@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wurster Web · Wurster</title>
+<meta name="description" content="Ship entire web apps as portable .wurst files. Run them anywhere with the Wurster Runtime.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/css/style.css">
+
+</head>
+<body>
+
+<header class="site-header">
+  <div class="site-header-bar">
+    <a class="brand" href="/">
+      <img src="/assets/img/pig.png" alt="Wurster pig">
+      <span class="brand-name">Wurster<em>wrst.io</em></span>
+    </a>
+
+    <nav class="main-nav">
+      
+      <a href="/#features">Features</a>
+      
+      <a href="/docs/">Docs</a>
+      
+      <a href="/examples/">Examples</a>
+      
+      <a href="/viewer/">Viewer</a>
+      
+      <a href="/verify/">Verify</a>
+      
+      <a href="/authority/">Authority</a>
+      
+      <a href="/runtime/">Runtime</a>
+      
+    </nav>
+
+    <div class="header-actions">
+      <a class="btn btn-primary" href="/meatgrinder/"><img src="/assets/img/meatgrinder.png" style="width:18px;height:18px;object-fit:contain;" alt="">MeatGrinder</a>
+      <label class="icon-btn nav-toggle mobile-nav-label" for="nav-toggle" aria-label="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2C2333" stroke-width="2.4" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </label>
+    </div>
+  </div>
+
+  <input type="checkbox" id="nav-toggle" class="mobile-nav-label" style="display:none;">
+  <nav class="mobile-nav">
+    
+    <a href="/#features">Features</a>
+    
+    <a href="/docs/">Docs</a>
+    
+    <a href="/examples/">Examples</a>
+    
+    <a href="/viewer/">Viewer</a>
+    
+    <a href="/verify/">Verify</a>
+    
+    <a href="/authority/">Authority</a>
+    
+    <a href="/runtime/">Runtime</a>
+    
+  </nav>
+</header>
+
+
+
+
+
+
+
+<main class="docs-main">
+  <label class="docs-sidebar-toggle" for="docs-sidebar-toggle">☰ Sections</label>
+  <input type="checkbox" id="docs-sidebar-toggle" style="display:none;">
+
+  <aside class="docs-sidebar" id="docs-sidebar">
+    
+    <div class="docs-group">
+      <div class="docs-group-title"></div>
+      
+      <a href="/docs/wurster-lab-wurst/" class=""></a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Getting Started</div>
+      
+      <a href="/docs/" class="">Wurster Docs</a>
+      
+      <a href="/docs/getting-started/" class="">Getting Started</a>
+      
+      <a href="/docs/installation/" class="">Installation</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Runtime &amp; Format</div>
+      
+      <a href="/docs/wurster-runtime/" class="">Wurster Runtime</a>
+      
+      <a href="/docs/universal-runtime/" class="">Universal Runtime Law</a>
+      
+      <a href="/docs/wurst-fs/" class="">WurstFS</a>
+      
+      <a href="/docs/personal-data/" class="">Personal Data</a>
+      
+      <a href="/docs/streaming/" class="">Slicing &amp; Streaming</a>
+      
+      <a href="/docs/undercover-wurst/" class="">Undercover Wurst</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Building Wursts</div>
+      
+      <a href="/docs/meatgrinder/" class="">MeatGrinder</a>
+      
+      <a href="/docs/manifest/" class="">Wurst Manifest</a>
+      
+      <a href="/docs/wurst-interface/" class="">Wurst Interface</a>
+      
+      <a href="/docs/headless/" class="">Headless Development Harness</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Runtime</div>
+      
+      <a href="/docs/runtime-layout/" class="">Runtime Layout</a>
+      
+      <a href="/docs/web-runtime/" class="active">Wurster Web</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Trust &amp; Identity</div>
+      
+      <a href="/docs/wurster-identities/" class="">Wurster Identities</a>
+      
+      <a href="/docs/signing/" class="">Package Signing</a>
+      
+      <a href="/docs/federated-publishers/" class="">Federated Publisher Identity</a>
+      
+      <a href="/docs/authority/" class="">WRST.IO Authority</a>
+      
+      <a href="/docs/identity/" class="">Wurst Identity Seal</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Security &amp; Trust</div>
+      
+      <a href="/docs/security/" class="">Security Overview</a>
+      
+      <a href="/docs/security-model/" class="">Security Model</a>
+      
+      <a href="/docs/auth/" class="">Wurster Auth</a>
+      
+      <a href="/docs/meatphrase/" class="">Meatphrase</a>
+      
+      <a href="/docs/wurstkey/" class="">WurstKey</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Specification</div>
+      
+      <a href="/docs/undercover-format/" class="">PNG Carrier Reference</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Project</div>
+      
+      <a href="/docs/faq/" class="">FAQ</a>
+      
+      <a href="/docs/roadmap/" class="">Road to Wurster 1.0</a>
+      
+      <a href="/docs/site-development/" class="">Documentation &amp; Site Build</a>
+      
+      <a href="/docs/release-signing/" class="">Signing Wurster Releases</a>
+      
+      <a href="/docs/licensing/" class="">Licensing status</a>
+      
+    </div>
+    
+  </aside>
+
+  <article class="docs-article">
+    <div class="docs-breadcrumb">Docs / Runtime / Wurster Web</div>
+    <h1>Wurster Web</h1>
+<p>Wurster Web is the browser-hosted Wurster runtime family. Its distributable surface is intentionally dependency-free:</p>
+<pre><code class="language-text">wurster.min.js
+wurster-sw.js
+wurster-embed.js
+wurster-embed-host.html
+</code></pre>
+<p>The core runtime uses a service worker to give each Wurst a virtual application resource surface while the visible Wurst runs in a sandboxed iframe. Normal relative HTML/CSS/JavaScript URLs therefore keep working inside a Wurst.</p>
+<h2 id="0.20.0-runtime-surface" tabindex="-1"><a class="header-anchor" href="#0.20.0-runtime-surface">0.20.0 runtime surface</a></h2>
+<p>Wurster Web can:</p>
+<ul>
+<li>open native WRST v7 from a user-selected <code>File</code>/<code>Blob</code>;</li>
+<li>open a remote <code>.wurst</code> or <code>.wrst</code> through pinned HTTP byte ranges;</li>
+<li>inspect manifest and immutable resource metadata without downloading the complete remote file;</li>
+<li>verify immutable resource chunk hashes;</li>
+<li>verify an Ed25519 Wurst package signature when the browser exposes Ed25519 through Web Crypto;</li>
+<li>run public application resources in a sandboxed iframe;</li>
+<li>unlock <strong>partial</strong> WurstKey application protection in-browser;</li>
+<li>unlock <strong>fully sealed</strong> WurstKey applications, including their encrypted private application map;</li>
+<li>keep the WurstKey outside application JavaScript and application DOM;</li>
+<li>read plain WurstFS metadata and file ranges;</li>
+<li>maintain a writable browser-session WurstFS overlay backed by chunk records rather than whole-file renderer buffers;</li>
+<li>provide <code>wurst.fs.*</code> CRUD, bounded range reads and chunked write sessions;</li>
+<li>serve WurstFS media through range-capable virtual URLs;</li>
+<li>export the current overlay as a standalone WRST v7 snapshot;</li>
+<li>embed a Wurst through the <code>&lt;wurst-embed&gt;</code> Custom Element without requiring the embedding site to install a Wurster service worker on its own origin.</li>
+</ul>
+<p>A remote Wurst remains read-only at its origin. Browser writes belong to the current Wurster session until the user exports a new Wurst snapshot.</p>
+<h2 id="the-simple-embed" tabindex="-1"><a class="header-anchor" href="#the-simple-embed">The simple embed</a></h2>
+<p>The CDN-facing integration is deliberately image-like:</p>
+<pre><code class="language-html">&lt;script type=&quot;module&quot; src=&quot;https://cdn.example/wurster/wurster-embed.js&quot;&gt;&lt;/script&gt;
+
+&lt;wurst-embed src=&quot;./media/example.wurst&quot;&gt;&lt;/wurst-embed&gt;
+</code></pre>
+<p><code>wurst-embed</code> is a standards-based Custom Element. Custom Element names require a hyphen, which is why the element is not simply <code>&lt;wurst&gt;</code>.</p>
+<p>Size it with normal CSS:</p>
+<pre><code class="language-css">wurst-embed {
+  width: 720px;
+  height: 480px;
+}
+</code></pre>
+<h3 id="optional-embedded-wurstkey" tabindex="-1"><a class="header-anchor" href="#optional-embedded-wurstkey">Optional embedded WurstKey</a></h3>
+<p>A developer may intentionally publish or share a key together with an embed:</p>
+<pre><code class="language-html">&lt;wurst-embed
+  src=&quot;./demos/client-preview.wurst&quot;
+  wurstkey=&quot;wurstkey-v1-....&quot;&gt;
+&lt;/wurst-embed&gt;
+</code></pre>
+<p>This is useful for demos, controlled previews, puzzles or any case where encryption is desired as packaging/access behavior but the embedding page is intentionally allowed to know the key.</p>
+<p>The <code>wurstkey</code> attribute is part of the host page DOM. Any script trusted by that page can read it. Do not use the attribute when the embedding page itself must not know the secret.</p>
+<p>If the attribute is omitted:</p>
+<ul>
+<li>a fully sealed Wurst shows Wurster-owned unlock UI before application HTML is executed;</li>
+<li>a partial Wurst loads its public <code>src/</code> shell immediately. If the shell later requests a protected resource while locked, Wurster Web pauses that resource request and presents its own WurstKey UI. The app can also request the same unlock explicitly through <code>&lt;wurster-auth type=&quot;wurstkey&quot;&gt;</code>.</li>
+</ul>
+<p>The key is used by the Wurster Web host and is never exposed as <code>window.wurst</code> data to the Wurst application.</p>
+<h2 id="why-the-embed-does-not-install-a-service-worker-on-your-site" tabindex="-1"><a class="header-anchor" href="#why-the-embed-does-not-install-a-service-worker-on-your-site">Why the embed does not install a service worker on your site</a></h2>
+<p>A normal service worker belongs to the origin and scope that registered it. A third-party CDN script should not ask every embedding site to install a root-level Wurster service worker.</p>
+<p><code>&lt;wurst-embed&gt;</code> therefore creates an isolated Wurster host iframe on the Wurster distribution origin. The parent page reads the configured Wurst source and answers bounded byte-range requests over a <code>MessageChannel</code>:</p>
+<pre><code class="language-text">embedding page
+    |
+    | &lt;wurst-embed src=&quot;./demo.wurst&quot;&gt;
+    v
+Wurster embed element
+    |
+    | bounded byte ranges
+    v
+isolated Wurster host iframe
+    |
+    +-- Wurster Web
+    +-- Wurster service worker on the host origin
+    +-- sandboxed Wurst application iframe
+</code></pre>
+<p>If the Wurst server supports HTTP Range, the parent streams only the required ranges. If the server ignores Range but permits the fetch, the embed falls back to a local Blob source.</p>
+<p>Cross-origin Wurst URLs still follow ordinary browser CORS rules.</p>
+<h2 id="direct-javascript-api" tabindex="-1"><a class="header-anchor" href="#direct-javascript-api">Direct JavaScript API</a></h2>
+<p>Applications that host Wurster Web themselves may still use the lower-level API:</p>
+<pre><code class="language-html">&lt;script type=&quot;module&quot;&gt;
+  import { WursterWeb } from &quot;/wurster.min.js&quot;;
+
+  const session = await WursterWeb.open(fileOrUrl, {
+    serviceWorkerUrl: &quot;/wurster-sw.js&quot;,
+    serviceWorkerScope: &quot;/&quot;
+  });
+
+  await session.mount(&quot;#wurst-stage&quot;);
+&lt;/script&gt;
+</code></pre>
+<p>A WurstKey can be supplied programmatically too:</p>
+<pre><code class="language-js">const session = await WursterWeb.open(fileOrUrl, { wurstKey });
+</code></pre>
+<h2 id="partial-application-protection" tabindex="-1"><a class="header-anchor" href="#partial-application-protection">Partial application protection</a></h2>
+<p>Partial application protection already exists in WRST v7 and MeatGrinder:</p>
+<pre><code class="language-text">src/       public application shell
+sealed/    developer-owned WurstKey content
+</code></pre>
+<p>The public entry runs without a WurstKey. If it later exposes:</p>
+<pre><code class="language-html">&lt;wurster-auth type=&quot;wurstkey&quot; purpose=&quot;application&quot;&gt;&lt;/wurster-auth&gt;
+</code></pre>
+<p>This explicit control is optional. A fetch/navigation for a protected application resource also triggers the same Wurster-owned unlock UI automatically. The pending resource continues after a valid key; choosing <strong>Not now</strong> leaves the public shell running and rejects only that protected request.</p>
+<p>Wurster Web opens the actual key-entry surface outside the Wurst application frame. On success the encrypted application resources become readable through their normal logical paths.</p>
+<p>If a protected resource is requested before the application has unlocked, the runtime reports the resource as locked rather than returning ciphertext or silently weakening protection.</p>
+<h2 id="fully-sealed-applications" tabindex="-1"><a class="header-anchor" href="#fully-sealed-applications">Fully sealed applications</a></h2>
+<p>A fully sealed Wurst hides its original application entry and logical application paths behind an encrypted <code>wurst/sealed-app-map-1</code> map. Wurster Web now opens that map with the same portable WurstKey/AES-256-GCM semantics as Desktop Wurster and only then starts the real application entry.</p>
+<p>No application HTML executes before a valid WurstKey is available.</p>
+<h2 id="url-semantics" tabindex="-1"><a class="header-anchor" href="#url-semantics">URL semantics</a></h2>
+<p>A Wurst is still a web application internally. Static application resources use normal relative URLs:</p>
+<pre><code class="language-html">&lt;script src=&quot;./app.js&quot;&gt;&lt;/script&gt;
+&lt;link rel=&quot;stylesheet&quot; href=&quot;./style.css&quot;&gt;
+&lt;img src=&quot;./assets/pig.png&quot;&gt;
+</code></pre>
+<p>For mutable <code>/data</code> resources the Wurst asks the runtime:</p>
+<pre><code class="language-js">video.src = wurst.fs.url('/data/videos/flight.mp4');
+</code></pre>
+<p>The returned URL is runtime-owned and opaque.</p>
+<h2 id="wurstfs-on-the-web" tabindex="-1"><a class="header-anchor" href="#wurstfs-on-the-web">WurstFS on the web</a></h2>
+<p>The web runtime does not pretend it can silently overwrite a remote server object or an arbitrary local file. Instead it exposes a writable session overlay:</p>
+<pre><code class="language-text">remote/local Wurst base     read
+browser session overlay     read/write
+snapshot export             new standalone .wurst
+</code></pre>
+<p>IndexedDB may be used as an implementation backing store, but it is not part of the portable Wurst persistence contract.</p>
+<h2 id="wurster-online-viewer" tabindex="-1"><a class="header-anchor" href="#wurster-online-viewer">Wurster online viewer</a></h2>
+<p>The Wurster site consumes the same generated web-runtime distribution and exposes <code>/viewer/</code> as a general browser Wurst viewer. A user can drag a <code>.wurst</code> or <code>.wrst</code> file onto the page and run it without installing Desktop Wurster.</p>
+<p>The viewer is intentionally built on <code>&lt;wurst-embed&gt;</code> rather than a separate private runtime. This keeps the public embed path and the official viewer on the same implementation.</p>
+<h2 id="remaining-browser-parity-work" tabindex="-1"><a class="header-anchor" href="#remaining-browser-parity-work">Remaining browser parity work</a></h2>
+<p>0.20.0 completes WurstKey application execution, but not every Desktop trust/auth feature is browser-equivalent yet.</p>
+<p>Still before 1.0:</p>
+<ul>
+<li>WurstFS v2 realm parity: history-free ordinary/personal realms, compaction behavior, Wurster Identity signing, X25519 shared-reader key-wraps, sealed realm catalogs/data and shared integrity/fork semantics;</li>
+<li>personal/shared WurstFS realm crypto, trusted identity handoff and protected snapshot writes;</li>
+<li>the cryptographic return leg for Desktop Wurster identity/auth handoff;</li>
+<li>browser presentation of the full publisher DNS/Authority trust chain and <code>&lt;wurst-identity&gt;</code> parity;</li>
+<li>Undercover PNG source adaptation in Wurster Web;</li>
+<li>complete Wurst Interface host/event conformance and browser-platform capability audit.</li>
+</ul>
+<p>The runtime must report unsupported behavior honestly rather than pretending that browser and desktop capabilities are identical.</p>
+<h2 id="wrst.io-authority-trust" tabindex="-1"><a class="header-anchor" href="#wrst.io-authority-trust"><a href="http://WRST.IO">WRST.IO</a> Authority trust</a></h2>
+<p>The Web distribution contains the same pinned public <a href="http://WRST.IO">WRST.IO</a> Root and Root-signed trust bundle as Desktop Wurster. <code>wurst/publisher-certificate-3</code> verified claims are checked locally through Root → issuer → publisher after the package signature verifies. This does not require a browser request to <code>authority.wrst.io</code>; live DNS identity remains a separate optional trust route.</p>
+
+
+    <div class="docs-pagenav">
+      <a href="/docs/manifest/">&larr; Wurst Manifest</a>
+      <a href="/docs/wurst-interface/">Wurst Interface &rarr;</a>
+    </div>
+  </article>
+
+  
+</main>
+
+<style>#docs-sidebar-toggle:checked ~ #docs-sidebar { display: block; }</style>
+
+
+<footer class="site-footer">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <div class="footer-brand-row">
+        <img src="/assets/img/pig.png" alt="Wurster">
+        <span>Wurster · wrst.io</span>
+      </div>
+      <p>Portable apps. Federated trust. One Wurst.</p>
+    </div>
+    <div class="footer-cols">
+      
+      <div class="footer-col">
+        <div class="footer-col-title">Product</div>
+        
+        <a href="/#features">Features</a>
+        
+        <a href="/examples/">Examples</a>
+        
+        <a href="/viewer/">Wurst Viewer</a>
+        
+        <a href="/runtime/">Runtime</a>
+        
+      </div>
+      
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        
+        <a href="/docs/">Docs</a>
+        
+        <a href="/verify/">Verify a Publisher</a>
+        
+        <a href="/authority/">WRST.IO Authority</a>
+        
+        <a href="/docs/wurst-fs/">WurstFS</a>
+        
+        <a href="/docs/roadmap/">Road to 1.0</a>
+        
+      </div>
+      
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>&copy; 2026 Wurster — All rights reserved.</span>
+    <img src="/assets/img/wurst-badge.png" alt="Wurst badge">
+  </div>
+</footer>
+
+</body>
+</html>

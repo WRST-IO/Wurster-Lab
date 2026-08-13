@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brand &amp; UI Playground · Wurster</title>
+<meta name="description" content="Internal Wurster brand and component playground — not linked in navigation.">
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/css/style.css">
+
+</head>
+<body>
+
+<header class="site-header">
+  <div class="site-header-bar">
+    <a class="brand" href="/">
+      <img src="/assets/img/pig.png" alt="Wurster pig">
+      <span class="brand-name">Wurster<em>wrst.io</em></span>
+    </a>
+
+    <nav class="main-nav">
+      
+      <a href="/#features">Features</a>
+      
+      <a href="/docs/">Docs</a>
+      
+      <a href="/examples/">Examples</a>
+      
+      <a href="/viewer/">Viewer</a>
+      
+      <a href="/verify/">Verify</a>
+      
+      <a href="/authority/">Authority</a>
+      
+      <a href="/runtime/">Runtime</a>
+      
+    </nav>
+
+    <div class="header-actions">
+      <a class="btn btn-primary" href="/meatgrinder/"><img src="/assets/img/meatgrinder.png" style="width:18px;height:18px;object-fit:contain;" alt="">MeatGrinder</a>
+      <label class="icon-btn nav-toggle mobile-nav-label" for="nav-toggle" aria-label="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2C2333" stroke-width="2.4" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </label>
+    </div>
+  </div>
+
+  <input type="checkbox" id="nav-toggle" class="mobile-nav-label" style="display:none;">
+  <nav class="mobile-nav">
+    
+    <a href="/#features">Features</a>
+    
+    <a href="/docs/">Docs</a>
+    
+    <a href="/examples/">Examples</a>
+    
+    <a href="/viewer/">Viewer</a>
+    
+    <a href="/verify/">Verify</a>
+    
+    <a href="/authority/">Authority</a>
+    
+    <a href="/runtime/">Runtime</a>
+    
+  </nav>
+</header>
+
+<main style="font-family:'Inter',sans-serif; padding: 48px clamp(16px,5vw,40px) 90px;">
+<div style="max-width: 980px; margin: 0 auto;">
+<div style="margin-bottom: 8px; display: inline-flex; align-items: center; gap: 8px; background: #F6DADD; color: #C94962; font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 4px 12px; border-radius: 999px;">Internal · not linked in nav</div>
+<h1 style="font-family:'Poppins',sans-serif; font-weight: 800; font-size: clamp(28px,4.5vw,42px); margin: 6px 0 8px;">Wurster Brand &amp; UI Playground</h1>
+<p style="font-size: 15px; color: #6B5F6B; max-width: 640px; line-height: 1.65; margin: 0 0 44px;">Live HTML sketches of Wurster's visual language — not mockup images. This is where we try out components before they land on the real site.</p>
+<section style="margin-bottom: 48px;">
+  <h2 style="font-family:'Poppins',sans-serif; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #A9707D; margin: 0 0 16px;">Palette</h2>
+  <div class="swatch-grid">
+    <div class="swatch" style="background:#FDF3F1;">Blush BG<br>#FDF3F1</div>
+    <div class="swatch" style="background:#FFFBFA;">Card<br>#FFFBFA</div>
+    <div class="swatch" style="background:#F6DADD;">Border<br>#F6DADD</div>
+    <div class="swatch" style="background:#E15A73;color:#FFF6F5;">Accent<br>#E15A73</div>
+    <div class="swatch" style="background:#C94962;color:#FFF6F5;">Accent Hover<br>#C94962</div>
+    <div class="swatch" style="background:#2C2333;color:#E8E2E8;">Ink<br>#2C2333</div>
+  </div>
+</section>
+<section style="margin-bottom: 48px;">
+  <h2 style="font-family:'Poppins',sans-serif; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #A9707D; margin: 0 0 16px;">Core kit</h2>
+  <div style="background:#FFFBFA; border:1px solid #F6DADD; border-radius:20px; padding:28px; display:flex; flex-direction:column; gap:20px;">
+    <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+      <button class="btn btn-primary">Primary</button>
+      <button class="btn btn-secondary">Secondary</button>
+      <button class="btn" style="background:transparent;color:#6B5F6B;">Ghost</button>
+      <span style="background:#F6DADD;color:#C94962;font-size:11.5px;font-weight:700;padding:4px 11px;border-radius:999px;text-transform:uppercase;letter-spacing:0.04em;">Badge</span>
+      <span style="background:#241E2B;color:#F4A6B6;font-family:'JetBrains Mono',monospace;font-size:12.5px;padding:5px 10px;border-radius:8px;">$ code chip</span>
+    </div>
+    <input placeholder="Text input placeholder" style="border:1.5px solid #F0C3CA;background:#FFFBFA;border-radius:12px;padding:12px 14px;font-size:14px;font-family:'Inter',sans-serif;max-width:320px;">
+  </div>
+</section>
+<section>
+  <h2 style="font-family:'Poppins',sans-serif; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #A9707D; margin: 0 0 10px;">Wurster Auth — embeddable identity field</h2>
+  <p style="font-size: 14.5px; color: #6B5F6B; max-width: 660px; line-height: 1.65; margin: 0 0 24px;">A single embeddable component any Wurst can drop into its own UI wherever it wants a "login." Default state is a plain Meatphrase field; the lock/avatar badge on the left switches to a picker over identities already stored on this device. Confirming with a stored identity swaps the avatar for a fingerprint and hands off to the OS keystore (Touch ID, Windows Hello, or OAuth).</p>
+  <div style="background:#2C2333; border-radius:24px; padding:clamp(24px,5vw,40px); display:flex; justify-content:center;">
+    <div style="width:100%; max-width:430px; background:#FFFBFA; border-radius:16px; box-shadow:0 24px 50px rgba(0,0,0,0.35);">
+      <div style="display:flex; align-items:center; gap:8px; padding:12px 16px; background:#F3E4E1; border-bottom:1px solid #E9CFCE; border-radius:16px 16px 0 0;">
+        <span style="width:10px;height:10px;border-radius:50%;background:#EF6961;"></span>
+        <span style="width:10px;height:10px;border-radius:50%;background:#F5BE4D;"></span>
+        <span style="width:10px;height:10px;border-radius:50%;background:#61C554;"></span>
+        <span style="margin-left:6px;font-size:12.5px;font-weight:600;color:#6B5F6B;">Fresh Meat Notes</span>
+      </div>
+      <div style="padding:22px 22px 26px; filter:blur(1.5px); opacity:0.5;">
+        <div style="height:12px;width:70%;background:#F6DADD;border-radius:6px;margin-bottom:10px;"></div>
+        <div style="height:12px;width:90%;background:#F6DADD;border-radius:6px;margin-bottom:10px;"></div>
+        <div style="height:12px;width:55%;background:#F6DADD;border-radius:6px;"></div>
+      </div>
+      <div id="wa-root" style="margin:0 18px 22px; position:relative;">
+        <div style="display:flex; align-items:center; gap:6px; background:#FFF6F5; border:1.5px solid #F6DADD; border-radius:999px; padding:6px; height:52px;">
+          <div id="wa-avatar" style="width:38px;height:38px;flex-shrink:0;border-radius:50%;background:#F6DADD;display:flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer;">🔒</div>
+          <input id="wa-input" placeholder="Enter your secret Meatphrase…" style="flex:1;min-width:0;border:none;background:transparent;outline:none;font-size:13.5px;font-family:'JetBrains Mono',monospace;color:#4A3F4A;">
+          <span id="wa-name" style="display:none;flex:1;min-width:0;font-size:13.5px;font-weight:600;color:#4A3F4A;"></span>
+          <button id="wa-submit" style="width:38px;height:38px;flex-shrink:0;border-radius:50%;background:#E15A73;border:none;color:#FFF6F5;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+          </button>
+        </div>
+        <p id="wa-status" style="display:none;position:absolute;left:6px;top:58px;font-size:11.5px;margin:0;font-weight:600;"></p>
+        <div id="wa-overlay" style="display:none;position:fixed;inset:0;z-index:9;"></div>
+        <div id="wa-popup" style="display:none;position:absolute;top:58px;left:0;width:240px;background:#FFFBFA;border:1px solid #F6DADD;border-radius:14px;box-shadow:0 16px 32px rgba(0,0,0,0.18);padding:8px;z-index:10;flex-direction:column;gap:4px;">
+          <div class="wa-identity" data-id="personal" data-name="Personal Meat" data-emoji="🐷" style="display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:10px;cursor:pointer;">
+            <span style="font-size:15px;">🐷</span><span style="font-size:12.5px;font-weight:600;flex:1;">Personal Meat</span><span class="wa-check" style="display:none;color:#E15A73;font-size:12px;">✓</span>
+          </div>
+          <div class="wa-identity" data-id="work" data-name="Work Meat" data-emoji="🐖" style="display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:10px;cursor:pointer;">
+            <span style="font-size:15px;">🐖</span><span style="font-size:12.5px;font-weight:600;flex:1;">Work Meat</span><span class="wa-check" style="display:none;color:#E15A73;font-size:12px;">✓</span>
+          </div>
+          <div class="wa-identity" data-id="imported" data-name="Imported Meat" data-emoji="🥓" style="display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:10px;cursor:pointer;">
+            <span style="font-size:15px;">🥓</span><span style="font-size:12.5px;font-weight:600;flex:1;">Imported Meat</span><span class="wa-check" style="display:none;color:#E15A73;font-size:12px;">✓</span>
+          </div>
+          <div style="height:1px;background:#F6DADD;margin:2px 4px;"></div>
+          <div id="wa-manual" style="padding:8px 9px;border-radius:10px;font-size:12.5px;font-weight:600;color:#A9707D;cursor:pointer;">🔐 Manual Meatphrase</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:22px; background:#FFFBFA; border:1px solid #F6DADD; border-radius:16px; padding:20px 24px;">
+    <div style="font-size:12.5px;font-weight:700;color:#A9707D;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:10px;">Behavior notes</div>
+    <ul style="margin:0;padding-left:20px;font-size:13.5px;color:#4A3F4A;line-height:1.8;">
+      <li>Default mode is a raw Meatphrase field — works even with zero stored identities.</li>
+      <li>Left-hand badge toggles a picker over identities already in this device's Meat Locker.</li>
+      <li>Selecting an identity and confirming swaps the avatar for a fingerprint and hands off to the OS keystore (Touch ID / Windows Hello) or OAuth.</li>
+      <li>Ships as one embeddable component any Wurst can drop wherever it needs a "login" — a separate full identity-management dialog exists, but is optional.</li>
+    </ul>
+  </div>
+</section>
+</div>
+</main>
+<style>@keyframes fingerPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }</style>
+<script src="/assets/js/wurster-auth.js" defer></script>
+
+
+<footer class="site-footer">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <div class="footer-brand-row">
+        <img src="/assets/img/pig.png" alt="Wurster">
+        <span>Wurster · wrst.io</span>
+      </div>
+      <p>Portable apps. Federated trust. One Wurst.</p>
+    </div>
+    <div class="footer-cols">
+      
+      <div class="footer-col">
+        <div class="footer-col-title">Product</div>
+        
+        <a href="/#features">Features</a>
+        
+        <a href="/examples/">Examples</a>
+        
+        <a href="/viewer/">Wurst Viewer</a>
+        
+        <a href="/runtime/">Runtime</a>
+        
+      </div>
+      
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        
+        <a href="/docs/">Docs</a>
+        
+        <a href="/verify/">Verify a Publisher</a>
+        
+        <a href="/authority/">WRST.IO Authority</a>
+        
+        <a href="/docs/wurst-fs/">WurstFS</a>
+        
+        <a href="/docs/roadmap/">Road to 1.0</a>
+        
+      </div>
+      
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>&copy; 2026 Wurster — All rights reserved.</span>
+    <img src="/assets/img/wurst-badge.png" alt="Wurst badge">
+  </div>
+</footer>
+
+</body>
+</html>

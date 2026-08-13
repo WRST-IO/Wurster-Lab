@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Federated Publisher Identity · Wurster</title>
+<meta name="description" content="Ship entire web apps as portable .wurst files. Run them anywhere with the Wurster Runtime.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/css/style.css">
+
+</head>
+<body>
+
+<header class="site-header">
+  <div class="site-header-bar">
+    <a class="brand" href="/">
+      <img src="/assets/img/pig.png" alt="Wurster pig">
+      <span class="brand-name">Wurster<em>wrst.io</em></span>
+    </a>
+
+    <nav class="main-nav">
+      
+      <a href="/#features">Features</a>
+      
+      <a href="/docs/">Docs</a>
+      
+      <a href="/examples/">Examples</a>
+      
+      <a href="/viewer/">Viewer</a>
+      
+      <a href="/verify/">Verify</a>
+      
+      <a href="/authority/">Authority</a>
+      
+      <a href="/runtime/">Runtime</a>
+      
+    </nav>
+
+    <div class="header-actions">
+      <a class="btn btn-primary" href="/meatgrinder/"><img src="/assets/img/meatgrinder.png" style="width:18px;height:18px;object-fit:contain;" alt="">MeatGrinder</a>
+      <label class="icon-btn nav-toggle mobile-nav-label" for="nav-toggle" aria-label="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2C2333" stroke-width="2.4" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </label>
+    </div>
+  </div>
+
+  <input type="checkbox" id="nav-toggle" class="mobile-nav-label" style="display:none;">
+  <nav class="mobile-nav">
+    
+    <a href="/#features">Features</a>
+    
+    <a href="/docs/">Docs</a>
+    
+    <a href="/examples/">Examples</a>
+    
+    <a href="/viewer/">Viewer</a>
+    
+    <a href="/verify/">Verify</a>
+    
+    <a href="/authority/">Authority</a>
+    
+    <a href="/runtime/">Runtime</a>
+    
+  </nav>
+</header>
+
+
+
+
+
+
+
+<main class="docs-main">
+  <label class="docs-sidebar-toggle" for="docs-sidebar-toggle">☰ Sections</label>
+  <input type="checkbox" id="docs-sidebar-toggle" style="display:none;">
+
+  <aside class="docs-sidebar" id="docs-sidebar">
+    
+    <div class="docs-group">
+      <div class="docs-group-title"></div>
+      
+      <a href="/docs/wurster-lab-wurst/" class=""></a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Getting Started</div>
+      
+      <a href="/docs/" class="">Wurster Docs</a>
+      
+      <a href="/docs/getting-started/" class="">Getting Started</a>
+      
+      <a href="/docs/installation/" class="">Installation</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Runtime &amp; Format</div>
+      
+      <a href="/docs/wurster-runtime/" class="">Wurster Runtime</a>
+      
+      <a href="/docs/universal-runtime/" class="">Universal Runtime Law</a>
+      
+      <a href="/docs/wurst-fs/" class="">WurstFS</a>
+      
+      <a href="/docs/personal-data/" class="">Personal Data</a>
+      
+      <a href="/docs/streaming/" class="">Slicing &amp; Streaming</a>
+      
+      <a href="/docs/undercover-wurst/" class="">Undercover Wurst</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Building Wursts</div>
+      
+      <a href="/docs/meatgrinder/" class="">MeatGrinder</a>
+      
+      <a href="/docs/manifest/" class="">Wurst Manifest</a>
+      
+      <a href="/docs/wurst-interface/" class="">Wurst Interface</a>
+      
+      <a href="/docs/headless/" class="">Headless Development Harness</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Runtime</div>
+      
+      <a href="/docs/runtime-layout/" class="">Runtime Layout</a>
+      
+      <a href="/docs/web-runtime/" class="">Wurster Web</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Trust &amp; Identity</div>
+      
+      <a href="/docs/wurster-identities/" class="">Wurster Identities</a>
+      
+      <a href="/docs/signing/" class="">Package Signing</a>
+      
+      <a href="/docs/federated-publishers/" class="active">Federated Publisher Identity</a>
+      
+      <a href="/docs/authority/" class="">WRST.IO Authority</a>
+      
+      <a href="/docs/identity/" class="">Wurst Identity Seal</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Security &amp; Trust</div>
+      
+      <a href="/docs/security/" class="">Security Overview</a>
+      
+      <a href="/docs/security-model/" class="">Security Model</a>
+      
+      <a href="/docs/auth/" class="">Wurster Auth</a>
+      
+      <a href="/docs/meatphrase/" class="">Meatphrase</a>
+      
+      <a href="/docs/wurstkey/" class="">WurstKey</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Specification</div>
+      
+      <a href="/docs/undercover-format/" class="">PNG Carrier Reference</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Project</div>
+      
+      <a href="/docs/faq/" class="">FAQ</a>
+      
+      <a href="/docs/roadmap/" class="">Road to Wurster 1.0</a>
+      
+      <a href="/docs/site-development/" class="">Documentation &amp; Site Build</a>
+      
+      <a href="/docs/release-signing/" class="">Signing Wurster Releases</a>
+      
+      <a href="/docs/licensing/" class="">Licensing status</a>
+      
+    </div>
+    
+  </aside>
+
+  <article class="docs-article">
+    <div class="docs-breadcrumb">Docs / Trust &amp; Identity / Federated Publisher Identity</div>
+    <h1>Federated Publisher Identity</h1>
+<p>Wurst signing has no required central authority.</p>
+<p>Every publisher may generate an Ed25519 key locally and sign Wursts with it. The package signature is completely offline-verifiable and means only that the immutable signed application matches the key that signed it.</p>
+<p>Identity is optional information layered on top of that key.</p>
+<pre><code class="language-text">package integrity     Ed25519 signature          offline
+publisher identity    local / domain / authority optional
+runtime capabilities  Wurster + user             separate
+</code></pre>
+<p>A valid Wurst does not need a signature, an account, a marketplace or an online service.</p>
+<h2 id="local-publisher-keys" tabindex="-1"><a class="header-anchor" href="#local-publisher-keys">Local publisher keys</a></h2>
+<p>Create an anonymous key:</p>
+<pre><code class="language-text">meatgrinder publisher create --label &quot;My local key&quot;
+</code></pre>
+<p>Or attach identity claims:</p>
+<pre><code class="language-text">meatgrinder publisher create --domain example.com --label &quot;Example&quot;
+meatgrinder publisher create --email dev@example.com
+</code></pre>
+<p>Claims are not trusted merely because the publisher key contains them. They are signed claims that another mechanism may verify.</p>
+<h2 id="wurster-managed-publisher-identities" tabindex="-1"><a class="header-anchor" href="#wurster-managed-publisher-identities">Wurster-managed publisher identities</a></h2>
+<p>The desktop runtime can keep publisher identities in the same local secure identity manager used for Wurster convenience state. User Meat Identities and MeatGrinder publisher identities are deliberately separate categories: a user Meatphrase unlocks user-owned WurstFS content, while a publisher identity signs immutable application builds.</p>
+<p>The MeatGrinder UI defaults to unsigned. Developers may create or select a stored publisher signer and optionally verify its domain directly from the UI. Signing asks the runtime for local device presence where supported. A stored signer can later be exported as its normal <code>.wurstkey</code>, so the Wurster-managed copy does not create a proprietary signing format.</p>
+<p>Domain verification may happen before or after the first signed build. A valid package signature made before DNS verification stays the same package signature; once <code>_wurst.&lt;domain&gt;</code> authorizes the fingerprint, Wurster can additionally display that domain identity as verified.</p>
+<h2 id="domain-verification" tabindex="-1"><a class="header-anchor" href="#domain-verification">Domain verification</a></h2>
+<p>A domain can authorize a Wurst publisher key without asking <a href="http://wrst.io">wrst.io</a> for permission.</p>
+<p>For a key whose SHA-256 SPKI fingerprint is <code>abc...</code>, MeatGrinder prints a TXT record in this form:</p>
+<pre><code class="language-text">_wurst.example.com TXT &quot;wurst1 ed25519=&lt;64-hex-fingerprint&gt;&quot;
+</code></pre>
+<p>Multiple TXT records may authorize multiple active publisher keys.</p>
+<p>When Wurster opens a signed Wurst that claims <code>example.com</code>, it may query <code>_wurst.example.com</code>.</p>
+<p>There are deliberately different outcomes:</p>
+<ul>
+<li><strong>verified</strong> — Wurst's signing key is currently listed by the domain.</li>
+<li><strong>unverified</strong> — no Wurst TXT record exists, or the domain cannot currently be checked.</li>
+<li><strong>previously verified</strong> — Wurster has a locally cached successful verification but cannot reach DNS now.</li>
+<li><strong>identity conflict</strong> — valid Wurst TXT records exist, but none authorize this Wurst's signing key.</li>
+</ul>
+<p>An identity conflict is not the same thing as an invalid package signature. The package may be cryptographically intact while its claimed domain identity conflicts with the domain's current statement. Wurster warns clearly and lets the user decide whether to continue.</p>
+<p>Successful domain verification may be cached locally. Existing Wursts never become dependent on DNS in order to remain valid files.</p>
+<h2 id="wrst.io-authority" tabindex="-1"><a class="header-anchor" href="#wrst.io-authority"><a href="http://WRST.IO">WRST.IO</a> Authority</a></h2>
+<p>Wurster 1.0 ships <strong>one Authority root trusted by default: <code>wrst.io</code></strong>. It certifies exact publisher claims such as domain or email control through the <a href="http://WRST.IO">WRST.IO</a> Authority Worker. The resulting <code>wurst/publisher-certificate-3</code> embeds its Root → issuer chain and remains verifiable offline. Labels remain self-declared unless a future verification method explicitly proves them.</p>
+<p>The Authority does not replace direct domain verification or local key trust. A publisher may use only its package signature, let its domain speak directly through <code>_wurst.&lt;domain&gt;</code>, or obtain a <a href="http://WRST.IO">WRST.IO</a> certificate. These are separate trust routes to the same publisher key.</p>
+<p>The older local Authority CLI remains useful for lab/private-root experiments, but it is not the official <a href="http://WRST.IO">WRST.IO</a> production issuance path. The V1 runtime has no built-in third-party Authority roots or management UI. The certificate format remains structurally capable of future additional roots without making them part of the V1 trust policy.</p>
+<p>The private publisher key never leaves the device that created it.</p>
+<h2 id="identity-never-grants-capabilities" tabindex="-1"><a class="header-anchor" href="#identity-never-grants-capabilities">Identity never grants capabilities</a></h2>
+<p>A verified domain, verified email or locally trusted key does not receive extra runtime privileges.</p>
+<pre><code class="language-text">whitehouse.gov ✓
+</code></pre>
+<p>still does not imply access to network, files, camera, microphone, WurstFS or any other capability.</p>
+<p>Package integrity, publisher identity and runtime permissions are separate questions.</p>
+<h2 id="future-user-attestations" tabindex="-1"><a class="header-anchor" href="#future-user-attestations">Future user attestations</a></h2>
+<p>A later Wurster version may let the trusted runtime sign a committed WurstFS state on behalf of a local identity. A Wurst could request such a signing ceremony through a Wurster-owned control, but would never receive the private signing key itself.</p>
+<p>That is intentionally post-1.0 work. The V1 publisher model establishes the key and identity foundation it can later reuse.</p>
+
+
+    <div class="docs-pagenav">
+      <a href="/docs/auth/">&larr; Wurster Auth</a>
+      <a href="/docs/authority/">WRST.IO Authority &rarr;</a>
+    </div>
+  </article>
+
+  
+</main>
+
+<style>#docs-sidebar-toggle:checked ~ #docs-sidebar { display: block; }</style>
+
+
+<footer class="site-footer">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <div class="footer-brand-row">
+        <img src="/assets/img/pig.png" alt="Wurster">
+        <span>Wurster · wrst.io</span>
+      </div>
+      <p>Portable apps. Federated trust. One Wurst.</p>
+    </div>
+    <div class="footer-cols">
+      
+      <div class="footer-col">
+        <div class="footer-col-title">Product</div>
+        
+        <a href="/#features">Features</a>
+        
+        <a href="/examples/">Examples</a>
+        
+        <a href="/viewer/">Wurst Viewer</a>
+        
+        <a href="/runtime/">Runtime</a>
+        
+      </div>
+      
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        
+        <a href="/docs/">Docs</a>
+        
+        <a href="/verify/">Verify a Publisher</a>
+        
+        <a href="/authority/">WRST.IO Authority</a>
+        
+        <a href="/docs/wurst-fs/">WurstFS</a>
+        
+        <a href="/docs/roadmap/">Road to 1.0</a>
+        
+      </div>
+      
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>&copy; 2026 Wurster — All rights reserved.</span>
+    <img src="/assets/img/wurst-badge.png" alt="Wurst badge">
+  </div>
+</footer>
+
+</body>
+</html>

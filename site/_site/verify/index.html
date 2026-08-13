@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verify a Wurst Publisher · Wurster</title>
+<meta name="description" content="Verify a Wurst publisher domain or email with WRST.IO and download a portable .wurstcert.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/css/style.css">
+
+</head>
+<body>
+
+<header class="site-header">
+  <div class="site-header-bar">
+    <a class="brand" href="/">
+      <img src="/assets/img/pig.png" alt="Wurster pig">
+      <span class="brand-name">Wurster<em>wrst.io</em></span>
+    </a>
+
+    <nav class="main-nav">
+      
+      <a href="/#features">Features</a>
+      
+      <a href="/docs/">Docs</a>
+      
+      <a href="/examples/">Examples</a>
+      
+      <a href="/viewer/">Viewer</a>
+      
+      <a href="/verify/">Verify</a>
+      
+      <a href="/authority/">Authority</a>
+      
+      <a href="/runtime/">Runtime</a>
+      
+    </nav>
+
+    <div class="header-actions">
+      <a class="btn btn-primary" href="/meatgrinder/"><img src="/assets/img/meatgrinder.png" style="width:18px;height:18px;object-fit:contain;" alt="">MeatGrinder</a>
+      <label class="icon-btn nav-toggle mobile-nav-label" for="nav-toggle" aria-label="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2C2333" stroke-width="2.4" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </label>
+    </div>
+  </div>
+
+  <input type="checkbox" id="nav-toggle" class="mobile-nav-label" style="display:none;">
+  <nav class="mobile-nav">
+    
+    <a href="/#features">Features</a>
+    
+    <a href="/docs/">Docs</a>
+    
+    <a href="/examples/">Examples</a>
+    
+    <a href="/viewer/">Viewer</a>
+    
+    <a href="/verify/">Verify</a>
+    
+    <a href="/authority/">Authority</a>
+    
+    <a href="/runtime/">Runtime</a>
+    
+  </nav>
+</header>
+
+<main class="verify-main">
+<section class="hero compact-hero">
+  <span class="hero-doodle left">📮</span>
+  <span class="hero-doodle right">🔏</span>
+  <h1>Prove it once.</h1>
+  <h1 class="accent">Verify it offline.</h1>
+  <p>Load a signed <strong>.wurstreq</strong> created by MeatGrinder. WRST.IO can verify control of its domain or email claim and return a portable <strong>.wurstcert</strong>. Your publisher private key and Meatphrase never enter this page.</p>
+</section>
+<section class="verify-shell">
+  <div class="verify-file-row">
+    <label class="verify-file">
+      <span class="verify-file-icon">📨</span>
+      <span><strong>Publisher request</strong><small id="requestFileName">Choose a .wurstreq</small></span>
+      <input id="requestFile" type="file" accept=".wurstreq,application/json">
+    </label>
+    <label class="verify-file optional">
+      <span class="verify-file-icon">🎖️</span>
+      <span><strong>Existing certificate</strong><small id="certificateFileName">Optional, to add another verified claim</small></span>
+      <input id="certificateFile" type="file" accept=".wurstcert,application/json">
+    </label>
+  </div>
+  <div id="verifyStatus" class="verify-status">Waiting for a signed publisher request.</div>
+  <div id="subjectCard" class="verify-subject hidden">
+    <div><span>Publisher key</span><strong id="subjectFingerprint"></strong></div>
+    <div><span>Domain claim</span><strong id="subjectDomain">—</strong></div>
+    <div><span>Email claim</span><strong id="subjectEmail">—</strong></div>
+  </div>
+  <div id="claimActions" class="verify-actions hidden">
+    <article id="domainCard" class="verify-card hidden">
+      <div class="verify-card-head"><span>🌐</span><div><h2>Domain verification</h2><p>WRST.IO checks a short-lived DNS TXT challenge once.</p></div></div>
+      <div id="domainReady"><button id="domainBegin" class="btn btn-primary">Create DNS challenge</button></div>
+      <div id="domainChallenge" class="hidden">
+        <div class="verify-record"><code id="domainRecordName"></code><b>TXT</b><code id="domainRecordValue"></code></div>
+        <p class="verify-help">Add the record at your DNS provider, wait until it resolves, then certify it.</p>
+        <button id="domainComplete" class="btn btn-primary">I added it · Certify domain</button>
+      </div>
+    </article>
+<p><article id="emailCard" class="verify-card hidden">
+<div class="verify-card-head"><span>📮</span><div><h2>Email verification</h2><p><a href="http://WRST.IO">WRST.IO</a> sends a six-digit code from <strong><a href="mailto:oink@wrst.io">oink@wrst.io</a></strong>.</p></div></div>
+<div id="emailReady"><button id="emailBegin" class="btn btn-primary">Send verification code</button></div>
+<div id="emailChallenge" class="hidden">
+<label class="verify-code-label" for="emailCode">Six-digit code</label>
+<input id="emailCode" class="verify-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456">
+<button id="emailComplete" class="btn btn-primary">Verify email</button>
+</div>
+<p id="emailUnavailable" class="verify-help hidden">Email verification is not enabled on the Authority service yet. Domain verification remains available.</p>
+</article></p>
+  </div>
+  <div id="certificateResult" class="verify-result hidden">
+    <span class="verify-seal">🐷✓</span>
+    <div><strong>Verified by WRST.IO</strong><p id="certificateClaims"></p></div>
+    <button id="downloadCertificate" class="btn btn-primary">Download .wurstcert</button>
+  </div>
+</section>
+<p class="viewer-note"><strong>What is being verified?</strong> A publisher label such as “John Doe” is self-declared unless a future verification method explicitly proves it. WRST.IO only marks the exact claims it actually checked, currently domain ownership and, when enabled, email control.</p>
+</main>
+<script type="module" src="/assets/js/authority-verify.js"></script>
+
+
+<footer class="site-footer">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <div class="footer-brand-row">
+        <img src="/assets/img/pig.png" alt="Wurster">
+        <span>Wurster · wrst.io</span>
+      </div>
+      <p>Portable apps. Federated trust. One Wurst.</p>
+    </div>
+    <div class="footer-cols">
+      
+      <div class="footer-col">
+        <div class="footer-col-title">Product</div>
+        
+        <a href="/#features">Features</a>
+        
+        <a href="/examples/">Examples</a>
+        
+        <a href="/viewer/">Wurst Viewer</a>
+        
+        <a href="/runtime/">Runtime</a>
+        
+      </div>
+      
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        
+        <a href="/docs/">Docs</a>
+        
+        <a href="/verify/">Verify a Publisher</a>
+        
+        <a href="/authority/">WRST.IO Authority</a>
+        
+        <a href="/docs/wurst-fs/">WurstFS</a>
+        
+        <a href="/docs/roadmap/">Road to 1.0</a>
+        
+      </div>
+      
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>&copy; 2026 Wurster — All rights reserved.</span>
+    <img src="/assets/img/wurst-badge.png" alt="Wurst badge">
+  </div>
+</footer>
+
+</body>
+</html>

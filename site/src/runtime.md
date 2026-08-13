@@ -1,6 +1,6 @@
 ---
 layout: layouts/base.njk
-title: Runtime
+title: Wurster Runtime
 description: A Wurst is platform-independent; each conforming Wurster runtime implements the same portable contract with platform-specific technology.
 permalink: /runtime/
 stylesheets:
@@ -24,14 +24,9 @@ stylesheets:
         <div class="platform-icon">{% platformIcon "windows" %}</div>
         <h3>Windows</h3>
         <p>Desktop Wurster uses Electron for controlled Chromium sessions, WurstFS and native runtime bridges.</p>
-        {% if releases.available %}
-          <a class="runtime-download" href="{{ releases.windowsX64 }}">↓ Download Setup.exe <small>x64</small></a>
-        {% else %}
-          <span class="runtime-download disabled">↓ Download Setup.exe <small>after GitHub deploy</small></span>
-        {% endif %}
+        {% if releases.available %}<a class="runtime-download" href="{{ releases.windowsX64 }}">↓ Download Setup.exe <small>x64</small></a>{% else %}<span class="runtime-download disabled">↓ Download Setup.exe <small>after GitHub deploy</small></span>{% endif %}
       </div>
     </div>
-
     <div class="platform-card">
       <div class="platform-card-stripe"></div>
       <div class="platform-card-body">
@@ -39,20 +34,9 @@ stylesheets:
         <div class="platform-icon">{% platformIcon "macos" %}</div>
         <h3>macOS</h3>
         <p>Choose the native DMG for Apple Silicon or Intel. Both run the same portable Wurst contract.</p>
-        {% if releases.available %}
-          <details class="runtime-download-menu">
-            <summary class="runtime-download">↓ Download .dmg <span>⌄</span></summary>
-            <div class="runtime-download-popover">
-              <a href="{{ releases.macArm64 }}"><strong>Apple Silicon</strong><small>arm64 · M1 and newer</small></a>
-              <a href="{{ releases.macX64 }}"><strong>Intel Mac</strong><small>x64</small></a>
-            </div>
-          </details>
-        {% else %}
-          <span class="runtime-download disabled">↓ Download .dmg <small>after GitHub deploy</small></span>
-        {% endif %}
+        {% if releases.available %}<details class="runtime-download-menu"><summary class="runtime-download">↓ Download .dmg <span>⌄</span></summary><div class="runtime-download-popover"><a href="{{ releases.macArm64 }}"><strong>Apple Silicon</strong><small>arm64 · M1 and newer</small></a><a href="{{ releases.macX64 }}"><strong>Intel Mac</strong><small>x64</small></a></div></details>{% else %}<span class="runtime-download disabled">↓ Download .dmg <small>after GitHub deploy</small></span>{% endif %}
       </div>
     </div>
-
     <div class="platform-card">
       <div class="platform-card-stripe"></div>
       <div class="platform-card-body">
@@ -63,7 +47,6 @@ stylesheets:
         <span class="runtime-download disabled">Coming soon</span>
       </div>
     </div>
-
     <div class="platform-card">
       <div class="platform-card-stripe"></div>
       <div class="platform-card-body">
@@ -71,18 +54,7 @@ stylesheets:
         <div class="platform-icon">{% platformIcon "web" %}</div>
         <h3>Wurster Web</h3>
         <p>Browser Wurster powers <code>&lt;wurst-embed&gt;</code> and the online Viewer. The exact release runtime is published beside the native runtimes.</p>
-        {% if releases.available %}
-          <details class="runtime-download-menu">
-            <summary class="runtime-download">↓ Download Web runtime <span>⌄</span></summary>
-            <div class="runtime-download-popover">
-              <a href="{{ releases.webMin }}"><strong>Minified ESM</strong><small>wurster.min.js</small></a>
-              <a href="{{ releases.webJs }}"><strong>Readable ESM</strong><small>wurster.js</small></a>
-              <a href="{{ releases.webZip }}"><strong>Complete distribution</strong><small>runtime + worker + embed host</small></a>
-            </div>
-          </details>
-        {% else %}
-          <span class="runtime-download disabled">↓ Download Web runtime <small>after GitHub deploy</small></span>
-        {% endif %}
+        {% if releases.available %}<details class="runtime-download-menu"><summary class="runtime-download">↓ Download Web runtime <span>⌄</span></summary><div class="runtime-download-popover"><a href="{{ releases.webMin }}"><strong>Minified ESM</strong><small>wurster.min.js</small></a><a href="{{ releases.webJs }}"><strong>Readable ESM</strong><small>wurster.js</small></a><a href="{{ releases.webZip }}"><strong>Complete distribution</strong><small>runtime + worker + embed host</small></a></div></details>{% else %}<span class="runtime-download disabled">↓ Download Web runtime <small>after GitHub deploy</small></span>{% endif %}
         <div class="runtime-coming-soon"><a href="/viewer/">Open Wurst Viewer ↗</a></div>
       </div>
     </div>

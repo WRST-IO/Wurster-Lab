@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Universal Runtime Law · Wurster</title>
+<meta name="description" content="Ship entire web apps as portable .wurst files. Run them anywhere with the Wurster Runtime.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/css/style.css">
+
+</head>
+<body>
+
+<header class="site-header">
+  <div class="site-header-bar">
+    <a class="brand" href="/">
+      <img src="/assets/img/pig.png" alt="Wurster pig">
+      <span class="brand-name">Wurster<em>wrst.io</em></span>
+    </a>
+
+    <nav class="main-nav">
+      
+      <a href="/#features">Features</a>
+      
+      <a href="/docs/">Docs</a>
+      
+      <a href="/examples/">Examples</a>
+      
+      <a href="/viewer/">Viewer</a>
+      
+      <a href="/verify/">Verify</a>
+      
+      <a href="/authority/">Authority</a>
+      
+      <a href="/runtime/">Runtime</a>
+      
+    </nav>
+
+    <div class="header-actions">
+      <a class="btn btn-primary" href="/meatgrinder/"><img src="/assets/img/meatgrinder.png" style="width:18px;height:18px;object-fit:contain;" alt="">MeatGrinder</a>
+      <label class="icon-btn nav-toggle mobile-nav-label" for="nav-toggle" aria-label="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2C2333" stroke-width="2.4" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </label>
+    </div>
+  </div>
+
+  <input type="checkbox" id="nav-toggle" class="mobile-nav-label" style="display:none;">
+  <nav class="mobile-nav">
+    
+    <a href="/#features">Features</a>
+    
+    <a href="/docs/">Docs</a>
+    
+    <a href="/examples/">Examples</a>
+    
+    <a href="/viewer/">Viewer</a>
+    
+    <a href="/verify/">Verify</a>
+    
+    <a href="/authority/">Authority</a>
+    
+    <a href="/runtime/">Runtime</a>
+    
+  </nav>
+</header>
+
+
+
+
+
+
+
+<main class="docs-main">
+  <label class="docs-sidebar-toggle" for="docs-sidebar-toggle">☰ Sections</label>
+  <input type="checkbox" id="docs-sidebar-toggle" style="display:none;">
+
+  <aside class="docs-sidebar" id="docs-sidebar">
+    
+    <div class="docs-group">
+      <div class="docs-group-title"></div>
+      
+      <a href="/docs/wurster-lab-wurst/" class=""></a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Getting Started</div>
+      
+      <a href="/docs/" class="">Wurster Docs</a>
+      
+      <a href="/docs/getting-started/" class="">Getting Started</a>
+      
+      <a href="/docs/installation/" class="">Installation</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Runtime &amp; Format</div>
+      
+      <a href="/docs/wurster-runtime/" class="">Wurster Runtime</a>
+      
+      <a href="/docs/universal-runtime/" class="active">Universal Runtime Law</a>
+      
+      <a href="/docs/wurst-fs/" class="">WurstFS</a>
+      
+      <a href="/docs/personal-data/" class="">Personal Data</a>
+      
+      <a href="/docs/streaming/" class="">Slicing &amp; Streaming</a>
+      
+      <a href="/docs/undercover-wurst/" class="">Undercover Wurst</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Building Wursts</div>
+      
+      <a href="/docs/meatgrinder/" class="">MeatGrinder</a>
+      
+      <a href="/docs/manifest/" class="">Wurst Manifest</a>
+      
+      <a href="/docs/wurst-interface/" class="">Wurst Interface</a>
+      
+      <a href="/docs/headless/" class="">Headless Development Harness</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Runtime</div>
+      
+      <a href="/docs/runtime-layout/" class="">Runtime Layout</a>
+      
+      <a href="/docs/web-runtime/" class="">Wurster Web</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Trust &amp; Identity</div>
+      
+      <a href="/docs/wurster-identities/" class="">Wurster Identities</a>
+      
+      <a href="/docs/signing/" class="">Package Signing</a>
+      
+      <a href="/docs/federated-publishers/" class="">Federated Publisher Identity</a>
+      
+      <a href="/docs/authority/" class="">WRST.IO Authority</a>
+      
+      <a href="/docs/identity/" class="">Wurst Identity Seal</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Security &amp; Trust</div>
+      
+      <a href="/docs/security/" class="">Security Overview</a>
+      
+      <a href="/docs/security-model/" class="">Security Model</a>
+      
+      <a href="/docs/auth/" class="">Wurster Auth</a>
+      
+      <a href="/docs/meatphrase/" class="">Meatphrase</a>
+      
+      <a href="/docs/wurstkey/" class="">WurstKey</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Specification</div>
+      
+      <a href="/docs/undercover-format/" class="">PNG Carrier Reference</a>
+      
+    </div>
+    
+    <div class="docs-group">
+      <div class="docs-group-title">Project</div>
+      
+      <a href="/docs/faq/" class="">FAQ</a>
+      
+      <a href="/docs/roadmap/" class="">Road to Wurster 1.0</a>
+      
+      <a href="/docs/site-development/" class="">Documentation &amp; Site Build</a>
+      
+      <a href="/docs/release-signing/" class="">Signing Wurster Releases</a>
+      
+      <a href="/docs/licensing/" class="">Licensing status</a>
+      
+    </div>
+    
+  </aside>
+
+  <article class="docs-article">
+    <div class="docs-breadcrumb">Docs / Runtime &amp; Format / Universal Runtime Law</div>
+    <h1>Universal Wurst Law 🌭🌍</h1>
+<p>A valid Wurst is the same Wurst on every conforming Wurster runtime.</p>
+<p>Windows, macOS, Linux, iOS, Android and future runtimes may use completely different implementation technology. They must agree on the Wurst format, the portable runtime API and its security boundaries.</p>
+<blockquote>
+<p>Same Wurst semantics, not the same runtime implementation.</p>
+</blockquote>
+<h2 id="baseline-and-optional-capabilities" tabindex="-1"><a class="header-anchor" href="#baseline-and-optional-capabilities">Baseline and optional capabilities</a></h2>
+<p>The conforming baseline is the part every Wurster must understand: the WRST container, normal application HTML/CSS/JavaScript, immutable resource integrity, WurstFS semantics, package signatures and the portable Wurster API baseline.</p>
+<p>Capabilities are different. A Wurst may declare an optional ability that a particular runtime cannot provide.</p>
+<p>That does <strong>not</strong> make the Wurst invalid and does not stop the rest of the application from running.</p>
+<pre><code class="language-js">const lan = await wurst.capabilities.query(&quot;network.local&quot;);
+
+if (lan.state === &quot;unsupported&quot;) {
+  // Explain the platform limitation or offer another workflow.
+}
+</code></pre>
+<p>Current runtime states are intentionally small:</p>
+<ul>
+<li><code>available</code> — declared by the Wurst and implemented by this runtime.</li>
+<li><code>unsupported</code> — declared by the Wurst but unavailable in this runtime.</li>
+<li><code>undeclared</code> — the Wurst did not request it.</li>
+</ul>
+<p>Permission-specific states such as user denial can be added as capability brokers become interactive.</p>
+<h2 id="platform-details-belong-to-wurster" tabindex="-1"><a class="header-anchor" href="#platform-details-belong-to-wurster">Platform details belong to Wurster</a></h2>
+<p>A Wurst does not request Apple Keychain, Windows Hello, Secure Enclave, Android Keystore or a particular browser implementation.</p>
+<p>The Wurst asks for portable behavior. The Wurster decides how its platform implements that behavior.</p>
+<p>For example, the desktop Wurster may use Electron because controlling Chromium sessions, request boundaries and isolated renderer surfaces is useful. A future iOS Wurster may use WKWebView and native Swift brokers. Android may use the system WebView. Those choices do not alter the Wurst.</p>
+<h2 id="portable-failure-is-part-of-portability" tabindex="-1"><a class="header-anchor" href="#portable-failure-is-part-of-portability">Portable failure is part of portability</a></h2>
+<p>A mini-app is allowed to discover that something is not available and remain useful.</p>
+<p>A local-model client can run everywhere while explaining that a runtime without local-network access cannot reach the user's Ollama server. A camera tool can still show its imported files on a platform where live camera access is unavailable.</p>
+<p>Conformance therefore means understanding the request and denying or marking unavailable what cannot be supplied, not refusing to open the whole Wurst.</p>
+<h2 id="portable-secrets" tabindex="-1"><a class="header-anchor" href="#portable-secrets">Portable secrets</a></h2>
+<p>The same rule applies to cryptography. Meatphrase is the universal recovery/unlock route for user-owned sealed content. Local hardware or OS security may make a particular Wurster more comfortable or safer, but never becomes a requirement embedded in the Wurst file.</p>
+
+
+    <div class="docs-pagenav">
+      <a href="/docs/wurster-runtime/">&larr; Wurster Runtime</a>
+      <a href="/docs/wurst-fs/">WurstFS &rarr;</a>
+    </div>
+  </article>
+
+  
+</main>
+
+<style>#docs-sidebar-toggle:checked ~ #docs-sidebar { display: block; }</style>
+
+
+<footer class="site-footer">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <div class="footer-brand-row">
+        <img src="/assets/img/pig.png" alt="Wurster">
+        <span>Wurster · wrst.io</span>
+      </div>
+      <p>Portable apps. Federated trust. One Wurst.</p>
+    </div>
+    <div class="footer-cols">
+      
+      <div class="footer-col">
+        <div class="footer-col-title">Product</div>
+        
+        <a href="/#features">Features</a>
+        
+        <a href="/examples/">Examples</a>
+        
+        <a href="/viewer/">Wurst Viewer</a>
+        
+        <a href="/runtime/">Runtime</a>
+        
+      </div>
+      
+      <div class="footer-col">
+        <div class="footer-col-title">Resources</div>
+        
+        <a href="/docs/">Docs</a>
+        
+        <a href="/verify/">Verify a Publisher</a>
+        
+        <a href="/authority/">WRST.IO Authority</a>
+        
+        <a href="/docs/wurst-fs/">WurstFS</a>
+        
+        <a href="/docs/roadmap/">Road to 1.0</a>
+        
+      </div>
+      
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>&copy; 2026 Wurster — All rights reserved.</span>
+    <img src="/assets/img/wurst-badge.png" alt="Wurst badge">
+  </div>
+</footer>
+
+</body>
+</html>
