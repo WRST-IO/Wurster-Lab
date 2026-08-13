@@ -1,0 +1,4 @@
+<Files "config.php">
+  Require all denied
+</Files>
+RedirectMatch 404 ^/.+\.wrst-mail-relay-cache(?:/|$)

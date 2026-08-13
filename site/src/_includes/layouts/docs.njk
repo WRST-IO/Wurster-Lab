@@ -1,0 +1,43 @@
+---
+layout: layouts/base.njk
+---
+{% set allDocs = collections.docs %}
+{% set currentIndex = 0 %}
+{% for d in allDocs %}{% if d.url == page.url %}{% set currentIndex = loop.index0 %}{% endif %}{% endfor %}
+{% set prevDoc = allDocs[currentIndex - 1] if currentIndex > 0 else null %}
+{% set nextDoc = allDocs[currentIndex + 1] if currentIndex < (allDocs.length - 1) else null %}
+
+<main class="docs-main">
+  <label class="docs-sidebar-toggle" for="docs-sidebar-toggle">☰ Sections</label>
+  <input type="checkbox" id="docs-sidebar-toggle" style="display:none;">
+
+  <aside class="docs-sidebar" id="docs-sidebar">
+    {% for group in collections.docGroups %}
+    <div class="docs-group">
+      <div class="docs-group-title">{{ group.title }}</div>
+      {% for item in group.items %}
+      <a href="{{ item.url }}" class="{{ 'active' if item.url == page.url }}">{{ item.data.title }}</a>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </aside>
+
+  <article class="docs-article">
+    <div class="docs-breadcrumb">Docs / {{ group }} / {{ title }}</div>
+    {{ content | safe }}
+
+    <div class="docs-pagenav">
+      {% if prevDoc %}<a href="{{ prevDoc.url }}">&larr; {{ prevDoc.data.title }}</a>{% else %}<span></span>{% endif %}
+      {% if nextDoc %}<a href="{{ nextDoc.url }}">{{ nextDoc.data.title }} &rarr;</a>{% else %}<span></span>{% endif %}
+    </div>
+  </article>
+
+  {% if toc %}
+  <aside class="docs-toc">
+    <div class="docs-toc-title">On this page</div>
+    {% for item in toc %}<a href="#{{ item.id }}">{{ item.label }}</a>{% endfor %}
+  </aside>
+  {% endif %}
+</main>
+
+<style>#docs-sidebar-toggle:checked ~ #docs-sidebar { display: block; }</style>

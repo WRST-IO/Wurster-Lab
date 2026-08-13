@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wurster Lab</title>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div class="lab-shell">
+  <header class="topbar">
+    <div class="brand">
+      <div class="pig-orb" id="pigOrb">🐷</div>
+      <div>
+        <div class="eyebrow">WRST EXPERIMENTAL MEAT COMPUTING FACILITY</div>
+        <h1>Wurster Lab <span>🧪</span></h1>
+        <div class="sub">One Wurst. One workspace. Several questionable scientific decisions.</div>
+      </div>
+    </div>
+    <div class="release-pill"><span class="dot"></span><span id="releasePill">reading specimen…</span></div>
+  </header>
+
+  <nav class="tabs" aria-label="Lab sections">
+    <button class="tab active" data-tab="overview">🐽 Overview</button>
+    <button class="tab" data-tab="changelog">🧬 Changelog</button>
+    <button class="tab" data-tab="notes">📝 Notes</button>
+    <button class="tab" data-tab="operator">🔐 Operator</button>
+  </nav>
+
+  <main>
+    <section class="panel active" data-panel="overview">
+      <div class="hero-grid">
+        <article class="card specimen-card">
+          <div class="card-label">CURRENT SPECIMEN</div>
+          <div class="specimen-row"><div class="mega-pig">🐖</div><div><div class="version" id="workspaceVersion">Wurster Lab</div><div class="muted" id="revisionLine">Inspecting workspace…</div></div></div>
+          <div class="meter"><div class="meter-fill" id="healthMeter"></div></div>
+          <div class="health" id="healthText">Meat integrity: thinking pink thoughts.</div>
+        </article>
+
+        <article class="card stat-grid">
+          <div class="stat"><span>Workspace</span><strong id="workspaceFiles">…</strong><small>source files</small></div>
+          <div class="stat"><span>Lab Notes</span><strong id="notesState">…</strong><small>mutable</small></div>
+          <div class="stat"><span>Operator</span><strong id="operatorState">…</strong><small>personal sealed realm</small></div>
+          <div class="stat"><span>WurstFS</span><strong id="fsState">v2</strong><small>mixed realms</small></div>
+        </article>
+      </div>
+
+      <div class="two-col">
+        <article class="card">
+          <div class="card-head"><div><div class="card-label">LAB READOUT</div><h2>What is inside this Wurst?</h2></div><div class="beaker">⚗️</div></div>
+          <div class="realm-list">
+            <div class="realm"><span class="realm-icon">📂</span><div><strong>/workspace</strong><small>Ordinary mutable project source. No identity, signatures or history required.</small></div><span class="tag plain">OPEN</span></div>
+            <div class="realm"><span class="realm-icon">🗒️</span><div><strong>/lab</strong><small>Portable project notes and release metadata.</small></div><span class="tag plain">OPEN</span></div>
+            <div class="realm"><span class="realm-icon">🔐</span><div><strong>/operator</strong><small>Your WRST.IO operator material. Personal, sealed and never shareable.</small></div><span class="tag private">PERSONAL</span></div>
+          </div>
+        </article>
+
+        <article class="card fun-card">
+          <div class="card-label">PIG SCIENCE</div>
+          <div class="fun-emoji" id="funEmoji">🧫🐷</div>
+          <h2 id="funTitle">Specimen appears unusually cooperative.</h2>
+          <p id="funText">No sausages were harmed during this filesystem mount.</p>
+          <button class="pink-button" id="pokePig">Poke specimen</button>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel" data-panel="changelog">
+      <article class="card full-card">
+        <div class="card-head"><div><div class="card-label">CURRENT DELIVERY</div><h2 id="changeTitle">Changelog</h2><p class="muted">Read directly from <code>/workspace/CHANGELOG.md</code>. What you see travels with the project.</p></div><button class="soft-button" id="reloadChange">↻ Reload</button></div>
+        <pre class="changelog" id="changelog">Loading current meat notes…</pre>
+      </article>
+    </section>
+
+    <section class="panel" data-panel="notes">
+      <article class="card full-card">
+        <div class="card-head"><div><div class="card-label">METZGER NOTEBOOK</div><h2>Notes that travel with Wurster Lab</h2><p class="muted">Plain mutable project notes. No ceremony, no signing, no history. Save means save.</p></div><div class="save-state" id="noteSaveState">ready</div></div>
+        <textarea id="notes" spellcheck="true" placeholder="Write something useful, suspicious or pork-related…"></textarea>
+        <div class="actions"><button class="pink-button" id="saveNotes">Save notes</button><button class="soft-button" id="reloadNotes">Reload</button></div>
+      </article>
+    </section>
+
+    <section class="panel" data-panel="operator">
+      <div class="operator-gate" id="operatorGate">
+        <article class="card operator-gate-card">
+          <div class="operator-seal">🔐🐷</div>
+          <div class="card-label">WRST.IO OPERATOR ACCESS</div>
+          <h2 id="operatorGateTitle">Unlock Operator Admin Zone</h2>
+          <p class="muted" id="operatorGateCopy">Authenticate the owning Wurster Identity. Wurster unwraps this personal realm locally.</p>
+          <div class="auth-wrap"><wurster-auth type="identity" purpose="filesystem" session="60m"></wurster-auth></div>
+          <div class="operator-gate-state" id="operatorGateState">Sealed personal realm · operator contents remain opaque.</div>
+        </article>
+      </div>
+
+      <div class="operator-admin hidden" id="operatorAdmin">
+        <article class="card operator-admin-head">
+          <div>
+            <div class="card-label">OPERATOR ADMIN ZONE</div>
+            <h2>WRST.IO production controls</h2>
+            <p class="muted">This entire zone exists behind your personal Wurster Identity. Root and Issuer Meatphrases still stay on paper.</p>
+            <div class="operator-fingerprint" id="operatorFingerprint">Owner authenticated for this session.</div>
+          </div>
+          <div class="operator-admin-actions"><span class="tag private">PERSONAL · OPEN</span><button class="soft-button" id="lockOperator">🔒 Lock zone</button></div>
+        </article>
+
+        <article class="card material-card">
+          <div class="card-head"><div><div class="card-label">PRODUCTION MATERIAL</div><h2>Four files. Zero cloud accounts.</h2></div><span class="tag private" id="materialBadge">OPEN</span></div>
+          <p class="muted">These four portable files are sealed inside your personal operator realm. Wurster Lab verifies their cryptographic relationships before allowing a production grind.</p>
+          <div class="material-list">
+            <button data-import="root.json"><span>🌳 root.json</span><small data-state="root.json">checking…</small></button>
+            <button data-import="issuer.json"><span>🏛️ issuer.json</span><small data-state="issuer.json">checking…</small></button>
+            <button data-import="trust-bundle.json"><span>🛡️ trust-bundle.json</span><small data-state="trust-bundle.json">checking…</small></button>
+            <button data-import="issuer.wurstissuer"><span>🔑 issuer.wurstissuer</span><small data-state="issuer.wurstissuer">checking…</small></button>
+          </div>
+          <div class="material-result" id="materialResult">Inspecting operator material…</div>
+          <div class="operator-import-row"><button class="soft-button" id="importOperatorWorkspace">📦 Import previous operator ZIP</button><span>One-click rehydrate from a WursterLab production export.</span></div>
+        </article>
+
+        <article class="card operator-settings-card">
+          <div class="card-head"><div><div class="card-label">SEALED OPERATOR SETTINGS</div><h2>Mail Relay memory</h2><p class="muted">The HTTPS relay endpoint and shared relay secret live only in your personal sealed realm. They are copied into the private production workspace so future Labs do not need the values re-entered.</p></div><span class="tag private">SEALED</span></div>
+          <div class="operator-settings-grid">
+            <label><span>Mail Relay HTTPS URL</span><input id="relayUrl" type="url" autocomplete="off" spellcheck="false" placeholder="https://mail.example.tld/wrst-mail-relay.php"></label>
+            <label><span>Mail Relay secret</span><div class="secret-field"><input id="relaySecret" type="password" autocomplete="off" spellcheck="false" placeholder="shared HMAC secret"><button type="button" id="toggleRelaySecret">Show</button></div></label>
+          </div>
+          <div class="operator-settings-actions"><button class="pink-button" id="saveOperatorSettings">🔐 Seal settings</button><div class="material-result" id="relaySettingsState">checking…</div></div>
+        </article>
+
+        <article class="card maintenance-card production-card">
+          <div><div class="card-label">LOCAL PRODUCTION GRINDER</div><h2>Build my private operator workspace</h2><p class="muted">Streams the complete public <code>/workspace</code>, overlays your verified WRST.IO operator material and writes a local ZIP for production builds/deployment. The private Issuer backup is included. Never publish this ZIP.</p></div>
+          <button class="pink-button" id="exportOperatorWorkspace">🌭 Verwursten</button>
+          <div class="material-result" id="exportResult"></div>
+        </article>
+
+        <article class="card maintenance-card">
+          <div><div class="card-label">LAB HYGIENE</div><h2>Defatten the Wurst</h2><p class="muted">Ordinary and personal data keep no revision tail. Compaction discards obsolete physical records while this personal realm is unlocked.</p></div>
+          <button class="soft-button" id="compactLab">🧹 Trim specimen</button>
+          <div class="material-result" id="compactResult"></div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer><span>🐷 WRST.IO is a project, not a corporation in a tiny suit.</span><span id="footerState">WurstFS ready</span></footer>
+</div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

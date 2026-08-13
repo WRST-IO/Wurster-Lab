@@ -1,0 +1,18 @@
+---
+layout: layouts/base.njk
+---
+<main class="page-main" style="max-width: 720px;">
+  <div class="page-head-icon">
+    <img src="/assets/img/wurst-file.png" alt="">
+    <h1 style="font-size: clamp(24px,4vw,34px);">{{ title }}</h1>
+  </div>
+  <p class="page-sub">
+    <span style="background:#F6DADD;color:#C94962;font-weight:700;padding:3px 12px;border-radius:999px;font-size:12px;">{{ tag }}</span>
+  </p>
+
+  <article class="docs-article" style="max-width: none;">
+    {{ content | safe }}
+  </article>
+
+  <p style="margin-top: 40px;"><a class="btn btn-ghost" href="/examples/">&larr; Back to all examples</a></p>
+</main>

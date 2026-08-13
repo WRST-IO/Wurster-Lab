@@ -1,0 +1,22 @@
+{
+  "name": "@wurster/headless",
+  "version": "0.20.0",
+  "description": "Development and AI harness for headless Wurst Interface actions.",
+  "type": "module",
+  "bin": {
+    "wurster-headless": "./src/cli.js"
+  },
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src"
+  ],
+  "dependencies": {
+    "@wurster/format": "0.20.0",
+    "@wurster/interface": "0.20.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

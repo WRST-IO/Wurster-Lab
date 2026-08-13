@@ -1,0 +1,47 @@
+{
+  "name": "wurster-lab",
+  "version": "0.20.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "runtime/desktop",
+    "runtime/web",
+    "authority/wrst.io/worker"
+  ],
+  "scripts": {
+    "test": "node tests/format.test.mjs && node tests/wurst-fs-v2.test.mjs && node tests/wurst-fs-storage.test.mjs && node tests/wurst-fs-runtime-contract.test.mjs && node tests/authority.test.mjs && node tests/authority-worker.test.mjs && node tests/authority-deployment.test.mjs && node tests/cli.test.mjs && node tests/protection-worker.test.mjs && node tests/identity-core.test.mjs && node tests/runtime-module-contract.test.mjs && node tests/runtime-trust-ui.test.mjs && node tests/session.test.mjs && node tests/interface.test.mjs && node tests/web-runtime.test.mjs && node tests/wurster-lab-wurst.test.mjs && node tests/release-workflow.test.mjs",
+    "dist:win": "npm run dist:win --workspace @wurster/desktop",
+    "meatphrase": "node packages/meatgrinder/src/cli.js meatphrase 12",
+    "dist:mac": "npm run dist:mac:universal",
+    "dist:mac:arm64": "npm run dist:mac:arm64 --workspace @wurster/desktop",
+    "dist:mac:x64": "npm run dist:mac:x64 --workspace @wurster/desktop",
+    "dist:mac:universal": "npm run dist:mac:universal --workspace @wurster/desktop",
+    "docs:sync": "npm run authority:sync && npm run runtime:web:build && node tools/sync-site-docs.mjs",
+    "docs:build": "npm run docs:sync && npm --prefix site run build",
+    "docs:serve": "npm run docs:sync && npm --prefix site run start",
+    "docs:setup": "npm --prefix site install",
+    "runtime:web:build": "npm run build --workspace @wurster/web",
+    "runtime:web:serve": "npm run serve --workspace @wurster/web",
+    "authority:bootstrap": "node tools/wrst-authority.mjs bootstrap",
+    "authority:verify": "node tools/wrst-authority.mjs verify",
+    "authority:production-check": "node tools/wrst-authority.mjs production-check",
+    "authority:sync": "node tools/wrst-authority.mjs sync",
+    "authority:worker-secret": "node tools/wrst-authority.mjs worker-secret",
+    "authority:worker:dev": "npm run dev --workspace @wurster/wrst-authority-worker",
+    "authority:worker:deploy": "node tools/wrst-authority.mjs production-check && npm run deploy --workspace @wurster/wrst-authority-worker",
+    "authority:rotate-issuer": "node tools/wrst-authority.mjs rotate-issuer",
+    "authority:revoke": "node tools/wrst-authority.mjs revoke",
+    "authority:root-check": "node tools/wrst-authority.mjs root-check",
+    "authority:worker:setup": "npm install --workspace @wurster/wrst-authority-worker",
+    "build:wurster-lab-wurst": "node tools/wurster-lab-wurst.mjs build",
+    "update:wurster-lab-wurst": "node tools/wurster-lab-wurst.mjs update",
+    "authority:mail-relay:test": "php -l authority/wrst.io/mail-relay/wrst-mail-relay.php && php authority/wrst.io/mail-relay/wrst-mail-relay.php --self-test",
+    "release:mac": "npm run dist:mac:arm64 && npm run dist:mac:x64",
+    "release:check": "node tools/release-check.mjs",
+    "authority:worker:relay-secrets": "node tools/wrst-authority.mjs worker-relay-secrets"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

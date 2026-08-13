@@ -1,0 +1,85 @@
+{
+  "title": "Wurster",
+  "tagline": "Portable apps. Federated trust. One Wurst.",
+  "nav": [
+    {
+      "label": "Features",
+      "href": "/#features"
+    },
+    {
+      "label": "Docs",
+      "href": "/docs/"
+    },
+    {
+      "label": "Examples",
+      "href": "/examples/"
+    },
+    {
+      "label": "Viewer",
+      "href": "/viewer/"
+    },
+    {
+      "label": "Verify",
+      "href": "/verify/"
+    },
+    {
+      "label": "Authority",
+      "href": "/authority/"
+    },
+    {
+      "label": "Runtime",
+      "href": "/runtime/"
+    }
+  ],
+  "footer": {
+    "columns": [
+      {
+        "title": "Product",
+        "links": [
+          {
+            "label": "Features",
+            "href": "/#features"
+          },
+          {
+            "label": "Examples",
+            "href": "/examples/"
+          },
+          {
+            "label": "Wurst Viewer",
+            "href": "/viewer/"
+          },
+          {
+            "label": "Runtime",
+            "href": "/runtime/"
+          }
+        ]
+      },
+      {
+        "title": "Resources",
+        "links": [
+          {
+            "label": "Docs",
+            "href": "/docs/"
+          },
+          {
+            "label": "Verify a Publisher",
+            "href": "/verify/"
+          },
+          {
+            "label": "WRST.IO Authority",
+            "href": "/authority/"
+          },
+          {
+            "label": "WurstFS",
+            "href": "/docs/wurst-fs/"
+          },
+          {
+            "label": "Road to 1.0",
+            "href": "/docs/roadmap/"
+          }
+        ]
+      }
+    ]
+  },
+  "domain": "wrst.io"
+}

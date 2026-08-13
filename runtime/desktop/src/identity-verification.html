@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Verify Wurst Identity</title>
+<style>
+:root{--ink:#32262b;--muted:#89747d;--pork:#e6506b;--cream:#fff9f6;--line:#ead7dc;--green:#267b58;--green-soft:#e7f6ee;--amber:#91672d;--amber-soft:#fff1d9;--red:#a33d4d;--red-soft:#ffe6ea;--grey:#706468;--grey-soft:#f1ecee}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink)}button{font:inherit}.shell{height:100%;border:1px solid rgba(93,61,73,.18);border-radius:28px;background:rgba(255,249,246,.985);box-shadow:0 24px 70px rgba(54,33,42,.28);overflow:hidden}.titlebar{height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid rgba(130,90,103,.13);-webkit-app-region:drag;background:rgba(255,249,246,.87);backdrop-filter:blur(16px)}.brand{font-size:13px;font-weight:820}.close{width:28px;height:28px;border:0;border-radius:9px;background:#f5e4e8;color:#9b5f6d;cursor:pointer;font-size:18px;line-height:1;-webkit-app-region:no-drag}.content{height:calc(100% - 52px);padding:20px 22px 18px;display:flex;flex-direction:column}.intro{display:flex;align-items:center;gap:14px}.seal{width:70px;height:70px;flex:0 0 70px;border-radius:50%;display:grid;place-items:center;font-size:34px;font-weight:950;background:var(--grey-soft);color:var(--grey);box-shadow:inset 0 0 0 1px rgba(77,50,60,.07),0 10px 24px rgba(90,50,63,.08)}.eyebrow{font-size:9px;font-weight:900;letter-spacing:.16em;color:#a27481}.status{font-size:23px;font-weight:900;letter-spacing:-.035em;margin-top:3px}.sub{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4}.verified .seal{background:var(--green-soft);color:var(--green)}.verified .eyebrow,.verified .status{color:var(--green)}.signed .seal{background:var(--amber-soft);color:var(--amber)}.signed .eyebrow,.signed .status{color:var(--amber)}.danger .seal{background:var(--red-soft);color:var(--red)}.danger .eyebrow,.danger .status{color:var(--red)}.card{margin-top:18px;border:1px solid var(--line);border-radius:19px;background:#fffdfc;overflow:hidden}.row{display:grid;grid-template-columns:118px minmax(0,1fr);gap:13px;padding:11px 14px;border-bottom:1px solid #f1e5e8;align-items:start}.row:last-child{border-bottom:0}.key{font-size:9px;font-weight:850;letter-spacing:.08em;text-transform:uppercase;color:#a18d95}.value{font-size:11px;font-weight:700;min-width:0;overflow-wrap:anywhere}.mono{font:9.5px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#67575e}.integrity{display:flex;align-items:center;gap:6px}.dot{width:8px;height:8px;border-radius:50%;background:#a89ca0}.verified .dot{background:var(--green)}.signed .dot{background:var(--amber)}.danger .dot{background:var(--red)}.explain{margin-top:14px;padding:12px 14px;border-radius:15px;background:#f8f1f3;color:#6d5c63;font-size:10.5px;line-height:1.5}.stamp{margin-top:auto;display:flex;justify-content:space-between;align-items:flex-end;gap:16px;padding-top:14px}.motto{font-size:9px;color:#a28d95;max-width:360px;line-height:1.45}.done{border:0;border-radius:12px;background:#342d30;color:#fff;padding:9px 14px;font-size:10px;font-weight:850;cursor:pointer}.done:hover{background:#201b1d}@media(max-height:620px){.content{padding-top:13px}.intro{gap:10px}.seal{width:54px;height:54px;flex-basis:54px;font-size:26px}.status{font-size:19px}.card{margin-top:12px}.row{padding:8px 12px}.explain{margin-top:9px;padding:9px 12px}.stamp{padding-top:9px}}
+</style>
+</head>
+<body>
+<div class="shell" id="shell">
+  <div class="titlebar"><div class="brand">🐷 Wurster · Identity Verification</div><button class="close" id="close" aria-label="Close">×</button></div>
+  <div class="content">
+    <div class="intro">
+      <div class="seal" id="seal">?</div>
+      <div><div class="eyebrow" id="eyebrow">WURST QUALITY SEAL</div><div class="status" id="status">Checking the casing…</div><div class="sub" id="sub">Wurster is verifying this package outside the Wurst renderer.</div></div>
+    </div>
+    <div class="card">
+      <div class="row"><div class="key">Wurst</div><div class="value" id="wurst">—</div></div>
+      <div class="row"><div class="key">Publisher</div><div class="value" id="publisher">—</div></div>
+      <div class="row"><div class="key">Trust route</div><div class="value" id="route">—</div></div>
+      <div class="row"><div class="key">Package integrity</div><div class="value integrity"><span class="dot"></span><span id="integrity">—</span></div></div>
+      <div class="row"><div class="key">Fingerprint</div><div class="value mono" id="fingerprint">—</div></div>
+      <div class="row" id="fileRow"><div class="key">File</div><div class="value mono" id="file">—</div></div>
+    </div>
+    <div class="explain" id="explain">A Wurst can draw whatever badge it likes. This window belongs to Wurster, so this is the part it cannot fake.</div>
+    <div class="stamp"><div class="motto">A good Wurst is a trustworthy Wurst. Verification here checks the package signature and the identity route known to this Wurster.</div><button class="done" id="done">Seal inspected</button></div>
+  </div>
+</div>
+<script>
+(async()=>{
+  const api=window.wursterVerification,$=(id)=>document.getElementById(id),shell=$('shell');
+  try{
+    const c=await api.context(),trust=c.trust||{};
+    shell.className=`shell ${['verified','signed','danger','warning'].includes(trust.level)?trust.level:'warning'}`;
+    $('seal').textContent=trust.level==='verified'?'✓':trust.level==='danger'?'!':trust.level==='signed'?'◆':'?';
+    $('eyebrow').textContent=trust.label||'WURST QUALITY SEAL';
+    $('status').textContent=trust.level==='verified'?'Identity confirmed':trust.level==='danger'?'Do not trust this label':trust.level==='signed'?'Signature valid · identity not confirmed':'No verified publisher identity';
+    $('sub').textContent=trust.detail||'Wurster checked this package outside the Wurst renderer.';
+    $('wurst').textContent=[c.name,c.version?`v${c.version}`:''].filter(Boolean).join(' · ')||c.id||'Unknown Wurst';
+    $('publisher').textContent=trust.publisher||c.publisher?.label||'No publisher identity';
+    $('route').textContent=c.trustRoute||'No independent identity route';
+    $('integrity').textContent=c.integrity||'Unknown';
+    $('fingerprint').textContent=trust.fingerprint||c.publisher?.fingerprint||'—';
+    if(c.filePath){$('file').textContent=c.filePath}else $('fileRow').style.display='none';
+    $('explain').textContent=c.explain||'A Wurst can draw whatever badge it likes. This window belongs to Wurster, so this is the part it cannot fake.';
+  }catch(error){shell.className='shell danger';$('seal').textContent='!';$('status').textContent='Verification failed';$('sub').textContent=error?.message||String(error);$('explain').textContent='Wurster could not establish a trustworthy identity result for this file.';}
+  const close=()=>api.close();$('close').onclick=close;$('done').onclick=close;
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Locked Wurst</title>
+<style>
+  :root { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:#302636; background:#fff9f8; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; width:100%; height:100%; }
+  body { display:grid; place-items:center; padding:26px; background:linear-gradient(180deg,#fffafa,#fff4f5); }
+  main { width:min(520px,100%); }
+  .name { font-size:14px; font-weight:750; color:#8f7c83; margin:0 0 12px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  wurster-auth { width:100%; height:72px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="name" id="name">Encrypted Wurst</div>
+  <wurster-auth type="wurstkey" purpose="application"></wurster-auth>
+</main>
+<script>
+window.wurst.info().then((info) => { document.getElementById('name').textContent = `${info.name} · WurstKey required`; }).catch(() => {});
+</script>
+</body>
+</html>

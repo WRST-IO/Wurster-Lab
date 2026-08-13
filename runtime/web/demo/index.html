@@ -1,0 +1,46 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wurster Web 0.20.0</title>
+<style>
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#30282b;background:#f6efec}*{box-sizing:border-box}body{margin:0;min-height:100vh}.bar{min-height:72px;padding:12px 18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #dfd2cd;background:rgba(255,250,248,.92);backdrop-filter:blur(18px)}.brand{font-weight:900;margin-right:4px}.url{min-width:min(420px,70vw);flex:1;max-width:720px}input,button{font:inherit}input[type=url]{width:100%;padding:10px 13px;border:1px solid #cdbdb7;border-radius:13px;background:white;color:inherit;outline:none}input[type=url]:focus{border-color:#8b7079;box-shadow:0 0 0 3px rgba(139,112,121,.12)}button,.pick{padding:9px 13px;border-radius:999px;border:1px solid #cbbdb8;background:white;color:inherit;cursor:pointer;font-weight:750}.pick input{display:none}.layout{height:calc(100vh - 73px);padding:14px;display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:14px}.stage{min-width:0;border:1px solid #d9ceca;border-radius:20px;overflow:hidden;background:white;box-shadow:0 18px 60px rgba(69,45,51,.07)}.side{border:1px solid #d9ceca;border-radius:20px;background:#fffaf8;padding:14px;overflow:auto}.side h2{font-size:13px;margin:0 0 12px;text-transform:uppercase;letter-spacing:.08em;color:#7f6971}.kv{padding:8px 0;border-bottom:1px solid #eadfdb}.kv:last-child{border:0}.k{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:#9a858c}.v{font-weight:750;margin-top:3px;overflow-wrap:anywhere}.tiny{font-size:12px;color:#7d6c72;line-height:1.45}.error{color:#9f2d3e}@media(max-width:800px){.layout{grid-template-columns:1fr;grid-template-rows:minmax(360px,1fr) auto}.side{max-height:220px}}
+</style>
+<div class="bar">
+  <div class="brand">🐷 Wurster Web 0.20.0</div>
+  <div class="url"><input id="url" type="url" placeholder="https://example.com/app.wurst"></div>
+  <button id="openUrl">Open URL</button>
+  <label class="pick">Choose Wurst <input id="file" type="file" accept=".wurst,.wrst,application/vnd.wurster.wurst"></label>
+</div>
+<div class="layout">
+  <div class="stage" id="stage"></div>
+  <aside class="side"><h2>Runtime</h2><div id="status" class="tiny">Drop or choose a Wurst, or open a range-enabled URL.</div></aside>
+</div>
+<script type="module">
+import { WursterWeb } from '/wurster.min.js';
+let session;
+const status=document.querySelector('#status');
+const esc=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function field(k,v){return `<div class="kv"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`}
+async function open(source){
+  try{
+    status.textContent='Opening Wurst…';
+    if(session)await session.close();
+    session=await WursterWeb.open(source,{serviceWorkerUrl:'/wurster-sw.js'});
+    const signature=await session.reader.verifySignature();
+    const fs=await session.fs.capabilities();
+    await session.mount('#stage');
+    status.innerHTML=[
+      field('Wurst',session.reader.manifest.name||session.reader.manifest.id),
+      field('Format',session.reader.manifest.format),
+      field('Source',session.reader.source.kind==='http'?'HTTP Range':'Local File / Blob'),
+      field('Package',signature.valid?'Signed · valid':signature.status==='unsigned'?'Unsigned':'Signature problem'),
+      field('WurstFS',fs.write?'Session read/write':'Read only'),
+      field('Overlay',fs.backing==='indexeddb'?'Chunk-backed IndexedDB':'Memory fallback'),
+      '<p class="tiny">Application resources use ordinary relative web URLs. Runtime-managed /data resources are obtained through <code>wurst.fs.url()</code>; the Wurst never depends on a physical URL scheme.</p>'
+    ].join('');
+  }catch(error){status.innerHTML=`<div class="error"><strong>Could not open Wurst</strong><br>${esc(error.message)}</div>`;}
+}
+document.querySelector('#openUrl').onclick=()=>{const value=document.querySelector('#url').value.trim();if(value)open(value)};
+document.querySelector('#url').addEventListener('keydown',e=>{if(e.key==='Enter')document.querySelector('#openUrl').click()});
+document.querySelector('#file').onchange=e=>e.target.files[0]&&open(e.target.files[0]);
+</script>

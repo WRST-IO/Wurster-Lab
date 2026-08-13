@@ -1,0 +1,60 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "wrst-authority",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-12",
+  "workers_dev": false,
+  "routes": [
+    {
+      "pattern": "authority.wrst.io",
+      "custom_domain": true
+    }
+  ],
+  "vars": {
+    "PUBLISHER_CERT_DAYS": "1095",
+    "EMAIL_FROM": "oink@wrst.io",
+    "EMAIL_DAILY_LIMIT": "50",
+    "EMAIL_PER_ADDRESS_DAILY_LIMIT": "3",
+    "EMAIL_PER_IP_DAILY_LIMIT": "10",
+    "EMAIL_CODE_ATTEMPTS": "8"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "EMAIL_BUDGET",
+        "class_name": "EmailBudget"
+      }
+    ]
+  },
+  "exports": {
+    "EmailBudget": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+  "ratelimits": [
+    {
+      "name": "EMAIL_ADDRESS_RATE",
+      "namespace_id": "501501",
+      "simple": {
+        "limit": 1,
+        "period": 60
+      }
+    },
+    {
+      "name": "EMAIL_IP_RATE",
+      "namespace_id": "501502",
+      "simple": {
+        "limit": 5,
+        "period": 60
+      }
+    }
+  ],
+  "secrets": {
+    "required": [
+      "WRST_ISSUER_PRIVATE_PKCS8",
+      "WRST_MAIL_RELAY_URL",
+      "WRST_MAIL_RELAY_SECRET"
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@wurster/interface",
+  "version": "0.20.0",
+  "description": "Runtime-neutral Wurst Interface declarations, actions, events and validation.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src"
+  ],
+  "engines": {
+    "node": ">=22"
+  }
+}

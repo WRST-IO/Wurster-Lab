@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% if title %}{{ title }} · {% endif %}{{ site.title }}</title>
+<meta name="description" content="{{ description or 'Ship entire web apps as portable .wurst files. Run them anywhere with the Wurster Runtime.' }}">
+{% if noindex %}<meta name="robots" content="noindex,nofollow">{% endif %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="site-header-bar">
+    <a class="brand" href="/">
+      <img src="/assets/img/pig.png" alt="Wurster pig">
+      <span class="brand-name">{{ site.title }}<em>{{ site.domain }}</em></span>
+    </a>
+
+    <nav class="main-nav">
+      {% for link in site.nav %}
+      <a href="{{ link.href }}">{{ link.label }}</a>
+      {% endfor %}
+    </nav>
+
+    <div class="header-actions">
+      <a class="btn btn-primary" href="/meatgrinder/"><img src="/assets/img/meatgrinder.png" style="width:18px;height:18px;object-fit:contain;" alt="">MeatGrinder</a>
+      <label class="icon-btn nav-toggle mobile-nav-label" for="nav-toggle" aria-label="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2C2333" stroke-width="2.4" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </label>
+    </div>
+  </div>
+
+  <input type="checkbox" id="nav-toggle" class="mobile-nav-label" style="display:none;">
+  <nav class="mobile-nav">
+    {% for link in site.nav %}
+    <a href="{{ link.href }}">{{ link.label }}</a>
+    {% endfor %}
+  </nav>
+</header>
+
+{{ content | safe }}
+
+<footer class="site-footer">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <div class="footer-brand-row">
+        <img src="/assets/img/pig.png" alt="Wurster">
+        <span>{{ site.title }} · {{ site.domain }}</span>
+      </div>
+      <p>{{ site.tagline }}</p>
+    </div>
+    <div class="footer-cols">
+      {% for col in site.footer.columns %}
+      <div class="footer-col">
+        <div class="footer-col-title">{{ col.title }}</div>
+        {% for l in col.links %}
+        <a href="{{ l.href }}">{{ l.label }}</a>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>&copy; {{ year }} {{ site.title }} — All rights reserved.</span>
+    <img src="/assets/img/wurst-badge.png" alt="Wurst badge">
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "@wurster/site",
+  "version": "0.20.0",
+  "private": true,
+  "description": "wrst.io Eleventy surface and canonical Wurster Lab documentation.",
+  "scripts": {
+    "start": "eleventy --serve",
+    "build": "eleventy",
+    "debug": "DEBUG=Eleventy* eleventy"
+  },
+  "devDependencies": {
+    "@11ty/eleventy": "^3.0.0",
+    "markdown-it-anchor": "^9.2.1"
+  }
+}

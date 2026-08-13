@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wurster Auth</title>
+<style>
+  :root {
+    color-scheme: light;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    --ink:#302636;
+    --muted:#aaa4a7;
+    --pork:#eb5572;
+    --pork-hover:#df4967;
+    --pork-soft:#f9dfe4;
+    --cream:#fff9f8;
+    --line:#f2cfd5;
+    --bad:#d94761;
+    --bad-soft:#ffe4e8;
+    --ok:#3fa267;
+    --ok-soft:#e6f5eb;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; width:100%; height:100%; min-height:100%; background:transparent; overflow:hidden; }
+  body { padding:0; position:relative; }
+  button,input { font:inherit; }
+  .control { position:absolute; left:4px; top:4px; width:calc(100% - 8px); }
+  .pill {
+    position:relative;
+    width:100%; height:64px; display:flex; align-items:center; gap:10px;
+    padding:6px 7px 6px 8px; border:2px solid var(--line); border-radius:999px;
+    background:rgba(255,249,248,.985); box-shadow:0 8px 24px rgba(48,38,54,.055);
+    transition:border-color .16s ease,box-shadow .16s ease,transform .14s ease,background .16s ease;
+  }
+  .pill.busy { border-color:#efb8c3; box-shadow:0 8px 28px rgba(235,85,114,.10); }
+  .pill.bad { border-color:var(--bad); background:#fff7f8; animation:shake .22s linear 1; }
+  .pill.ok { border-color:#afd9bd; background:#fbfffc; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+  .identity-button {
+    flex:0 0 50px; width:50px; height:50px; border:0; border-radius:50%; background:var(--pork-soft);
+    display:grid; place-items:center; font-size:24px; cursor:pointer; color:var(--ink); padding:0;
+    transition:transform .14s ease,background .14s ease,box-shadow .14s ease;
+  }
+  .identity-button:hover:not(:disabled) { transform:scale(1.025); background:#f7d5dc; }
+  .trust-dot { position:absolute; left:47px; top:46px; width:10px; height:10px; border-radius:50%; border:2px solid var(--cream); background:#d5cbd0; pointer-events:none; }
+  .trust-dot.verified, .trust-dot.signed { background:#48aa6b; }
+  .trust-dot.unsigned { background:#e4a545; }
+  .trust-dot.invalid { background:#d94761; }
+  .identity-button:disabled { cursor:default; }
+  .identity-button.busy { animation:pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(235,85,114,.08)} 50%{box-shadow:0 0 0 10px rgba(235,85,114,.14)} }
+  .field { min-width:0; flex:1; height:48px; display:flex; align-items:center; position:relative; }
+  input {
+    width:100%; border:0; outline:0; background:transparent; color:var(--ink);
+    font:600 17px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing:.01em; padding:0 3px; min-width:0;
+  }
+  input::placeholder { color:var(--muted); opacity:1; font-weight:500; }
+  input:disabled { color:#766b72; -webkit-text-fill-color:#766b72; opacity:1; }
+  .identity-name {
+    width:100%; color:var(--ink); font-size:18px; font-weight:760;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 3px;
+  }
+  .go {
+    flex:0 0 50px; width:50px; height:50px; border:0; border-radius:50%; background:var(--pork); color:white;
+    font-size:31px; line-height:1; display:grid; place-items:center; cursor:pointer; padding:0 0 3px;
+    transition:transform .13s ease,opacity .13s ease,background .13s ease;
+  }
+  .go:hover:not(:disabled) { transform:scale(1.035); background:var(--pork-hover); }
+  .go:disabled { opacity:.48; cursor:default; transform:none; }
+  .menu {
+    display:none; position:absolute; left:8px; top:72px; width:min(360px,calc(100% - 16px));
+    background:rgba(255,250,249,.995); border:1px solid var(--line); border-radius:18px;
+    box-shadow:0 18px 46px rgba(48,38,54,.16); padding:8px; z-index:10;
+    max-height:300px; overflow:auto; overscroll-behavior:contain;
+  }
+  .menu.open { display:block; }
+  .menu.above { top:auto; bottom:72px; }
+  .option {
+    width:100%; min-height:48px; border:0; border-radius:12px; background:transparent; display:flex; align-items:center; gap:12px;
+    color:var(--ink); font-size:16px; font-weight:720; text-align:left; padding:7px 10px; cursor:pointer;
+  }
+  .option:hover { background:#fcecef; }
+  .option .emoji { width:28px; flex:0 0 28px; text-align:center; font-size:22px; }
+  .separator { height:1px; background:var(--line); margin:7px 4px; }
+  .manual { color:#8d6570; }
+  .tiny { display:block; font-size:11px; color:#ad9da2; font-weight:600; margin-top:1px; }
+  .totp-input { position:absolute; inset:0; opacity:0; width:100%; height:100%; cursor:text; }
+  .otp-cells { width:100%; display:flex; align-items:center; justify-content:center; gap:6px; padding:0 2px; cursor:text; }
+  .otp-cell { width:30px; height:38px; display:grid; place-items:center; border:1.5px solid #ecd2d7; border-radius:9px; background:#fffdfd; color:var(--ink); font:750 18px/1 ui-monospace,SFMono-Regular,Menlo,monospace; transition:border-color .12s ease,box-shadow .12s ease; }
+  .otp-cell.active { border-color:#e88ba0; box-shadow:0 0 0 3px rgba(235,85,114,.08); }
+  .sr-status { position:absolute; width:1px; height:1px; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+</style>
+</head>
+<body>
+<div class="control">
+  <div class="pill" id="pill">
+    <button class="identity-button" id="identityButton" aria-label="Choose Meat Identity">🔒</button>
+    <span class="trust-dot" id="trustDot" aria-hidden="true"></span>
+    <div class="field" id="field"></div>
+    <button class="go" id="go" aria-label="Unlock">→</button>
+  </div>
+  <div class="sr-status" id="status" aria-live="polite"></div>
+  <div class="menu" id="menu"></div>
+</div>
+<script>
+(() => {
+  const pill = document.getElementById('pill');
+  const identityButton = document.getElementById('identityButton');
+  const field = document.getElementById('field');
+  const go = document.getElementById('go');
+  const menu = document.getElementById('menu');
+  const status = document.getElementById('status');
+  const trustDot = document.getElementById('trustDot');
+
+  let context = null;
+  let selectedIdentity = null;
+  let input = null;
+  let phase = 'manual';
+  let busy = false;
+  let errorRestoreTimer = null;
+  let lastLayout = null;
+
+  function applyLayout(layout = {}) {
+    lastLayout = layout;
+    const x = Math.max(0, Number(layout.x) || 0);
+    const y = Math.max(0, Number(layout.y) || 0);
+    const width = Math.max(220, Number(layout.width) || Math.max(220, window.innerWidth - 8));
+    const height = Math.max(60, Number(layout.height) || 64);
+    const control = document.querySelector('.control');
+    control.style.left = `${x}px`;
+    control.style.top = `${y}px`;
+    control.style.width = `${Math.min(width, Math.max(220, window.innerWidth - x))}px`;
+    pill.style.height = `${Math.max(60, Math.min(72, height))}px`;
+    if (menu.classList.contains('open')) positionMenu();
+  }
+
+  function positionMenu() {
+    if (!menu.classList.contains('open')) return;
+    const control = document.querySelector('.control');
+    const rect = control.getBoundingClientRect();
+    const below = Math.max(0, window.innerHeight - rect.bottom - 8);
+    const above = Math.max(0, rect.top - 8);
+    const natural = Math.min(300, Math.max(120, menu.scrollHeight || 220));
+    const useAbove = below < Math.min(180, natural) && above > below;
+    menu.classList.toggle('above', useAbove);
+    const available = useAbove ? above : below;
+    menu.style.maxHeight = `${Math.max(92, Math.min(300, available - 4))}px`;
+  }
+
+  function applyTrust(trust) {
+    trustDot.className = 'trust-dot';
+    const rawLevel = String(trust?.level || 'warning').toLowerCase();
+    const level = rawLevel === 'warning' ? 'unsigned' : rawLevel === 'danger' ? 'invalid' : rawLevel;
+    trustDot.classList.add(['verified','signed','unsigned','invalid'].includes(level) ? level : 'unsigned');
+    const parts = [trust?.label, trust?.publisher, trust?.detail].filter(Boolean);
+    trustDot.title = parts.join(' · ');
+  }
+
+  function clearErrorVisual() {
+    if (errorRestoreTimer) clearTimeout(errorRestoreTimer);
+    errorRestoreTimer = null;
+    pill.classList.remove('bad');
+    status.textContent = '';
+  }
+
+  function signalError(message) {
+    clearErrorVisual();
+    status.textContent = message || 'Authentication failed';
+    pill.classList.remove('ok');
+    pill.classList.add('bad');
+    const previous = identityButton.textContent;
+    identityButton.textContent = '×';
+    identityButton.title = message || 'Authentication failed';
+    if (input) input.setAttribute('aria-invalid', 'true');
+    errorRestoreTimer = setTimeout(() => {
+      pill.classList.remove('bad');
+      if (input) input.removeAttribute('aria-invalid');
+      identityButton.title = '';
+      if (phase === 'identity' && selectedIdentity) identityButton.textContent = selectedIdentity.emoji || '🐷';
+      else if (phase === 'totp') identityButton.textContent = '🔢';
+      else identityButton.textContent = context?.type === 'wurstkey' ? '🔑' : '🔒';
+      status.textContent = '';
+    }, 1500);
+  }
+
+  function signalSuccess() {
+    clearErrorVisual();
+    pill.classList.add('ok');
+    identityButton.classList.remove('busy');
+    identityButton.textContent = '✓';
+    go.disabled = true;
+    identityButton.disabled = true;
+    status.textContent = 'Unlocked';
+  }
+
+  function setBusy(value, fingerprint = false) {
+    busy = value;
+    go.disabled = value;
+    identityButton.disabled = value;
+    pill.classList.toggle('busy', value);
+    identityButton.classList.toggle('busy', value);
+    if (fingerprint && value) identityButton.textContent = '🫆';
+  }
+
+  function revealSecret() {
+    if (input && phase === 'manual') input.type = 'text';
+  }
+
+  function concealSecret() {
+    if (input && phase === 'manual') input.type = 'password';
+  }
+
+  function buildInput(kind) {
+    clearErrorVisual();
+    phase = kind;
+    selectedIdentity = null;
+    field.innerHTML = '';
+    input = document.createElement('input');
+    input.autocomplete = 'off';
+    input.autocapitalize = 'none';
+    input.spellcheck = false;
+    input.type = kind === 'totp' ? 'text' : 'password';
+    input.placeholder = context?.type === 'wurstkey' ? 'Enter WurstKey…' : 'Enter your secret Meatphrase…';
+    if (kind === 'totp') {
+      input.inputMode = 'numeric';
+      input.pattern = '[0-9]*';
+      input.maxLength = 6;
+      input.autocomplete = 'one-time-code';
+      input.className = 'totp-input';
+      field.classList.add('totp');
+      const cells = document.createElement('div');
+      cells.className = 'otp-cells';
+      for (let i = 0; i < 6; i += 1) {
+        const cell = document.createElement('span');
+        cell.className = 'otp-cell';
+        cells.appendChild(cell);
+      }
+      field.appendChild(cells);
+      const paintOtp = () => {
+        const digits = String(input.value || '').replace(/\D/g, '').slice(0, 6);
+        if (input.value !== digits) input.value = digits;
+        [...cells.children].forEach((cell, index) => {
+          cell.textContent = digits[index] || '';
+          cell.classList.toggle('active', document.activeElement === input && index === Math.min(digits.length, 5));
+        });
+      };
+      input.addEventListener('input', paintOtp);
+      input.addEventListener('focus', paintOtp);
+      input.addEventListener('blur', paintOtp);
+      cells.addEventListener('pointerdown', (event) => { event.preventDefault(); input.focus(); });
+    } else {
+      field.classList.remove('totp');
+      input.addEventListener('mouseenter', revealSecret);
+      input.addEventListener('mouseleave', concealSecret);
+      input.addEventListener('blur', concealSecret);
+    }
+    input.addEventListener('input', clearErrorVisual);
+    input.addEventListener('keydown', (event) => { if (event.key === 'Enter') submit(); });
+    field.appendChild(input);
+    identityButton.textContent = context?.type === 'wurstkey' ? '🔑' : (kind === 'totp' ? '🔢' : '🔒');
+    identityButton.disabled = context?.type === 'wurstkey' || kind === 'totp';
+    go.disabled = false;
+    pill.classList.remove('ok');
+    setTimeout(() => input.focus(), 20);
+  }
+
+  function selectIdentity(identity) {
+    clearErrorVisual();
+    selectedIdentity = identity;
+    phase = 'identity';
+    input = null;
+    field.classList.remove('totp');
+    field.innerHTML = '<div class="identity-name"></div>';
+    field.firstElementChild.textContent = identity.name;
+    identityButton.textContent = identity.emoji || '🐷';
+    identityButton.disabled = false;
+    go.disabled = false;
+    pill.classList.remove('ok');
+    closeMenu();
+  }
+
+  async function openMenu() {
+    if (context?.type !== 'identity' || busy) return;
+    context = await window.wursterAuth.context();
+    menu.innerHTML = '';
+    for (const identity of context.identities || []) {
+      const button = document.createElement('button');
+      button.className = 'option';
+      button.innerHTML = '<span class="emoji"></span><span></span>';
+      button.children[0].textContent = identity.emoji || '🐷';
+      button.children[1].textContent = identity.name;
+      button.addEventListener('click', () => selectIdentity(identity));
+      menu.appendChild(button);
+    }
+    if ((context.identities || []).length) {
+      const separator = document.createElement('div');
+      separator.className = 'separator';
+      menu.appendChild(separator);
+    }
+    const manual = document.createElement('button');
+    manual.className = 'option manual';
+    manual.innerHTML = '<span class="emoji">🔐</span><span>Manual Meatphrase<span class="tiny">Use once · nothing is stored</span></span>';
+    manual.addEventListener('click', () => { closeMenu(); buildInput('manual'); });
+    menu.appendChild(manual);
+    if (context.meatLockerAvailable) {
+      const manage = document.createElement('button');
+      manage.className = 'option manual';
+      manage.innerHTML = '<span class="emoji">＋</span><span>Meat Identities<span class="tiny">Create or manage in Wurster</span></span>';
+      manage.addEventListener('click', async () => { await closeMenu(); await window.wursterAuth.manageIdentities(); });
+      menu.appendChild(manage);
+    }
+    menu.classList.add('open');
+    await window.wursterAuth.setExpanded(true);
+    requestAnimationFrame(positionMenu);
+  }
+
+  async function closeMenu() {
+    menu.classList.remove('open', 'above');
+    menu.style.maxHeight = '';
+    await window.wursterAuth.setExpanded(false).catch(() => {});
+  }
+
+  async function submit() {
+    if (busy) return;
+    clearErrorVisual();
+    try {
+      if (phase === 'identity' && selectedIdentity) {
+        setBusy(true, true);
+        const result = await window.wursterAuth.beginIdentity(selectedIdentity.id);
+        if (!result.ok) throw new Error(result.error || 'Identity could not be used');
+        if (result.needsTotp) {
+          setBusy(false);
+          buildInput('totp');
+          identityButton.textContent = '🔢';
+          return;
+        }
+        setBusy(false);
+        signalSuccess();
+        return;
+      }
+      if (phase === 'totp') {
+        const code = String(input?.value || '').replace(/\D/g, '');
+        if (code.length !== 6) throw new Error('Enter the 6-digit Authenticator code');
+        setBusy(true);
+        const result = await window.wursterAuth.submitTotp(code);
+        if (!result.ok) throw new Error(result.error || 'Authenticator code rejected');
+        setBusy(false);
+        signalSuccess();
+        return;
+      }
+      const value = String(input?.value || '').trim();
+      if (!value) throw new Error(context?.type === 'wurstkey' ? 'Enter the WurstKey' : 'Enter the Meatphrase');
+      concealSecret();
+      setBusy(true);
+      const result = await window.wursterAuth.submitManual(value);
+      if (!result.ok) throw new Error(result.error || 'Secret rejected');
+      setBusy(false);
+      input.value = '';
+      signalSuccess();
+    } catch (error) {
+      setBusy(false);
+      signalError(error.message || String(error));
+    }
+  }
+
+  identityButton.addEventListener('click', () => menu.classList.contains('open') ? closeMenu() : openMenu());
+  go.addEventListener('click', submit);
+  document.addEventListener('pointerdown', (event) => {
+    if (!menu.classList.contains('open')) return;
+    if (!document.querySelector('.control').contains(event.target)) void closeMenu();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && menu.classList.contains('open')) void closeMenu();
+  });
+  window.addEventListener('resize', positionMenu, { passive: true });
+  window.wursterAuth.onLayout(applyLayout);
+
+  window.wursterAuth.context().then((ctx) => {
+    context = ctx;
+    applyTrust(context.trust);
+    buildInput('manual');
+    if (context.type === 'identity' && context.preferredIdentity) selectIdentity(context.preferredIdentity);
+  }).catch((error) => signalError(error.message || String(error)));
+})();
+</script>
+</body>
+</html>

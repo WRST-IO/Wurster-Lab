@@ -1,0 +1,14 @@
+{
+  "name": "@wurster/wrst-authority-worker",
+  "version": "0.20.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "secret": "wrangler secret put WRST_ISSUER_PRIVATE_PKCS8"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

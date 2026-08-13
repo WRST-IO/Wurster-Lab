@@ -1,0 +1,45 @@
+{
+  "id": "io.wrst.wurster-lab",
+  "name": "Wurster Lab",
+  "version": "0.20.0",
+  "type": "app",
+  "entry": "index.html",
+  "outputName": "WursterLab",
+  "window": {
+    "width": 980,
+    "height": 760,
+    "transparent": false,
+    "frame": true,
+    "resizable": true
+  },
+  "capabilities": {
+    "files.open": true,
+    "files.save": true
+  },
+  "application": {
+    "protection": "public"
+  },
+  "data": {
+    "format": "wurst/data-realms-1",
+    "writable": true,
+    "realms": [
+      {
+        "id": "workspace",
+        "label": "Wurster Workspace"
+      },
+      {
+        "id": "lab",
+        "label": "Lab Notes"
+      },
+      {
+        "id": "operator",
+        "label": "WRST.IO Operator",
+        "governance": "personal"
+      }
+    ]
+  },
+  "protection": {
+    "storedIdentity": true
+  },
+  "versionedOutput": false
+}

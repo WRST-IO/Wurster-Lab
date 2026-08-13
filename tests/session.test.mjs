@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { webcrypto } from 'node:crypto';
+import { UnlockSessionBroker, parseSessionDuration } from '../packages/session/src/index.js';
+if (!globalThis.crypto) globalThis.crypto = webcrypto;
+let now = 1_000_000;
+const broker = new UnlockSessionBroker({ now: () => now, defaultTtlMs: 60_000, maxTtlMs: 86_400_000 });
+const grant = broker.grant({ binding: 'wurst:abc:runtime-1', purpose: 'filesystem', scopes: ['fs:read','fs:write'], requestedTtl: '10m', secretHandle: 'private-handle' });
+assert.equal(grant.secretHandle, 'private-handle');
+assert.equal(broker.status('wurst:abc:runtime-1','filesystem').session.expiresAt, now + 600_000);
+assert.equal(broker.require('wurst:abc:runtime-1','filesystem','fs:write').secretHandle, 'private-handle');
+assert.throws(() => broker.require('wurst:abc:runtime-1','filesystem','sign'), /does not allow/);
+now += 600_001;
+assert.equal(broker.get('wurst:abc:runtime-1','filesystem'), null);
+assert.equal(broker.status('wurst:abc:runtime-1','filesystem').state, 'locked');
+assert.equal(parseSessionDuration('7d', { maxMs: 86_400_000 }), 86_400_000);
+console.log('✓ Wurster authorization sessions are runtime-bound, scoped, expiring and never require a renderer-visible bearer token');
