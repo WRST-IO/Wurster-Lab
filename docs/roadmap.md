@@ -19,6 +19,12 @@ The working release lane is:
 
 The exact feature-to-version assignment can move. The important part is that the project now favors conformance, recovery, documentation and platform behavior over accumulating unrelated features.
 
+## Pre-1.0 compatibility policy
+
+Before Wurster 1.0, experimental contracts are allowed to change cleanly. When a schema, runtime path, capability or security model is replaced, the discarded design is removed instead of being kept alive through backwards-compatibility shims, migration bridges or dual behavior.
+
+Pre-1.0 Wursts that depend on a discarded contract are rebuilt against the current contract. Compatibility guarantees begin only when a behavior is explicitly promoted into the 1.0 contract. Bug fixes and current-format recovery are still required; compatibility code for superseded alpha designs is not.
+
 ## Before 1.0
 
 Primary work includes:

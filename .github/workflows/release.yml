@@ -28,6 +28,45 @@ jobs:
       - name: Run release gate
         run: npm test
 
+  web:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - run: npm install
+      - name: Build Wurster Web distribution
+        run: |
+          npm run authority:sync
+          npm run runtime:web:build
+      - name: Stage Wurster Web release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          mkdir -p release-web
+          cp runtime/web/dist/wurster.js release-web/
+          cp runtime/web/dist/wurster.min.js release-web/
+          cp runtime/web/dist/wurster-sw.js release-web/
+          cp runtime/web/dist/wurster-embed.js release-web/
+          cp runtime/web/dist/wurster-embed-host.html release-web/
+          cp runtime/web/dist/trust-data.mjs release-web/
+          (
+            cd release-web
+            zip -9 "Wurster-Web-${version}.zip" \
+              wurster.js wurster.min.js wurster-sw.js wurster-embed.js \
+              wurster-embed-host.html trust-data.mjs
+          )
+      - uses: actions/upload-artifact@v7
+        with:
+          name: runtime-web
+          path: release-web/*
+          if-no-files-found: error
+          compression-level: 0
+
   mac-arm64:
     needs: validate
     runs-on: macos-latest
@@ -243,7 +282,7 @@ jobs:
           compression-level: 0
 
   publish:
-    needs: [mac-arm64, mac-x64, windows-x64]
+    needs: [web, mac-arm64, mac-x64, windows-x64]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

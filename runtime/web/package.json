@@ -1,6 +1,6 @@
 {
   "name": "@wurster/web",
-  "version": "0.20.0",
+  "version": "0.20.1",
   "private": true,
   "type": "module",
   "description": "Browser-hosted Wurster runtime alpha for WRST v7.",
@@ -8,5 +8,8 @@
   "scripts": {
     "build": "node build.mjs",
     "serve": "node serve.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
   }
 }

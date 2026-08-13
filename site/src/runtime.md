@@ -70,16 +70,27 @@ stylesheets:
         <span class="platform-badge">Current alpha</span>
         <div class="platform-icon">{% platformIcon "web" %}</div>
         <h3>Wurster Web</h3>
-        <p>Browser Wurster powers <code>&lt;wurst-embed&gt;</code> and the online Viewer. A public CDN endpoint is coming later.</p>
-        <a class="runtime-download" href="/viewer/">Open Wurst Viewer ↗</a>
-        <div class="runtime-coming-soon">CDN package · coming soon</div>
+        <p>Browser Wurster powers <code>&lt;wurst-embed&gt;</code> and the online Viewer. The exact release runtime is published beside the native runtimes.</p>
+        {% if releases.available %}
+          <details class="runtime-download-menu">
+            <summary class="runtime-download">↓ Download Web runtime <span>⌄</span></summary>
+            <div class="runtime-download-popover">
+              <a href="{{ releases.webMin }}"><strong>Minified ESM</strong><small>wurster.min.js</small></a>
+              <a href="{{ releases.webJs }}"><strong>Readable ESM</strong><small>wurster.js</small></a>
+              <a href="{{ releases.webZip }}"><strong>Complete distribution</strong><small>runtime + worker + embed host</small></a>
+            </div>
+          </details>
+        {% else %}
+          <span class="runtime-download disabled">↓ Download Web runtime <small>after GitHub deploy</small></span>
+        {% endif %}
+        <div class="runtime-coming-soon"><a href="/viewer/">Open Wurst Viewer ↗</a></div>
       </div>
     </div>
   </div>
 
   {% if releases.available %}
   <div class="runtime-release-strip">
-    <div><strong>Wurster {{ releases.version }}</strong><span>GitHub Release · installers + SHA-256 checksums</span></div>
+    <div><strong>Wurster {{ releases.version }}</strong><span>GitHub Release · native installers + Web Runtime + SHA-256 checksums</span></div>
     <a class="btn btn-ghost" href="{{ releases.releaseUrl }}">All release assets ↗</a>
   </div>
   {% endif %}

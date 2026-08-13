@@ -16,5 +16,8 @@ module.exports = {
   allReleasesUrl: releaseRoot || '',
   windowsX64: assetRoot ? `${assetRoot}/Wurster-Setup-${pkg.version}-x64.exe` : '',
   macArm64: assetRoot ? `${assetRoot}/Wurster-${pkg.version}-mac-arm64.dmg` : '',
-  macX64: assetRoot ? `${assetRoot}/Wurster-${pkg.version}-mac-x64.dmg` : ''
+  macX64: assetRoot ? `${assetRoot}/Wurster-${pkg.version}-mac-x64.dmg` : '',
+  webJs: assetRoot ? `${assetRoot}/wurster.js` : '',
+  webMin: assetRoot ? `${assetRoot}/wurster.min.js` : '',
+  webZip: assetRoot ? `${assetRoot}/Wurster-Web-${pkg.version}.zip` : ''
 };
