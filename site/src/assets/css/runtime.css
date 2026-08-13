@@ -1,0 +1,49 @@
+/* Runtime page layout stays intentionally deterministic. Four targets form a
+   calm 2×2 grid instead of redistributing into sparse auto-fit columns. */
+.runtime-page .platform-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  max-width: 860px;
+  margin: 0 auto 48px;
+}
+
+.runtime-page .platform-card {
+  min-width: 0;
+}
+
+.runtime-page .platform-card-body {
+  min-height: 250px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.runtime-page .platform-card p {
+  flex: 1 1 auto;
+}
+
+.runtime-page .runtime-download,
+.runtime-page .runtime-download-menu {
+  margin-top: auto;
+}
+
+.runtime-page .runtime-download-menu > .runtime-download {
+  margin-top: 0;
+}
+
+.runtime-page .runtime-release-strip {
+  max-width: 860px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (max-width: 720px) {
+  .runtime-page .platform-grid {
+    grid-template-columns: 1fr;
+    max-width: 460px;
+  }
+
+  .runtime-page .platform-card-body {
+    min-height: 0;
+  }
+}

@@ -106,6 +106,20 @@ Outputs are organized below `runtime/windows/dist/` and `runtime/mac/dist/`.
 
 ## GitHub runtime releases
 
-Pushing a tag that exactly matches `v<package.json version>` triggers `.github/workflows/release.yml`. The workflow builds each desktop target on its native GitHub-hosted operating system and publishes the resulting installers as Release assets. Pre-1.0 tags are marked as prereleases.
+Pushing a tag that exactly matches `v<package.json version>` triggers `.github/workflows/release.yml`. The workflow runs the test gate, builds each desktop target on its native GitHub-hosted operating system and publishes the resulting installers as Release assets. Pre-1.0 tags are marked as prereleases.
 
-Signing credentials are not stored in the repository. Unsigned alpha builds can be produced by the hosted runners today. Platform signing and Apple notarization can later be enabled with repository secrets without changing the release URL contract used by wrst.io.
+Signing credentials are never stored in the repository. The current hosted macOS release jobs fail closed unless all five repository secrets are configured:
+
+```text
+MAC_CSC_LINK
+MAC_CSC_KEY_PASSWORD
+APPLE_ID
+APPLE_APP_SPECIFIC_PASSWORD
+APPLE_TEAM_ID
+```
+
+`MAC_CSC_LINK` carries the Developer ID Application `.p12` as a Base64 value and `MAC_CSC_KEY_PASSWORD` unlocks that `.p12`. `APPLE_ID` is the Apple Account used for notarization, `APPLE_APP_SPECIFIC_PASSWORD` is a dedicated app-specific password generated for that account rather than the normal account password, and `APPLE_TEAM_ID` selects the Apple Developer Program team used for the notarization request.
+
+The workflow creates the hardened-runtime Electron entitlements temporarily on the GitHub runner, signs and notarizes each macOS build, then verifies the resulting app with `codesign`, Gatekeeper and `stapler` before publishing it. These temporary CI entitlements do not change the configuration of a normal local `npm run dist:mac:*` build.
+
+The Windows hosted build remains a separate signing concern. Its installer can be produced without the Apple credentials, while Windows Authenticode or Azure Trusted Signing can be enabled independently.
