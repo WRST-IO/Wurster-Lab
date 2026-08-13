@@ -18,7 +18,6 @@ stylesheets:
 
   <div class="platform-grid">
     <div class="platform-card">
-      <div class="platform-card-stripe"></div>
       <div class="platform-card-body">
         <span class="platform-badge">Current alpha</span>
         <div class="platform-icon">{% platformIcon "windows" %}</div>
@@ -28,7 +27,6 @@ stylesheets:
       </div>
     </div>
     <div class="platform-card">
-      <div class="platform-card-stripe"></div>
       <div class="platform-card-body">
         <span class="platform-badge">Current alpha</span>
         <div class="platform-icon">{% platformIcon "macos" %}</div>
@@ -38,7 +36,6 @@ stylesheets:
       </div>
     </div>
     <div class="platform-card">
-      <div class="platform-card-stripe"></div>
       <div class="platform-card-body">
         <span class="platform-badge">Planned for 1.0 family</span>
         <div class="platform-icon">{% platformIcon "linux" %}</div>
@@ -48,7 +45,6 @@ stylesheets:
       </div>
     </div>
     <div class="platform-card">
-      <div class="platform-card-stripe"></div>
       <div class="platform-card-body">
         <span class="platform-badge">Current alpha</span>
         <div class="platform-icon">{% platformIcon "web" %}</div>

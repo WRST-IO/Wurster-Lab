@@ -21,7 +21,6 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  overflow: visible !important;
 }
 
 .runtime-page .platform-card p {
