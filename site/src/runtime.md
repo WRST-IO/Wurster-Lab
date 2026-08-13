@@ -3,9 +3,11 @@ layout: layouts/base.njk
 title: Runtime
 description: A Wurst is platform-independent; each conforming Wurster runtime implements the same portable contract with platform-specific technology.
 permalink: /runtime/
+stylesheets:
+  - /assets/css/runtime.css
 ---
 
-<main class="page-main">
+<main class="page-main runtime-page">
   <div class="page-head"><h1>Wurster Runtime</h1></div>
   <p class="page-sub">Same Wurst semantics, not the same runtime implementation.</p>
 
