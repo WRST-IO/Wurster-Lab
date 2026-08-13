@@ -99,3 +99,5 @@ Personal/shared WurstFS realm crypto, the authenticated Desktop↔Web identity r
 `wrst.io` is the official project domain. Wurster ships a pinned public WRST.IO Root Authority and a root-signed trust bundle; normal Authority certificate verification is offline. The Root private key is derived only from an operator-held 24-token Root Meatphrase and is never deployed. A separate rotatable issuer powers the stateless `authority.wrst.io` Cloudflare Worker.
 
 The repository ships a marked development Root for tests. Before production, run `npm run authority:bootstrap` on the trusted operator machine, print/store the Root Meatphrase and fingerprint offline, then require `npm run authority:production-check` before V1 release. WRST.IO certificates are claim-based: DNS can attest a domain and the optional mail service can attest an email address with a six-digit code from `oink@wrst.io`; labels remain self-declared unless a future proof method explicitly verifies them. See `docs/authority.md` and `authority/wrst.io/README.md`.
+
+ChatGPT GitHub connector write test.
