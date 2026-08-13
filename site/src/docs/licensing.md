@@ -1,16 +1,22 @@
 ---
-title: Licensing status
+title: Licensing
 group: Project
 groupOrder: 9
 order: 1
 ---
 
-# Licensing status
+# Licensing
 
-Wurster is currently a **pre-1.0 development project**. The source tree is not presently published under an open-source license. Unless a file explicitly says otherwise, the current pre-1.0 source remains all rights reserved.
+Wurster Lab software is licensed under the **Apache License, Version 2.0**.
 
-The intended direction for the final 1.0 release is a permissive open-source license. **MIT is the current candidate**, but the final license is not established until an actual `LICENSE` file is published with the 1.0 source.
+SPDX-License-Identifier: `Apache-2.0`
 
-This distinction is deliberate: public documentation and binaries do not themselves grant permission to copy, redistribute or commercially relicense the current development source.
+This includes the runtimes, Wurst Meat Grinder, libraries, developer tools, tests, documentation, examples, and related source code. The Wurst file format itself is an open format; this license governs Wurster Lab code and materials, not the abstract format itself.
 
-The project name is **Wurster**, the application/container format is **Wurst**, and the official project domain is **wrst.io**. WRST.IO is a project website and trust service, not a representation that a company, association or other incorporated entity exists behind the project.
+## View the full license
+
+See [LICENSE.md](https://github.com/wursterschungel/wurster-lab/blob/main/LICENSE.md) in the root of the repository for the complete Apache 2.0 license text, attribution requirements, and trademark information.
+
+## Attribution
+
+Wurster Lab was created by **Valentin Winkelmann**. Redistributions and derivative works must preserve the copyright, license, and attribution notices as required by the Apache License, Version 2.0.

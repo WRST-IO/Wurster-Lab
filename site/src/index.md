@@ -22,8 +22,6 @@ permalink: /
   </div>
 </section>
 
-<section class="project-status"><strong>Pre-1.0 development project.</strong> Wurster is under active development and is not currently published under an open-source license. The 1.0 release is intended to move to a permissive open-source license; MIT is the current candidate. Until a LICENSE file says otherwise, the source remains all rights reserved.</section>
-
 {% processDiagram %}
 
 <section id="features" class="card-grid">

@@ -134,6 +134,9 @@ a { color: inherit; }
 .main-nav a:hover { color: var(--pink-500); }
 
 .header-actions { display: flex; align-items: center; gap: 10px; }
+@media (max-width: 860px) { 
+  .header-actions .btn { display: none; }
+}
 .icon-btn {
   width: 38px; height: 38px; border-radius: var(--radius-sm);
   display: inline-flex; align-items: center; justify-content: center;
@@ -153,6 +156,7 @@ a { color: inherit; }
   padding: 12px 10px; font-size: 15px; font-weight: 500; color: var(--ink);
   text-decoration: none; border-bottom: 1px solid var(--pink-100);
 }
+.mobile-nav .btn { width: 100%; margin-top: 8px; display: flex; justify-content: center; }
 #nav-toggle:checked ~ .mobile-nav { display: flex; }
 
 @media (min-width: 861px) {
@@ -180,6 +184,10 @@ a { color: inherit; }
   background: var(--card); border: 1px solid var(--pink-100); border-radius: 28px;
   padding: clamp(24px, 5vw, 44px); display: flex; align-items: center; justify-content: center;
   gap: clamp(12px, 3vw, 28px); flex-wrap: wrap; box-shadow: var(--shadow-card);
+}
+@media (max-width: 600px) {
+  .process-card { flex-direction: column; }
+  .process-arrow { transform: rotate(90deg); }
 }
 .process-step { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .process-step img.pig, .process-step img.wurst-file { width: clamp(76px, 10vw, 108px); height: clamp(76px, 10vw, 108px); object-fit: contain; }

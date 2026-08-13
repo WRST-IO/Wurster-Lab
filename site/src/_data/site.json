@@ -15,18 +15,6 @@
       "href": "/examples/"
     },
     {
-      "label": "Viewer",
-      "href": "/viewer/"
-    },
-    {
-      "label": "Verify",
-      "href": "/verify/"
-    },
-    {
-      "label": "Authority",
-      "href": "/authority/"
-    },
-    {
       "label": "Runtime",
       "href": "/runtime/"
     }
@@ -37,16 +25,8 @@
         "title": "Product",
         "links": [
           {
-            "label": "Features",
-            "href": "/#features"
-          },
-          {
             "label": "Examples",
             "href": "/examples/"
-          },
-          {
-            "label": "Wurst Viewer",
-            "href": "/viewer/"
           },
           {
             "label": "Runtime",
@@ -60,14 +40,6 @@
           {
             "label": "Docs",
             "href": "/docs/"
-          },
-          {
-            "label": "Verify a Publisher",
-            "href": "/verify/"
-          },
-          {
-            "label": "WRST.IO Authority",
-            "href": "/authority/"
           },
           {
             "label": "WurstFS",
