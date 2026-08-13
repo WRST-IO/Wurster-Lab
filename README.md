@@ -1,4 +1,4 @@
-# Wurster Lab 0.20.0 🌭🐖🥩
+# 🌭 Wurster Lab 0.20.0 🌭🐖🥩
 
 Wurster Lab is the build, runtime, format, test and documentation workspace for Wurst: a portable mini-app container with controlled runtime capabilities, WurstFS, signing, streaming and optional portable protection.
 
@@ -16,13 +16,13 @@ Wurster  Wurster  Wursters
 ```
 
 
-## Wurst law
+## ⚖️ Wurst law
 
 > A valid Wurst is platform-independent. Conforming runtimes implement the same Wurst semantics even when their host-platform implementation differs.
 
 Wurst packages never encode Apple Keychain, Windows Hello, Secure Enclave, Android Keystore or other platform-specific machinery. Those belong to individual Wurster runtimes.
 
-## Workspace
+## 🧰 Workspace
 
 - `packages/format` — WRST v7, current WurstFS realms, Wurster Identity crypto, publisher signing, random-access sources and carrier primitives.
 - `packages/interface` — portable Wurst Interface Actions/Events contract.
@@ -37,20 +37,20 @@ Wurst packages never encode Apple Keychain, Windows Hello, Secure Enclave, Andro
 - `site` — wrst.io documentation/site surface generated from the canonical docs.
 
 
-## Project status and licensing
+## 🧭 Project status and licensing
 
 Wurster is an independent software project published at `wrst.io`; WRST.IO is the project identity and website, not a company or incorporated organization. The project is still pre-1.0 and **is not open source yet**. No permissive license is granted by this workspace until an explicit `LICENSE` file says otherwise.
 
 The current plan is to publish Wurster 1.0 under a permissive open-source license, with MIT as the leading candidate. That intent is not a license grant for pre-1.0 code. See `docs/licensing.md`.
 
-## Install and test
+## 🧪 Install and test
 
 ```bash
 npm install
 npm test
 ```
 
-## Runtime builds
+## 🏗️ Runtime builds
 
 ```bash
 npm run dist:win
@@ -62,13 +62,13 @@ npm run runtime:web:build
 
 Desktop artifacts are written below `runtime/windows/dist/` and `runtime/mac/dist/` instead of living beside the shared Electron source.
 
-## Release signing
+## 🔐 Release signing
 
 Copy `.env.signing.example` to `.env.signing.local` and fill only the credentials needed by the platform you are building. The local file, `.p12` and `.pfx` material are gitignored. macOS Developer ID/notarization and Windows Authenticode are release concerns for the Wurster runtime itself and are completely separate from Wurst publisher signatures.
 
 See `docs/release-signing.md`.
 
-## WurstFS v2: simple by default, federated when asked
+## 🗃️ WurstFS v2: simple by default, federated when asked
 
 0.20 keeps the realm/identity foundation while removing the assumption that ordinary mutable data needs a special filesystem mode or signed history. WurstFS v2 is now a capability ladder:
 
@@ -86,7 +86,7 @@ History-free ordinary/personal Wursts can be compacted back to their current liv
 
 Shared governance retains Wurster Identity based Ed25519 authorization and optional X25519 sealed sharing. A public `.wurstid` can still be exchanged before the recipient ever opens the Wurst. See `docs/wurst-fs.md` and `docs/wurster-identities.md`.
 
-## Wurster Web
+## 🌐 Wurster Web
 
 `runtime/web/dist/` now contains the browser runtime, service worker and the CDN-friendly `<wurst-embed>` host. 0.20.0 opens local or HTTP Range-backed WRST v7, runs public, partial and fully WurstKey-sealed application content, keeps normal relative resource URLs intact, and gives plain WurstFS a chunk-backed browser overlay with ranged reads, streaming writes and standalone snapshot export.
 
@@ -94,7 +94,7 @@ A site can host the runtime distribution together and embed a Wurst with `<wurst
 
 Personal/shared WurstFS realm crypto, the authenticated Desktop↔Web identity return leg, live DNS/local-trust presentation parity and Undercover PNG adaptation remain pre-1.0 browser parity work. WRST.IO Authority certificate chains are already verified offline in both Desktop and Web.
 
-## WRST.IO Authority
+## 🛡️ WRST.IO Authority
 
 `wrst.io` is the official project domain. Wurster ships a pinned public WRST.IO Root Authority and a root-signed trust bundle; normal Authority certificate verification is offline. The Root private key is derived only from an operator-held 24-token Root Meatphrase and is never deployed. A separate rotatable issuer powers the stateless `authority.wrst.io` Cloudflare Worker.
 
