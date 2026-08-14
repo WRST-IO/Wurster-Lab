@@ -1,0 +1,24 @@
+{
+  "format": "wurster/edge-runtime-lock-1",
+  "repository": "WRST-IO/wurster-edge-runtime",
+  "tag": "v0.1.0-dev.2",
+  "checksumAsset": "SHA256SUMS",
+  "targets": {
+    "linux-amd64": {
+      "asset": "wurster-edge-runtime-linux-amd64.tar.gz",
+      "archiveFormat": "tar.gz"
+    },
+    "darwin-arm64": {
+      "asset": "wurster-edge-runtime-darwin-arm64.tar.gz",
+      "archiveFormat": "tar.gz"
+    },
+    "darwin-amd64": {
+      "asset": "wurster-edge-runtime-darwin-amd64.tar.gz",
+      "archiveFormat": "tar.gz"
+    },
+    "windows-amd64": {
+      "asset": "wurster-edge-runtime-windows-amd64.zip",
+      "archiveFormat": "zip"
+    }
+  }
+}

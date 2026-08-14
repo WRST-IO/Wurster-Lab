@@ -1,5 +1,61 @@
 # Changelog
 
+## 0.32.0 r008 - Clean Stall Release Lane
+
+- Decoupled normal Windows, macOS and Web releases from Pigsty native-runtime availability. Tagged v0.32 releases no longer download Edge/Wasmer bundles or wait for platform Pigsty smoke jobs.
+- Desktop Edge-runtime packaging is now explicit opt-in through `WURSTER_BUNDLE_PIGSTY=1`. The pinned public `WRST-IO/wurster-edge-runtime` acquisition/verification path stays in-tree for conformance builds without making Pigsty a release blocker.
+- Desktop Pigsty now reports declared Pigsty as `coming-soon` when no conforming Edge/WASIX runtime is available. The small worker engine is development-only and requires `WURSTER_PIGSTY_DEV=1` or an explicit worker-engine selection.
+- Split Desktop Piglet, PigLink and Pigsty IPC/runtime ownership out of `runtime/desktop/src/main.mjs`. PigLink now owns pending invocation state and cleanup; Piglet owns child lookup/integrity; Pigsty owns engine discovery/status/build routing.
+- Split Desktop web-sandbox request/CSP/range/partition helpers out of `main.mjs`, reducing the central Electron module and giving its remaining responsibilities a temporary code-size/IPC regression budget.
+- Added `tests/code-structure.test.mjs` so known large modules cannot silently grow past their current cleanup budgets and Pig IPC ownership cannot drift back into the Desktop bootstrap module.
+- Added canonical `docs/status.md` and corrected Piglet/PigLink/Pigsty docs to distinguish working slices from planned runtime lifecycle/broker/native-engine work.
+- Reconciled project licensing documentation with the current Apache-2.0 repository license and corrected the canonical WRST-IO repository link.
+
+## 0.32.0 - Pigsty Learns To Build
+
+- Added `@wurster/pigsty`, a controlled Node-backed worker that runs Pigsty scripts against a virtual Wurst workspace. The worker exposes text/byte read-write primitives and returns derived workspace files, results, writes and console events without exposing host `fs`, shell, `process` or network APIs.
+- Desktop Wurster now reports declared Pigsty as available and exposes `wurst.pigsty.run({ script, workspace, args, timeoutMs })` through the preload bridge. Web Wurster keeps the same status surface but rejects execution explicitly because browsers do not carry the Node-backed Pigsty worker.
+- The headless PigLink harness now exposes the same controlled `wurst.pigsty.status()` and `wurst.pigsty.run(...)` surface, so machine callers can drive Pigsty-capable Wursts through PigLink without a visible UI.
+- Pigsty policies can now declare named builds under `pigsty.builds`. Desktop and headless runtimes expose `wurst.pigsty.build(name, request)` so Wursts can run packaged build scripts from their own app workspace instead of passing ad hoc script strings.
+- Removed the host-Node workspace-projection spike from the Pigsty direction. Pigsty no longer treats `mode: "node"` as a valid manifest/runtime path; engine selection is a Wurster implementation detail, not Wurst vocabulary.
+- Added `wurst/pigsty-engine-contract-1` to describe the intended internal runtime world: `/wurst` as WurstFS-backed workspace, `/tmp` as ephemeral scratch, no host filesystem, no host shell, no host processes and no host environment.
+- Added `wurst/pigsty-fs-view-1` plus Pigsty path resolution helpers so future engine adapters receive a concrete mount view for `/wurst`, optional `/toolchain` and `/tmp` without seeing host paths.
+- Added `wurst/pigsty-changeset-1` and `wurst/pigsty-engine-result-1` helpers so future engine adapters can return `add`, `modify` and `delete` operations that Wurster can verify and commit to WurstFS transactionally.
+- Added `runPigstyEngine(...)`, the first executable engine-adapter boundary. It hands a normalized Pigsty filesystem view to a runtime-supplied adapter, converts adapter output into a digest-checked engine result and applies only the persistent WurstFS change-set. Regression coverage uses a mock Edge/WASIX-shaped adapter while the production adapter remains follow-up work.
+- Added `createEdgeWasixPigstyEngine(...)`, `probeEdgeWasixPigstyEngine(...)` and `runPigstyEngineBuild(...)`. Pigsty can now invoke a concrete Edge.js/WASIX adapter through `edge --safe`, enforce declared build outputs against returned change-sets, reject native `.node` addons for v1 portability and report missing Edge binaries cleanly.
+- Added a pinned Wurster Edge runtime acquisition layer for desktop packaging. `runtime/edge-runtime.lock.json` names the tagged `WRST-IO/wurster-edge-runtime` release assets, while `tools/wurster-edge-runtime.mjs` downloads them, verifies `SHA256SUMS` plus every bundle-manifest file hash and stages only the requested platform below the gitignored desktop runtime directory.
+- Electron desktop packages now carry staged Pigsty runtimes through `extraResources`, so installed Wurster discovers `resources/runtimes/wurster-edge-runtime-<target>` without end-user environment variables. Windows x64, macOS arm64/x64 and a prepared Linux x64 build lane share the same staging contract; universal macOS carries both native runtime bundles.
+- The tagged Wurster release workflow now expects a read token when the parallel Edge runtime repository is private, runs a real Linux-amd64 Edge/WASIX gate, and repeats the real Pigsty Edge smoke test against the staged macOS and Windows bundles before publishing. Runtime binaries remain release inputs instead of permanent Wurster Lab repository cargo.
+- Pigsty now recognizes `pigsty-toolchain/` as the canonical Wurst-carried toolchain root. MeatGrinder can package `pigsty.toolchain.source` into that root, Edge builds auto-project it into immutable `/toolchain`, and `/toolchain/node_modules` is linked into the staged `/wurst/node_modules` position for ordinary Node resolution without runtime npm downloads.
+- Desktop and headless Pigsty status now probes Edge/WASIX availability instead of reporting it optimistically. Edge is selectable and testable, but unavailable binaries are surfaced as unavailable rather than silently falling back.
+- Desktop and headless PigLink builds can now request `engine: "edge-wasix"`, or use `WURSTER_PIGSTY_ENGINE=edge-wasix` as the default. Requested Edge builds fail loudly when the Edge binary is unavailable; they do not silently fall back to the development worker.
+- The Edge/WASIX adapter links `/toolchain/node_modules` into the staged `/wurst/node_modules` position for ordinary Node package resolution, then skips that link when collecting persistent WurstFS changes so toolchain packages do not become authored output.
+- Declared Pigsty build outputs are enforced. A named build that declares `outputs: ["dist"]` fails if it writes artifacts outside that output tree.
+- MeatGrinder now uses the shared Pigsty policy normalizer from `@wurster/pigsty`, keeping manifest validation and runtime execution on one contract.
+- Pigsty run results now include deterministic build provenance: source workspace digest, output workspace digest, toolchain summary, creation time and per-written-artifact SHA-256 metadata.
+- Added `assessPigstyBuildRecord(...)` for source-digest stale detection. Stored Pigsty build records can now be checked against a current workspace and reported as `fresh`, `stale` or `invalid`.
+- Added `wurst/pigsty-artifact-store-1` helpers for build status tracking. `createPigstyArtifactStore(...)`, `upsertPigstyBuildRecord(...)` and `assessPigstyArtifactStore(...)` classify builds as `fresh`, `stale`, `missing` or `invalid` using both source digests and artifact hashes.
+- Added `wurst/pigsty-publication-1` helpers for publishing declared build output into a stable Wurst workspace layout. `createPigstyBuildPublication(...)` writes generated files under `data/builds/<build>/artifacts/...`, writes `data/builds/<build>/current.json`, and preserves both declared artifact paths and persisted storage paths for verification.
+- Pigsty runtime status now lists declared build names so UIs and PigLink tools can discover available builds without manually parsing the full manifest.
+- Extended Piglet/Pigsty/PigLink regression coverage to prove Pigsty can build derived files inside the virtual workspace, run declared packaged builds, enforce declared output trees, reject path traversal or host-process access attempts, define an internal engine contract without host authority, resolve Pigsty mount paths, expose immutable toolchain and ephemeral tmp mounts, execute the adapter handoff with digest-checked engine results, invoke the Edge/WASIX adapter through an Edge-compatible command runner, route explicit Edge builds through headless PigLink without worker fallback, apply transactional Pigsty engine results, publish generated artifacts for later persistence, detect tampered published output and be invoked by a Wurst action through headless PigLink and the CLI.
+
+## 0.31.0 - Piglet Bites Back
+
+- Added the first functional Piglet slice. MeatGrinder can embed fixed child `.wurst` / `.wrst` files declared under `piglet.children`, stores them as immutable `piglet` resources and records each child id, entry path, SHA-256 digest, byte size and child application identity summary in the parent manifest.
+- Parent package signatures now cover immutable Piglet child bytes. Replacing a built-in child invalidates the parent signature while the child remains an independently normal Wurst.
+- Wurster Web can list Piglet children, serve runtime-owned child Wurst URLs, verify child byte hashes and open a child as an internal `WursterWebSession`.
+- Desktop Wurster exposes `wurst.piglet.children()` and `wurst.piglet.url(id)` plus `wurst://piglet/<id>.wurst` byte serving for built-in children. Full managed desktop child renderer embedding remains follow-up work.
+- Added the first Pigsty runtime contract slice. MeatGrinder validates `pigsty` policy, runtimes expose `wurst.pigsty.status()`, and unavailable Pigsty is reported explicitly instead of silently pretending Node exists.
+- Added Piglet/Pigsty regression coverage for child-byte signing, Web child sessions and Pigsty status.
+
+## 0.20.1 r007 - Pigsty / Piglet / PigLink direction
+
+- Established the v0.30 architecture lane around three runtime primitives: Pigsty for internal computation, Piglet for Wurst-in-Wurst composition and PigLink for communication.
+- Renamed the current declared Actions/Events contract from Wurst Interface to PigLink. The current manifest field is now `piglink`, the immutable resource scope is `piglink`, the runtime API is `wurst.piglink` and the implementation global is `PigLink.define`.
+- Kept the pre-1.0 no-bridge rule: `interface` manifests are rejected instead of being interpreted as a parallel legacy contract.
+- Added canonical documentation for Pigsty, Piglet, PigLink and derived build artifacts, including Pigsty permission boundaries, Piglet trust separation and PigLink capability-composition rules.
+- Updated current docs and CLI copy from 0.20.0 to 0.20.1 where they described active runtime behavior.
+
 ## 0.20.0 r006 — Whole Hog Repository
 
 - Added a tag-driven GitHub Actions runtime release pipeline. A `v<package-version>` tag runs the test gate, builds macOS arm64, macOS x64 and Windows x64 installers on native GitHub runners, writes SHA-256 checksums and publishes the artifacts as a GitHub Release.

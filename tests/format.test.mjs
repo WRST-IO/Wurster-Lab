@@ -86,6 +86,23 @@ assert.throws(() => encodeWurst({
   },
   files: [{ path: 'index.html', data: Buffer.from('nope'), scope: 'app' }]
 }), /sealed owner-only/);
+assert.throws(() => encodeWurst({
+  manifest: {
+    ...makeManifest(),
+    pigsty: {
+      format: 'wurst/pigsty-1',
+      version: 'node-lts-1',
+      builds: {
+        site: {
+          source: 'build.js',
+          mode: 'node',
+          outputs: ['dist']
+        }
+      }
+    }
+  },
+  files: [{ path: 'index.html', data: Buffer.from('nope'), scope: 'app' }]
+}), /mode is not supported/);
 
 const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'wurst-format-'));
 try {

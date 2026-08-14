@@ -1,4 +1,4 @@
-export const WURST_INTERFACE_FORMAT = 'wurst/interface-1';
+export const PIGLINK_FORMAT = 'wurst/piglink-1';
 export const DEFAULT_ACTION_TIMEOUT_MS = 5_000;
 export const MAX_ACTION_TIMEOUT_MS = 60_000;
 
@@ -41,59 +41,59 @@ export function validateJsonSchema(schema, label = 'schema') {
 }
 
 function normalizeAction(name, raw = {}) {
-  if (!plainObject(raw)) throw new Error(`interface.actions.${name} must be an object`);
+  if (!plainObject(raw)) throw new Error(`piglink.actions.${name} must be an object`);
   const timeoutMs = raw.timeoutMs == null ? DEFAULT_ACTION_TIMEOUT_MS : Number(raw.timeoutMs);
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_ACTION_TIMEOUT_MS) {
-    throw new Error(`interface.actions.${name}.timeoutMs must be between 1 and ${MAX_ACTION_TIMEOUT_MS}`);
+    throw new Error(`piglink.actions.${name}.timeoutMs must be between 1 and ${MAX_ACTION_TIMEOUT_MS}`);
   }
   return {
     description: String(raw.description ?? '').trim(),
     readOnly: raw.readOnly === true,
-    input: validateJsonSchema(raw.input ?? { type: 'object' }, `interface.actions.${name}.input`),
-    output: validateJsonSchema(raw.output ?? null, `interface.actions.${name}.output`),
+    input: validateJsonSchema(raw.input ?? { type: 'object' }, `piglink.actions.${name}.input`),
+    output: validateJsonSchema(raw.output ?? null, `piglink.actions.${name}.output`),
     timeoutMs
   };
 }
 
 function normalizeEvent(name, raw = {}) {
-  if (!plainObject(raw)) throw new Error(`interface.events.${name} must be an object`);
+  if (!plainObject(raw)) throw new Error(`piglink.events.${name} must be an object`);
   return {
     description: String(raw.description ?? '').trim(),
-    payload: validateJsonSchema(raw.payload ?? null, `interface.events.${name}.payload`)
+    payload: validateJsonSchema(raw.payload ?? null, `piglink.events.${name}.payload`)
   };
 }
 
 function normalizeTest(raw, index, actions) {
-  if (!plainObject(raw)) throw new Error(`interface.tests[${index}] must be an object`);
-  const action = assertName(raw.action, `interface.tests[${index}].action`);
-  if (!Object.hasOwn(actions, action)) throw new Error(`interface.tests[${index}] references unknown action ${action}`);
+  if (!plainObject(raw)) throw new Error(`piglink.tests[${index}] must be an object`);
+  const action = assertName(raw.action, `piglink.tests[${index}].action`);
+  if (!Object.hasOwn(actions, action)) throw new Error(`piglink.tests[${index}] references unknown action ${action}`);
   return {
     name: String(raw.name ?? `${action} #${index + 1}`).trim(),
     action,
-    input: cloneJson(raw.input ?? {}, `interface.tests[${index}].input`),
-    expect: Object.hasOwn(raw, 'expect') ? cloneJson(raw.expect, `interface.tests[${index}].expect`) : undefined
+    input: cloneJson(raw.input ?? {}, `piglink.tests[${index}].input`),
+    expect: Object.hasOwn(raw, 'expect') ? cloneJson(raw.expect, `piglink.tests[${index}].expect`) : undefined
   };
 }
 
-export function normalizeWurstInterface(raw) {
+export function normalizePigLink(raw) {
   if (raw == null) return null;
-  if (!plainObject(raw)) throw new Error('interface must be an object');
+  if (!plainObject(raw)) throw new Error('piglink must be an object');
   const source = String(raw.source ?? '').replaceAll('\\', '/').replace(/^\/+/, '');
-  if (!source || source.includes('..') || source.startsWith('__wurst/')) throw new Error('interface.source must be a project-relative JavaScript file');
+  if (!source || source.includes('..') || source.startsWith('__wurst/')) throw new Error('piglink.source must be a project-relative JavaScript file');
   const actions = {};
   for (const [rawName, spec] of Object.entries(raw.actions ?? {})) {
-    const name = assertName(rawName, 'interface action name');
+    const name = assertName(rawName, 'PigLink action name');
     actions[name] = normalizeAction(name, spec);
   }
   const events = {};
   for (const [rawName, spec] of Object.entries(raw.events ?? {})) {
-    const name = assertName(rawName, 'interface event name');
+    const name = assertName(rawName, 'PigLink event name');
     events[name] = normalizeEvent(name, spec);
   }
-  if (Object.keys(actions).length === 0) throw new Error('interface.actions must declare at least one action');
+  if (Object.keys(actions).length === 0) throw new Error('piglink.actions must declare at least one action');
   const tests = (raw.tests ?? []).map((test, index) => normalizeTest(test, index, actions));
   return {
-    format: WURST_INTERFACE_FORMAT,
+    format: PIGLINK_FORMAT,
     source,
     headless: raw.headless === true,
     actions,
@@ -123,7 +123,7 @@ export function validateJsonValue(value, schema, label = '$') {
   return value;
 }
 
-export function publicInterfaceManifest(normalized, entry) {
+export function publicPigLinkManifest(normalized, entry) {
   if (!normalized) return null;
   return {
     format: normalized.format,

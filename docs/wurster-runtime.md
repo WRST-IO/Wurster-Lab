@@ -24,7 +24,7 @@ The desktop runtime opens Wurst Developer Tools in a dedicated top-level window.
 
 Wurster can keep local Meat Identities. A Meat Identity is a name, emoji and portable Meatphrase protected by the local runtime.
 
-Identity administration lives inside the Wurster launcher. Before the Meat Locker is shown, Wurster asks the operating system for local user presence where the runtime has an adapter. macOS uses Touch ID when available. The 0.20.0 Windows adapter asks Windows Security/Hello and is still being validated on real Windows machines before 1.0. This protects Wurster's local copy only and never changes the portable Wurst.
+Identity administration lives inside the Wurster launcher. Before the Meat Locker is shown, Wurster asks the operating system for local user presence where the runtime has an adapter. macOS uses Touch ID when available. The 0.31.0 Windows adapter asks Windows Security/Hello and is still being validated on real Windows machines before 1.0. This protects Wurster's local copy only and never changes the portable Wurst.
 
 A Wurst still remains unlockable by entering its Meatphrase manually on another conforming runtime.
 

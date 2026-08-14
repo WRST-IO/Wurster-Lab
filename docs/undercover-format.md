@@ -19,7 +19,7 @@ valid PNG image
 └── IEND
 ```
 
-Each `wuSt` chunk contains a slice of one complete WRST stream. Normal PNG viewers ignore the private ancillary chunks and display the carrier image. Wurster maps those chunks into one virtual WRST byte stream and then uses the normal Wurst parser, integrity checks, signatures, Vault crypto and range reads.
+Each `wuSt` chunk contains a slice of one complete WRST stream. Normal PNG viewers ignore the private ancillary chunks and display the carrier image. Wurster maps those chunks into one virtual WRST byte stream and then uses the normal Wurst parser, integrity checks, signatures, WurstKey crypto and range reads.
 
 ## Build
 

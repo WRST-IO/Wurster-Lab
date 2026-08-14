@@ -70,7 +70,9 @@ const MIME = new Map([
   ['.woff2', 'font/woff2'],
   ['.wasm', 'application/wasm'],
   ['.sqlite', 'application/vnd.sqlite3'],
-  ['.db', 'application/octet-stream']
+  ['.db', 'application/octet-stream'],
+  ['.wurst', 'application/vnd.wrst.wurst'],
+  ['.wrst', 'application/vnd.wrst.wurst']
 ]);
 
 const MEATPHRASE_PREFIXES = [
@@ -213,6 +215,8 @@ export function normalizeCapabilities(input) {
 const CAPABILITY_RISK = new Map([
   ['storage.local', 'yellow'],
   ['network', 'yellow'],
+  ['pigsty', 'yellow'],
+  ['piglet', 'yellow'],
   ['clipboard.write', 'yellow'],
   ['window.alwaysOnTop', 'green'],
   ['code.unsafeEval', 'yellow'],
@@ -240,6 +244,12 @@ export function classifyRisk(manifest) {
 
   if (manifest?.data?.writable) {
     raise('yellow', 'Mutable WurstFS data can modify the .wurst file itself.');
+  }
+  if (manifest?.piglet?.children?.length) {
+    raise('yellow', `Piglet embeds ${manifest.piglet.children.length} child Wurst(s).`);
+  }
+  if (manifest?.pigsty) {
+    raise('yellow', 'Pigsty internal computation requested.');
   }
 
   for (const [name, value] of Object.entries(capabilities)) {
@@ -355,6 +365,41 @@ function assertWrst7Manifest(manifest) {
       }
     }
   }
+  if (manifest.piglet != null) {
+    if (typeof manifest.piglet !== 'object' || manifest.piglet.format !== 'wurst/piglet-1') throw new Error('WRST v7 piglet policy must use wurst/piglet-1');
+    if (!Array.isArray(manifest.piglet.children) || manifest.piglet.children.length > 64) throw new Error('WRST v7 piglet.children must be an array of at most 64 child Wursts');
+    const ids = new Set();
+    for (const child of manifest.piglet.children) {
+      if (!child || typeof child !== 'object') throw new Error('WRST v7 piglet child must be an object');
+      const id = String(child.id ?? '');
+      if (!/^[A-Za-z][A-Za-z0-9_.:-]{0,95}$/.test(id)) throw new Error(`Invalid WRST v7 piglet child id: ${id}`);
+      if (ids.has(id)) throw new Error(`Duplicate WRST v7 piglet child id: ${id}`);
+      ids.add(id);
+      if (!child.entry || typeof child.entry !== 'string') throw new Error(`WRST v7 piglet child ${id} requires an immutable entry path`);
+      if (!child.sha256 || typeof child.sha256 !== 'string') throw new Error(`WRST v7 piglet child ${id} requires sha256`);
+    }
+  }
+  if (manifest.pigsty != null) {
+    if (typeof manifest.pigsty !== 'object' || manifest.pigsty.format !== 'wurst/pigsty-1') throw new Error('WRST v7 pigsty policy must use wurst/pigsty-1');
+    if (manifest.pigsty.version !== 'node-lts-1') throw new Error('WRST v7 pigsty.version currently supports node-lts-1');
+    if (manifest.pigsty.toolchain != null) {
+      const toolchain = manifest.pigsty.toolchain;
+      if (!toolchain || typeof toolchain !== 'object' || Array.isArray(toolchain) || toolchain.format !== 'wurst/pigsty-toolchain-1') throw new Error('WRST v7 pigsty.toolchain must use wurst/pigsty-toolchain-1');
+      if (!toolchain.root || typeof toolchain.root !== 'string') throw new Error('WRST v7 pigsty.toolchain.root must be a path string');
+      if (toolchain.root.startsWith('/') || toolchain.root.includes('..') || toolchain.root.startsWith('__wurst/')) throw new Error('WRST v7 pigsty.toolchain.root must stay inside the Wurst workspace');
+    }
+    if (manifest.pigsty.builds != null) {
+      if (typeof manifest.pigsty.builds !== 'object' || Array.isArray(manifest.pigsty.builds)) throw new Error('WRST v7 pigsty.builds must be an object');
+      for (const [name, build] of Object.entries(manifest.pigsty.builds)) {
+        if (!/^[A-Za-z][A-Za-z0-9_.:-]{0,95}$/.test(name)) throw new Error(`Invalid WRST v7 pigsty build name: ${name}`);
+        if (!build || typeof build !== 'object' || Array.isArray(build)) throw new Error(`WRST v7 pigsty build ${name} must be an object`);
+        if (!build.source || typeof build.source !== 'string') throw new Error(`WRST v7 pigsty build ${name} requires source`);
+        if (!/\.(?:js|mjs)$/i.test(build.source)) throw new Error(`WRST v7 pigsty build ${name}.source must be JavaScript`);
+        if (build.mode != null) throw new Error(`WRST v7 pigsty build ${name}.mode is not supported; Pigsty engine selection is a runtime implementation detail`);
+        if (build.outputs != null && (!Array.isArray(build.outputs) || build.outputs.some((item) => typeof item !== 'string'))) throw new Error(`WRST v7 pigsty build ${name}.outputs must be an array of paths`);
+      }
+    }
+  }
   return manifest;
 }
 
@@ -375,9 +420,9 @@ export function encodeWurst({ manifest, files }) {
   for (const file of files) {
     const normalized = normalizeFileDescriptor(file);
     if (normalized.scope === 'data') {
-      throw new Error('Mutable WurstFS data is runtime state. Build immutable app/meta/interface resources, then initialize data realms through WurstFS.');
+      throw new Error('Mutable WurstFS data is runtime state. Build immutable app/meta/PigLink resources, then initialize data realms through WurstFS.');
     }
-    if (!['app', 'interface', 'meta', 'signature'].includes(normalized.scope)) throw new Error(`Unsupported immutable Wurst scope: ${normalized.scope}`);
+    if (!['app', 'piglink', 'piglet', 'meta', 'signature'].includes(normalized.scope)) throw new Error(`Unsupported immutable Wurst scope: ${normalized.scope}`);
     const canonicalPath = normalized.path;
     const duplicateKey = `base:${canonicalPath}`;
     if (seen.has(duplicateKey)) throw new Error(`Duplicate Wurst path: ${canonicalPath}`);
@@ -672,7 +717,7 @@ function packageManifestProjection(manifest) {
 
 function packageDigestProjection(pkg) {
   const immutableFiles = pkg.index.files
-    .filter((entry) => ['app', 'meta', 'interface'].includes(entry.scope ?? 'app') && entry.path !== SIGNATURE_PATH)
+    .filter((entry) => ['app', 'meta', 'piglink', 'piglet'].includes(entry.scope ?? 'app') && entry.path !== SIGNATURE_PATH)
     .map((entry) => ({
       path: entry.path,
       length: entry.length,

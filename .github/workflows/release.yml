@@ -136,6 +136,7 @@ jobs:
       - name: Build signed and notarized macOS arm64
         run: npm run dist:mac:arm64
 
+
       - name: Verify signed and notarized app
         shell: bash
         run: |
@@ -232,6 +233,7 @@ jobs:
 
       - name: Build signed and notarized macOS x64
         run: npm run dist:mac:x64
+
 
       - name: Verify signed and notarized app
         shell: bash

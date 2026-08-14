@@ -15,7 +15,7 @@ This includes the runtimes, Wurst Meat Grinder, libraries, developer tools, test
 
 ## View the full license
 
-See [LICENSE.md](https://github.com/wursterschungel/wurster-lab/blob/main/LICENSE.md) in the root of the repository for the complete Apache 2.0 license text, attribution requirements, and trademark information.
+See [LICENSE.md](https://github.com/WRST-IO/Wurster-Lab/blob/main/LICENSE.md) in the root of the repository for the complete Apache 2.0 license text, attribution requirements, and trademark information.
 
 ## Attribution
 

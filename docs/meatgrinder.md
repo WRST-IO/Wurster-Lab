@@ -103,9 +103,9 @@ Generate a user Meatphrase:
 meatgrinder meatphrase 12
 ```
 
-See [manifest.md](manifest.md) for optional special sauce such as frameless windows, capabilities, WurstFS realms and application sealing.
+See [manifest.md](manifest.md) for optional special sauce such as frameless windows, capabilities, WurstFS realms, PigLink and application sealing.
 
 
 ## Machine-friendly Wursts
 
-Add an optional `interface` section when the Wurst should expose declared Actions and Events to its own UI, an embedding host, test tools or AI. See [Wurst Interface](wurst-interface.md).
+Add an optional `piglink` section when the Wurst should expose declared Actions and Events to its own UI, an embedding host, test tools, child Wursts or AI. See [PigLink](piglink.md).

@@ -37,8 +37,8 @@ The Pages artifact explicitly includes hidden files. This is required because WR
 Desktop runtime releases are intentionally separate from normal source pushes. Local `npm run dist:mac:arm64` and `npm run dist:mac:x64` builds are useful smoke tests, but `dist/` remains gitignored so installer binaries do not bloat Git history. To publish a runtime version, first make the package version final, then push the matching tag:
 
 ```bash
-git tag v0.20.0
-git push origin v0.20.0
+git tag v0.32.0
+git push origin v0.32.0
 ```
 
 `.github/workflows/release.yml` verifies that the tag exactly matches the root package version, runs the test gate, builds Windows x64 on a Windows runner, Apple Silicon on an arm64 macOS runner and Intel macOS on an Intel runner, then publishes a GitHub Release with SHA-256 checksums. The Runtime page derives the repository from GitHub Actions and links directly to these versioned assets.

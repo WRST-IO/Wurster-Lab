@@ -33,6 +33,14 @@ A `wurst.json` file only becomes useful when a Wurst needs special behavior such
 
 **User secrets and app secrets are different.** A Meatphrase belongs to user-owned mutable data. A WurstKey protects developer-owned sealed application content. They are deliberately separate.
 
-**Everything has an end. Only Wurst has two.** A Wurst may expose a visible UI on one side and a declared Wurst Interface on the other. The same Actions can be used by its UI, an embedding host, automated tests or machines.
+**Everything has an end. Only Wurst has two.** A Wurst may expose a visible UI on one side and PigLink on the other. The same declared Actions already serve UI and headless/tooling paths; brokered links between separate running Wursts are the next communication layer.
 
-Next: [Getting Started](getting-started.md).
+## Three v0.30 pillars
+
+**Pigsty is computation.** A Wurst can build and transform its own internal workspace where the runtime provides Pigsty. In normal v0.32 Desktop releases the native Pigsty engine is still coming soon, so Pigsty does not block Windows/macOS/Web releases.
+
+**Piglet is composition.** Wursts can contain and embed other Wursts without merging trust domains.
+
+**PigLink is communication.** Wursts expose declared behavior to other Wursts, tools and automation without turning the DOM into an API.
+
+For exact release maturity, see [Current status](status.md). Next: [Getting Started](getting-started.md).

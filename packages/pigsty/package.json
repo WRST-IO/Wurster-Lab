@@ -1,0 +1,16 @@
+{
+  "name": "@wurster/pigsty",
+  "version": "0.32.0",
+  "description": "Pigsty: controlled internal computation worker for Wurst workspaces.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./edge-wasix": "./src/edge-wasix.mjs"
+  },
+  "files": [
+    "src"
+  ],
+  "engines": {
+    "node": ">=22"
+  }
+}

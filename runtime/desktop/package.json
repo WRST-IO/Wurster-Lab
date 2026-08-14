@@ -1,6 +1,6 @@
 {
   "name": "@wurster/desktop",
-  "version": "0.20.1",
+  "version": "0.32.0",
   "private": true,
   "description": "Wurster: a deliberately tiny Electron runtime for .wurst and .wrst mini apps.",
   "type": "module",
@@ -11,13 +11,15 @@
     "dist:mac": "node ../../tools/build-desktop-runtime.mjs mac universal",
     "dist:mac:arm64": "node ../../tools/build-desktop-runtime.mjs mac arm64",
     "dist:mac:x64": "node ../../tools/build-desktop-runtime.mjs mac x64",
-    "dist:mac:universal": "node ../../tools/build-desktop-runtime.mjs mac universal"
+    "dist:mac:universal": "node ../../tools/build-desktop-runtime.mjs mac universal",
+    "dist:linux": "node ../../tools/build-desktop-runtime.mjs linux x64"
   },
   "dependencies": {
     "@wurster/format": "file:../../packages/format",
+    "@wurster/pigsty": "file:../../packages/pigsty",
     "qrcode": "^1.5.4",
     "@wurster/meatgrinder": "file:../../packages/meatgrinder",
-    "@wurster/interface": "file:../../packages/interface",
+    "@wurster/piglink": "file:../../packages/interface",
     "@wurster/session": "file:../../packages/session"
   },
   "devDependencies": {
@@ -97,6 +99,28 @@
           "wurster"
         ]
       }
-    ]
+    ],
+    "extraResources": [
+      {
+        "from": "runtimes",
+        "to": "runtimes",
+        "filter": [
+          "wurster-edge-runtime-*/**/*"
+        ]
+      }
+    ],
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Utility",
+      "icon": "build/icons/wurster.png",
+      "artifactName": "Wurster-${version}-linux-${arch}.${ext}"
+    }
   }
 }

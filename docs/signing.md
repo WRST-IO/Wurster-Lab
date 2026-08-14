@@ -47,7 +47,9 @@ If no key Meatphrase source is supplied in an interactive terminal, MeatGrinder 
 
 Wurster-managed signing identities can be created, imported, exported and DNS-checked under **Wurster Settings → MeatGrinder Signers**. Their protected local copies are Wurster convenience state, not part of the Wurst format.
 
-The signature covers the immutable application signing projection: manifest information, application resources, public metadata and Wurst Interface code. Mutable WurstFS generations are deliberately outside this publisher signature so user data can change without invalidating the application.
+The signature covers the immutable application signing projection: manifest information, application resources, public metadata, built-in child Wurst bytes and PigLink code. Mutable WurstFS generations are deliberately outside this publisher signature so user data can change without invalidating the application.
+
+Signatures identify publishers. They do not grant Pigsty, PigLink or host capabilities.
 
 Changing signed application content invalidates the package signature. Changing or compacting committed WurstFS user data does not.
 

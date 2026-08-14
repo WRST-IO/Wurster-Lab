@@ -24,7 +24,15 @@ WurstKey protects developer-owned immutable application content. A Wurster Ident
 
 ## Can user data be unencrypted?
 
-Yes. A writable Vault may use `protection: "plain"`.
+Yes. Ordinary WurstFS realms are mutable public app data: no identity, no encryption, no signatures and no retained audit history. Personal and sealed shared realms are encrypted.
+
+## Why not just one index.html?
+
+A single HTML file is great. Wurst starts where it stops being enough: when state should travel with the app, assets and project structure grow, offline publisher identity matters, capabilities need to be declared or the app needs PigLink as a machine-readable second end.
+
+## Is Wurster an operating system?
+
+No. Wurster should provide a few strong primitives: WRST, WurstFS, the renderer sandbox, the capability broker, Pigsty, Piglet and PigLink. Higher-level systems such as WurstOS can be Wursts.
 
 ## Can a Wurst contain gigabytes of media?
 

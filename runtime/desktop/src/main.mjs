@@ -23,11 +23,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ProtectionClient } from './protection-client.mjs';
 import { buildWurst } from '@wurster/meatgrinder';
-import { validateJsonValue } from '@wurster/interface';
 import { UnlockSessionBroker } from '@wurster/session';
 import { generateTotpSecret, totpUri, verifyTotp } from './identity-core.mjs';
 import { publisherDisplayName, secureTrustPresentation, verificationTrustRoute } from './publisher-trust-presentation.mjs';
 import { dataFsPath } from './wurst-fs-paths.mjs';
+import { createDesktopPigLinkRuntime, loadPigLinkEntry } from './piglink-runtime.mjs';
+import { loadPigletResource, pigletChildren, registerDesktopPigletRuntime } from './piglet-runtime.mjs';
+import { createDesktopPigstyRuntime } from './pigsty-runtime.mjs';
+import { cspFor, networkRequestAllowed, parseHttpRange, partitionFor, responseFor, safeRequestPath } from './web-sandbox-runtime.mjs';
 import {
   SEALED_APP_INDEX_PATH,
   classifyRisk,
@@ -38,7 +41,6 @@ import {
   generateMeatphrase,
   mimeFor,
   measureWurstFs2Storage,
-  networkOrigins,
   normalizeCapabilities,
   normalizeMeatphrase,
   normalizeWurstKey,
@@ -71,7 +73,7 @@ const TRUST_BUNDLE_JSON = path.join(HERE, 'trust-bundle.json');
 const WURSTER_ICON = path.join(app.getAppPath(), 'build', 'icons', 'wurster.png');
 const MAX_WURST_FS_SLICE_BYTES = 2 * 1024 * 1024;
 const MAX_WURST_FS_CHUNK_BYTES = 4 * 1024 * 1024;
-const SUPPORTED_CAPABILITIES = new Set(['storage.local', 'network', 'window.alwaysOnTop', 'code.unsafeEval', 'files.open', 'files.save']);
+const SUPPORTED_CAPABILITIES = new Set(['storage.local', 'network', 'window.alwaysOnTop', 'code.unsafeEval', 'files.open', 'files.save', 'piglet', 'pigsty']);
 const MEAT_LOCKER_FORMAT = 'wurster/meat-locker-5';
 const WURSTER_SETTINGS_FORMAT = 'wurster/settings-1';
 const SETTINGS_HTML = path.join(HERE, 'settings.html');
@@ -120,8 +122,6 @@ let pendingMacOpenFile = null;
 let pendingRuntimeHandoff = null;
 let initialOpenComplete = false;
 let isOpeningPackage = false;
-let nextInterfaceRequestId = 1;
-const pendingInterfaceInvocations = new Map();
 let grinderSourcePath = null;
 let grinderCarrierPath = null;
 let grinderLastOutput = null;
@@ -273,89 +273,6 @@ function findWurstArgument(argv) {
   return argv.find((arg) => isWurstCandidate(arg)) ?? null;
 }
 
-function safeRequestPath(rawUrl, manifest) {
-  const url = new URL(rawUrl);
-  if (url.hostname !== 'app') throw new Error('Unknown Wurst host');
-  const candidate = decodeURIComponent(url.pathname.replace(/^\//, '')) || manifest.entry;
-  if (!candidate || typeof candidate !== 'string') throw new Error('Wurst request has no public path');
-  if (candidate.startsWith('__wurst/') || candidate.startsWith('data/')) {
-    throw new Error('Private Wurst data is not web-addressable');
-  }
-  return candidate;
-}
-
-function cspFor(manifest) {
-  const allowedNetwork = networkOrigins(manifest);
-  const capabilities = normalizeCapabilities(manifest.capabilities);
-  const connect = allowedNetwork.length ? allowedNetwork.join(' ') : "'none'";
-  const scripts = capabilities['code.unsafeEval'] ? "'self' wurst://interface 'unsafe-eval'" : "'self' wurst://interface";
-  return [
-    "default-src 'self' data: blob:",
-    `script-src ${scripts}`,
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' wurst://data data: blob:",
-    "font-src 'self' wurst://data data: blob:",
-    "media-src 'self' wurst://data data: blob:",
-    "worker-src 'self' blob:",
-    `connect-src ${connect}`,
-    "object-src 'none'",
-    "base-uri 'none'",
-    "frame-src 'none'",
-    "form-action 'none'"
-  ].join('; ');
-}
-
-function responseFor(entry, manifest, data = entry.data, range = null) {
-  const headers = {
-    'Content-Type': entry.mime,
-    'Content-Security-Policy': cspFor(manifest),
-    'X-Content-Type-Options': 'nosniff',
-    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), clipboard-read=(), clipboard-write=(), display-capture=(), usb=(), serial=(), hid=(), fullscreen=()',
-    'Cache-Control': 'no-store',
-    'Accept-Ranges': 'bytes',
-    'Content-Length': String(data.length)
-  };
-  if (range) headers['Content-Range'] = `bytes ${range.offset}-${range.offset + data.length - 1}/${range.total}`;
-  return new Response(data, { status: range ? 206 : 200, headers });
-}
-
-function parseHttpRange(value, total) {
-  if (!value) return null;
-  const match = /^bytes=(\d*)-(\d*)$/i.exec(String(value).trim());
-  if (!match) return null;
-  let start;
-  let end;
-  if (match[1] === '') {
-    const suffix = Number(match[2]);
-    if (!Number.isSafeInteger(suffix) || suffix <= 0) return null;
-    start = Math.max(0, total - suffix);
-    end = total - 1;
-  } else {
-    start = Number(match[1]);
-    end = match[2] === '' ? total - 1 : Number(match[2]);
-  }
-  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= total || end < start) return null;
-  end = Math.min(end, total - 1);
-  return { offset: start, length: end - start + 1, total };
-}
-
-function partitionFor(manifest) {
-  const id = crypto.createHash('sha256').update(String(manifest.id)).digest('hex').slice(0, 24);
-  const capabilities = normalizeCapabilities(manifest.capabilities);
-  return capabilities['storage.local'] ? `persist:wurst-${id}` : `wurst-${id}-${crypto.randomUUID()}`;
-}
-
-function networkRequestAllowed(rawUrl, manifest) {
-  try {
-    const url = new URL(rawUrl);
-    if (url.protocol === 'wurst:' || url.protocol === 'data:' || url.protocol === 'blob:') return true;
-    if (url.protocol !== 'https:') return false;
-    return networkOrigins(manifest).includes(url.origin);
-  } catch {
-    return false;
-  }
-}
-
 function fullySealedApplication(manifest) {
   return manifest?.application?.protection === 'sealed';
 }
@@ -451,15 +368,11 @@ function configureSession(wurstSession, context) {
         }
         return responseFor(resourceEntry, context.manifest, loaded.data, requestedRange);
       }
-      if (parsedUrl.hostname === 'interface') {
-        const declaration = context.manifest.interface;
-        if (!declaration?.entry) return new Response('Wurst Interface not declared', { status: 404 });
+      if (parsedUrl.hostname === 'piglink') {
         const requested = decodeURIComponent(parsedUrl.pathname.replace(/^\//, ''));
-        if (requested !== 'entry.js') return new Response('Wurst Interface resource not found', { status: 404 });
-        const entry = context.reader.entry(declaration.entry);
-        if (!entry || entry.scope !== 'interface' || entry.encryption) return new Response('Wurst Interface unavailable', { status: 404 });
-        const loaded = await context.reader.read(declaration.entry, { verify: true });
-        return new Response(loaded.data, {
+        const data = await loadPigLinkEntry(context, requested);
+        if (!data) return new Response('PigLink resource not found', { status: 404 });
+        return new Response(data, {
           status: 200,
           headers: {
             'Content-Type': 'text/javascript; charset=utf-8',
@@ -468,6 +381,26 @@ function configureSession(wurstSession, context) {
             'Cache-Control': 'no-store'
           }
         });
+      }
+      if (parsedUrl.hostname === 'piglet') {
+        const requestedId = decodeURIComponent(parsedUrl.pathname.replace(/^\//, '')).replace(/\.wurst$/i, '');
+        try {
+          const { data } = await loadPigletResource(context, requestedId);
+          return new Response(data, {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/vnd.wrst.wurst',
+              'Content-Security-Policy': cspFor(context.manifest),
+              'X-Content-Type-Options': 'nosniff',
+              'Cache-Control': 'no-store'
+            }
+          });
+        } catch (error) {
+          const integrityFailure = /integrity failed/i.test(String(error?.message ?? ''));
+          return new Response(integrityFailure ? 'Piglet child integrity failed' : 'Piglet child not found', {
+            status: integrityFailure ? 500 : 404
+          });
+        }
       }
       const requestPath = safeRequestPath(request.url, context.manifest);
       const resolved = await resolveApplicationResource(context, requestPath);
@@ -1734,12 +1667,7 @@ ipcMain.handle('wurster:auth:totp', async (event, code) => {
 });
 
 async function clearCurrentContext() {
-  for (const [requestId, pending] of pendingInterfaceInvocations) {
-    if (pending.context !== currentContext) continue;
-    clearTimeout(pending.timer);
-    pending.reject(new Error('Wurst closed before action completed'));
-    pendingInterfaceInvocations.delete(requestId);
-  }
+  if (currentContext) pigLinkRuntime.closeContext(currentContext);
 
   destroyAllAuthSurfaces();
   destroyAllIdentitySurfaces();
@@ -1765,6 +1693,15 @@ function assertWurstSender(event) {
   }
   return currentContext;
 }
+
+registerDesktopPigletRuntime({ ipcMain, assertWurstSender });
+const pigLinkRuntime = createDesktopPigLinkRuntime({
+  ipcMain,
+  assertWurstSender,
+  getWindow: () => currentWindow,
+  isCurrentContext: (context) => currentContext === context
+});
+const pigstyRuntime = createDesktopPigstyRuntime({ app, ipcMain, assertWurstSender });
 
 function realmDataMode(manifest) {
   return manifest?.data?.format === 'wurst/data-realms-1';
@@ -2203,12 +2140,17 @@ ipcMain.handle('wurst:info', async (event) => {
     application: context.manifest.application ?? { protection: 'public' },
     protection: contextProtectionStatus(context),
     presentation: context.manifest.presentation ?? null,
-    interface: context.manifest.interface ? {
-      format: context.manifest.interface.format,
-      headless: Boolean(context.manifest.interface.headless),
-      actions: context.manifest.interface.actions ?? {},
-      events: context.manifest.interface.events ?? {}
+    piglink: context.manifest.piglink ? {
+      format: context.manifest.piglink.format,
+      headless: Boolean(context.manifest.piglink.headless),
+      actions: context.manifest.piglink.actions ?? {},
+      events: context.manifest.piglink.events ?? {}
     } : null,
+    piglet: context.manifest.piglet ? {
+      format: context.manifest.piglet.format,
+      children: pigletChildren(context)
+    } : null,
+    pigsty: await pigstyRuntime.status(context),
     signature: {
       status: context.signature.status,
       publisher: context.signature.publisher ?? null,
@@ -2231,68 +2173,6 @@ ipcMain.handle('wurst:capabilities:query', async (event, name) => {
 ipcMain.handle('wurst:capabilities:list', async (event) => {
   const context = assertWurstSender(event);
   return runtimeCapabilityStates(context.manifest);
-});
-
-ipcMain.handle('wurst:interface:describe', async (event) => {
-  const context = assertWurstSender(event);
-  return context.manifest.interface ?? null;
-});
-
-async function invokeContextInterfaceAction(context, rawName, payload = {}) {
-  const declaration = context.manifest.interface;
-  const name = String(rawName ?? '');
-  const spec = declaration?.actions?.[name];
-  if (!spec) throw new Error(`Unknown Wurst action: ${name}`);
-  validateJsonValue(payload, spec.input, '$input');
-  if (!currentWindow || currentWindow.isDestroyed() || currentContext !== context) throw new Error('Wurst renderer is not available');
-  const requestId = `wi-${nextInterfaceRequestId++}`;
-  const timeoutMs = Math.min(Number(spec.timeoutMs ?? 5000), 60000);
-  return await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      pendingInterfaceInvocations.delete(requestId);
-      reject(new Error(`Wurst action exceeded ${timeoutMs} ms: ${name}`));
-    }, timeoutMs);
-    pendingInterfaceInvocations.set(requestId, { context, name, spec, resolve, reject, timer });
-    currentWindow.webContents.send('wurst:interface:invoke-request', { requestId, name, input: payload });
-  });
-}
-
-ipcMain.handle('wurst:interface:invoke', async (event, name, payload = {}) => {
-  const context = assertWurstSender(event);
-  return invokeContextInterfaceAction(context, name, payload);
-});
-
-ipcMain.on('wurst:interface:invoke-result', (event, message = {}) => {
-  const context = assertWurstSender(event);
-  const requestId = String(message.requestId ?? '');
-  const pending = pendingInterfaceInvocations.get(requestId);
-  if (!pending || pending.context !== context) return;
-  pendingInterfaceInvocations.delete(requestId);
-  clearTimeout(pending.timer);
-  if (!message.ok) {
-    pending.reject(new Error(String(message.error ?? `Wurst action failed: ${pending.name}`)));
-    return;
-  }
-  try {
-    const result = message.result == null ? null : structuredClone(message.result);
-    if (pending.spec.output) validateJsonValue(result, pending.spec.output, '$output');
-    pending.resolve(result);
-  } catch (error) {
-    pending.reject(error);
-  }
-});
-
-ipcMain.on('wurst:interface:event', (event, rawName, payload) => {
-  const context = assertWurstSender(event);
-  const name = String(rawName ?? '');
-  const spec = context.manifest.interface?.events?.[name];
-  if (!spec) return;
-  try {
-    if (spec.payload) validateJsonValue(payload, spec.payload, '$event');
-    context.lastInterfaceEvent = { name, payload: structuredClone(payload), at: Date.now() };
-  } catch {
-    // Invalid events never cross the runtime boundary.
-  }
 });
 
 async function fsReadOptions(context, fsPath = '/data') {

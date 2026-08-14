@@ -66,7 +66,7 @@ If a server stops honoring ranges or changes the pinned representation while the
 
 ## Remote runtime status
 
-`openHttpWurst()` exists in the format layer in 0.20.0.
+`openHttpWurst()` exists in the format layer in 0.31.0.
 
 Wurster Web already accepts an HTTP URL as a first-class Range-backed source and layers a writable browser-session WurstFS overlay over that immutable remote base. Desktop Wurster does not yet accept an HTTP URL as a first-class launch target. The portable API name is the same in both families: `wurst.snapshot.export()`. Desktop streams its committed virtual WRST bytes through Wurster-owned save UI; Web materializes the remote base plus current overlay as a new standalone snapshot.
 
@@ -86,4 +86,4 @@ A standalone snapshot necessarily has to acquire every byte it needs to become i
 
 Undercover PNG preserves the virtual WRST offset model for reads by mapping virtual ranges to intersecting `wuSt` PNG chunks.
 
-Incremental crash-safe WurstFS writes inside the current PNG carrier are not implemented in 0.20.0. Carrier Wursts remain read-only for mutation until the carrier framing gains an append-safe journal.
+Incremental crash-safe WurstFS writes inside the current PNG carrier are not implemented in 0.31.0. Carrier Wursts remain read-only for mutation until the carrier framing gains an append-safe journal.

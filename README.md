@@ -1,4 +1,4 @@
-# 🌭 Wurster Lab 0.20.0 🌭🐖🥩
+# Wurster Lab 0.32.0
 
 Wurster Lab is the build, runtime, format, test and documentation workspace for Wurst: a portable mini-app container with controlled runtime capabilities, WurstFS, signing, streaming and optional portable protection.
 
@@ -25,12 +25,13 @@ Wurst packages never encode Apple Keychain, Windows Hello, Secure Enclave, Andro
 ## 🧰 Workspace
 
 - `packages/format` — WRST v7, current WurstFS realms, Wurster Identity crypto, publisher signing, random-access sources and carrier primitives.
-- `packages/interface` — portable Wurst Interface Actions/Events contract.
+- `packages/interface` — portable PigLink Actions/Events contract package (`@wurster/piglink`).
 - `packages/headless` — developer/AI browserless harness.
 - `packages/meatgrinder` — Wurst builder and signing tools.
 - `runtime/desktop` — shared Electron desktop implementation.
 - `runtime/windows` — Windows build output and platform notes.
 - `runtime/mac` — macOS build output and platform notes.
+- `runtime/linux` — prepared Linux desktop build output and platform notes.
 - `runtime/web` — browser Wurster runtime and distributable `<wurst-embed>` stack.
 - `runtime/ios` / `runtime/android` — reserved native-runtime homes.
 - `docs` — canonical 11ty-ready documentation source.
@@ -39,9 +40,7 @@ Wurst packages never encode Apple Keychain, Windows Hello, Secure Enclave, Andro
 
 ## 🧭 Project status and licensing
 
-Wurster is an independent software project published at `wrst.io`; WRST.IO is the project identity and website, not a company or incorporated organization. The project is still pre-1.0 and **is not open source yet**. No permissive license is granted by this workspace until an explicit `LICENSE` file says otherwise.
-
-The current plan is to publish Wurster 1.0 under a permissive open-source license, with MIT as the leading candidate. That intent is not a license grant for pre-1.0 code. See `docs/licensing.md`.
+Wurster is an independent software project published at `wrst.io`; WRST.IO is the project identity and website, not a company or incorporated organization. Wurster Lab is pre-1.0 software and is licensed under the **Apache License, Version 2.0**. Trademark and brand rights remain separate from the software license. See `LICENSE.md`, `NOTICE` and `docs/licensing.md`.
 
 ## 🧪 Install and test
 
@@ -50,6 +49,16 @@ npm install
 npm test
 ```
 
+## v0.32 release lane
+
+The v0.32 line stabilizes the current Wurst runtime while the three new runtime primitives mature independently:
+
+- **PigLink** is active: declared Actions/Events run through UI, Desktop and headless paths. Cross-Wurst broker handles are still follow-up work.
+- **Piglet** has a functional built-in-child slice: signed child bytes, runtime-owned child URLs and Web child sessions. Managed Desktop child surfaces and lifecycle handles are still follow-up work.
+- **Pigsty** remains experimental and is **not bundled in normal v0.32 Desktop releases yet**. Its contracts, worker harness and Edge/WASIX integration stay in-tree and tested, but native Edge/Wasmer runtime availability does not block Windows, macOS or Web releases.
+
+See `docs/status.md` for the current maturity matrix instead of inferring feature readiness from the presence of implementation code.
+
 ## 🏗️ Runtime builds
 
 ```bash
@@ -57,10 +66,11 @@ npm run dist:win
 npm run dist:mac:arm64
 npm run dist:mac:x64
 npm run dist:mac:universal
+npm run dist:linux
 npm run runtime:web:build
 ```
 
-Desktop artifacts are written below `runtime/windows/dist/` and `runtime/mac/dist/` instead of living beside the shared Electron source.
+Desktop artifacts are written below `runtime/windows/dist/`, `runtime/mac/dist/` and `runtime/linux/dist/` instead of living beside the shared Electron source. Normal v0.32 packaging does not download or require Pigsty native runtimes. The prepared Edge-runtime acquisition path remains available for development and can be opted into with `WURSTER_BUNDLE_PIGSTY=1` once the platform bundle set is release-ready; Edge/Wasmer binaries remain release inputs from `WRST-IO/wurster-edge-runtime`, never files committed to Wurster Lab.
 
 ## 🔐 Release signing
 
@@ -88,7 +98,7 @@ Shared governance retains Wurster Identity based Ed25519 authorization and optio
 
 ## 🌐 Wurster Web
 
-`runtime/web/dist/` now contains the browser runtime, service worker and the CDN-friendly `<wurst-embed>` host. 0.20.0 opens local or HTTP Range-backed WRST v7, runs public, partial and fully WurstKey-sealed application content, keeps normal relative resource URLs intact, and gives plain WurstFS a chunk-backed browser overlay with ranged reads, streaming writes and standalone snapshot export.
+`runtime/web/dist/` now contains the browser runtime, service worker and the CDN-friendly `<wurst-embed>` host. 0.32.0 opens local or HTTP Range-backed WRST v7, runs public, partial and fully WurstKey-sealed application content, keeps normal relative resource URLs intact, and gives plain WurstFS a chunk-backed browser overlay with ranged reads, streaming writes and standalone snapshot export.
 
 A site can host the runtime distribution together and embed a Wurst with `<wurst-embed src="./example.wurst">`. The embed host keeps its service worker on the Wurster distribution origin and streams Wurst byte ranges from the parent page over `MessageChannel`, so embedding does not require a root service worker on every consuming site. The official 11ty site receives the same generated runtime automatically and exposes `/viewer/` as a drag-and-drop online Wurst viewer.
 
@@ -99,5 +109,3 @@ Personal/shared WurstFS realm crypto, the authenticated Desktop↔Web identity r
 `wrst.io` is the official project domain. Wurster ships a pinned public WRST.IO Root Authority and a root-signed trust bundle; normal Authority certificate verification is offline. The Root private key is derived only from an operator-held 24-token Root Meatphrase and is never deployed. A separate rotatable issuer powers the stateless `authority.wrst.io` Cloudflare Worker.
 
 The repository ships a marked development Root for tests. Before production, run `npm run authority:bootstrap` on the trusted operator machine, print/store the Root Meatphrase and fingerprint offline, then require `npm run authority:production-check` before V1 release. WRST.IO certificates are claim-based: DNS can attest a domain and the optional mail service can attest an email address with a six-digit code from `oink@wrst.io`; labels remain self-declared unless a future proof method explicitly verifies them. See `docs/authority.md` and `authority/wrst.io/README.md`.
-
-ChatGPT GitHub connector write test.

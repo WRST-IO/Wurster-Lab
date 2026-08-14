@@ -10,7 +10,7 @@ Wurster separates trust domains instead of treating "encrypted" or "signed" as o
 
 ## Immutable application integrity
 
-The application package is immutable. Publisher signatures use Ed25519 and cover the application resources, manifest and declared Wurst Interface. A package signature answers: **which publisher key signed this application, and are the signed bytes unchanged?**
+The application package is immutable. Publisher signatures use Ed25519 and cover the application resources, manifest, public metadata and declared PigLink code. A package signature answers: **which publisher key signed this application, and are the signed bytes unchanged?**
 
 WRST.IO Authority certificates may bind verified domain/email claims to that publisher key. Verification is offline when the WRST.IO Root is pinned in the runtime.
 
@@ -65,6 +65,22 @@ Trusted surfaces such as `<wurster-auth>` and `<wurst-identity>` are rendered by
 Wurst JavaScript does not receive arbitrary host paths or Node filesystem access. `files.open` and `files.save` are narrow user-selected bridges owned by Wurster dialogs.
 
 WurstFS paths are inside the Wurst itself and are not host filesystem permissions.
+
+## Pigsty boundary
+
+Pigsty may provide Node-powered tooling inside a Wurster-controlled Wurst workspace. It is not Node access to the host computer. Host filesystem, shell, processes, network, other Wursts and private keys remain behind explicit Wurster capabilities.
+
+Pigsty permission is independent of package signature. A signature identifies a publisher; it does not authorize computation.
+
+## Piglet boundary
+
+Piglet lets a parent Wurst embed and orchestrate child Wursts. It does not merge trust domains. A child keeps its own signature, publisher, realms, WurstKey state, Pigsty permission and PigLink declarations.
+
+Parenthood grants orchestration, not omnipotence.
+
+## PigLink boundary
+
+PigLink connects behavior, not trust. A link does not transfer capabilities, but it may compose them. Wurster must treat relevant links as security decisions when the resulting data flow is stronger than either side alone.
 
 ## Append-safe writes and compaction
 

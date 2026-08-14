@@ -13,7 +13,7 @@ const FS_END_MAGIC = new Uint8Array([0x57, 0x37, 0x52, 0x45]);
 const FS_RECORD = Object.freeze({ DATA: 1, MAP: 2, CATALOG: 3, COMMIT: 4 });
 const SIGNATURE_PATH = '__wurst/signature.json';
 const SEALED_APP_INDEX_PATH = '__wurst/sealed-app/index.json';
-const WURSTER_WEB_VERSION = '0.20.0';
+const WURSTER_WEB_VERSION = '0.32.0';
 const te = new TextEncoder();
 const td = new TextDecoder();
 
@@ -446,7 +446,7 @@ export class WurstWebReader {
     try{
       const loaded=await this.read(SIGNATURE_PATH);const record=JSON.parse(td.decode(loaded.data));if(record?.format!=='wurst/signature-1'||record.algorithm!=='ed25519')throw new Error('Unsupported Wurst signature format');
       const pub=fromBase64(record.statement.publisher.publicKeySpki);if(await sha256Hex(pub)!==record.statement.publisher.fingerprint)throw new Error('Publisher fingerprint mismatch');
-      const immutableFiles=this.index.files.filter((e)=>['app','meta','interface'].includes(e.scope||'app')&&e.path!==SIGNATURE_PATH).map((e)=>({path:e.path,length:e.length,sha256:e.sha256,mime:e.mime,scope:e.scope||'app',encryption:e.encryption??null,integrity:e.integrity??null})).sort((a,b)=>a.path.localeCompare(b.path));
+      const immutableFiles=this.index.files.filter((e)=>['app','meta','piglink','piglet'].includes(e.scope||'app')&&e.path!==SIGNATURE_PATH).map((e)=>({path:e.path,length:e.length,sha256:e.sha256,mime:e.mime,scope:e.scope||'app',encryption:e.encryption??null,integrity:e.integrity??null})).sort((a,b)=>a.path.localeCompare(b.path));
       const manifest=structuredClone(this.manifest);
       const projection={format:'wurst/signing-projection-7',manifest,immutableFiles};const digest=await sha256Hex(te.encode(canonicalStringify(projection)));if(record.statement.packageDigest!==`sha256:${digest}`)throw new Error('Signed package digest mismatch');
       const key=await crypto.subtle.importKey('spki',pub,{name:'Ed25519'},false,['verify']);const valid=await crypto.subtle.verify({name:'Ed25519'},key,fromBase64(record.signature),te.encode(canonicalStringify(record.statement)));if(!valid)throw new Error('Ed25519 verification failed');
@@ -560,25 +560,27 @@ function injectBootstrap(html,session){
   const network=Array.isArray(session.reader.manifest?.capabilities?.network)?session.reader.manifest.capabilities.network:[];
   const hostOrigin=location.origin;
   const csp=`default-src ${hostOrigin} data: blob:; script-src ${hostOrigin} 'unsafe-inline' blob:; style-src ${hostOrigin} 'unsafe-inline' blob:; img-src ${hostOrigin} data: blob: ${network.join(' ')}; media-src ${hostOrigin} data: blob: ${network.join(' ')}; font-src ${hostOrigin} data: blob:; connect-src ${hostOrigin} ${network.join(' ')}; object-src 'none'; frame-src ${hostOrigin}; base-uri 'none';`;
-  const config={sessionId:session.id,root:session._virtualBase(),origin:location.origin,wurstId:session.reader.manifest?.id||null,interfaceEntry:session.reader.manifest?.interface?.entry||null};
+  const config={sessionId:session.id,root:session._virtualBase(),origin:location.origin,wurstId:session.reader.manifest?.id||null,piglinkEntry:session.reader.manifest?.piglink?.entry||null};
   const script=`<meta http-equiv="Content-Security-Policy" content="${csp.replaceAll('"','&quot;')}"><script>(${frameBootstrap.toString()})(${JSON.stringify(config)})<\/script>`;
   return /<head[\s>]/i.test(html)?html.replace(/<head([^>]*)>/i,`<head$1>${script}`):`${script}${html}`;
 }
 function frameBootstrap(config){
-  const pending=new Map();let seq=1;const handlers=new Map();let interfaceReadyResolve;const interfaceReady=new Promise(r=>interfaceReadyResolve=r);
+  const pending=new Map();let seq=1;const handlers=new Map();let piglinkReadyResolve;const piglinkReady=new Promise(r=>piglinkReadyResolve=r);
   function call(method,...args){const id=`${config.sessionId}:${seq++}`;return new Promise((resolve,reject)=>{pending.set(id,{resolve,reject});parent.postMessage({__wurster:1,sessionId:config.sessionId,id,method,args},'*');});}
   addEventListener('message',(event)=>{const m=event.data;if(!m?.__wursterReply||m.sessionId!==config.sessionId)return;const p=pending.get(m.id);if(!p)return;pending.delete(m.id);m.ok?p.resolve(m.result):p.reject(new Error(m.error||'Wurster Web operation failed'));});
-  window.WurstInterface=Object.freeze({define(def={}){for(const [name,fn] of Object.entries(def.actions||{})){if(typeof fn!=='function')throw new Error(`Wurst Interface action must be a function: ${name}`);handlers.set(name,fn);}return true;}});
+  window.PigLink=Object.freeze({define(def={}){for(const [name,fn] of Object.entries(def.actions||{})){if(typeof fn!=='function')throw new Error(`PigLink action must be a function: ${name}`);handlers.set(name,fn);}return true;}});
   const dataUrl=(path)=>{const v=String(path??'').replaceAll('\\','/').replace(/^\/+/, '').replace(/^data\//,'');if(!v||v.split('/').some(p=>!p||p==='.'||p==='..'))throw new TypeError('Invalid WurstFS media path');return `${config.root}/data/${v.split('/').map(encodeURIComponent).join('/')}`;};
   window.wurst=Object.freeze({
     info:()=>call('info'),capabilities:Object.freeze({query:(n)=>call('capabilities.query',String(n||'')),list:()=>call('capabilities.list')}),
     auth:Object.freeze({status:(purpose='identity')=>call('auth.status',String(purpose||'identity')),onResult:()=>true}),identity:Object.freeze({session:()=>Promise.resolve(null)}),window:Object.freeze({close:()=>call('window.close'),minimize:()=>call('window.minimize')}),snapshot:Object.freeze({export:()=>call('snapshot.export')}),
-    interface:Object.freeze({ready:()=>interfaceReady.then(()=>Boolean(config.interfaceEntry)),describe:()=>call('interface.describe'),invoke:async(name,input={})=>{await interfaceReady;const fn=handlers.get(String(name));if(!fn)throw new Error(`Wurst action is not registered: ${name}`);return fn(structuredClone(input));},emit:(name,payload=null)=>{parent.postMessage({__wursterEvent:1,sessionId:config.sessionId,name,payload},'*');return true;}}),
+    piglink:Object.freeze({ready:()=>piglinkReady.then(()=>Boolean(config.piglinkEntry)),describe:()=>call('piglink.describe'),invoke:async(name,input={})=>{await piglinkReady;const fn=handlers.get(String(name));if(!fn)throw new Error(`Wurst action is not registered: ${name}`);return fn(structuredClone(input));},emit:(name,payload=null)=>{parent.postMessage({__wursterEvent:1,sessionId:config.sessionId,name,payload},'*');return true;}}),
+    piglet:Object.freeze({children:()=>call('piglet.children'),url:(id)=>call('piglet.url',String(id||''))}),
+    pigsty:Object.freeze({status:()=>call('pigsty.status'),run:(request={})=>call('pigsty.run',request),build:(name='default',request={})=>call('pigsty.build',String(name||'default'),request)}),
     fs:Object.freeze({capabilities:()=>call('fs.capabilities'),realms:()=>call('fs.realms'),usage:()=>call('fs.usage'),compact:()=>call('fs.compact'),url:dataUrl,stat:(p)=>call('fs.stat',p),list:(p='/data')=>call('fs.list',p),read:(p,o={})=>call('fs.read',p,{offset:Number(o.offset||0),length:o.length==null?null:Number(o.length)}),write:(p,d,o={})=>call('fs.write',p,d,o),beginWrite:(p,o={})=>call('fs.beginWrite',p,o),writeChunk:(id,d)=>call('fs.writeChunk',id,d),commitWrite:(id)=>call('fs.commitWrite',id),abortWrite:(id)=>call('fs.abortWrite',id),remove:(p,o={})=>call('fs.remove',p,o),mkdir:(p,o={})=>call('fs.mkdir',p,o),rename:(a,b)=>call('fs.rename',a,b)})
   });
   class WursterAuth extends HTMLElement{connectedCallback(){if(this.shadowRoot)return;const root=this.attachShadow({mode:'closed'}),wrap=document.createElement('div');wrap.style.cssText='font:600 13px system-ui;display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid rgba(80,50,60,.22);border-radius:14px;background:#fff8f6;color:#523f46;box-sizing:border-box;min-height:48px';const b=document.createElement('button');b.type='button';const type=String(this.getAttribute('type')||'identity').toLowerCase(),purpose=this.getAttribute('purpose')||(type==='wurstkey'?'application':'identity');b.textContent=type==='wurstkey'?'🔑 Unlock with Wurster Web':'🐷 Open Wurster Runtime';b.style.cssText='font:inherit;border:0;border-radius:999px;padding:8px 12px;background:#5d4650;color:white;cursor:pointer';b.addEventListener('click',async()=>{if(type==='wurstkey'){try{await call('auth.present',{type,purpose,target:this.getAttribute('target')||null,session:this.getAttribute('session')||'60m'});this.dispatchEvent(new CustomEvent('wurster-auth-success',{bubbles:true,composed:true,detail:{purpose:'application',runtime:'web'}}));}catch(error){this.dispatchEvent(new CustomEvent('wurster-auth-error',{bubbles:true,composed:true,detail:{error:error.message}}));}return;}const request=(crypto.randomUUID?.()||Math.random().toString(36).slice(2)),duration=this.getAttribute('session')||'60m';const params=new URLSearchParams({origin:config.origin,purpose,request,duration});if(config.wurstId)params.set('wurst',config.wurstId);const a=document.createElement('a');a.href=`wurster://auth?${params}`;a.target='_top';a.click();});wrap.append(b);const note=document.createElement('span');note.textContent=type==='wurstkey'?'Wurster opens the key prompt outside the Wurst DOM':'Authenticate with the trusted local runtime';wrap.append(note);root.append(wrap);}}
   customElements.define('wurster-auth',WursterAuth);
-  addEventListener('DOMContentLoaded',async()=>{try{if(config.interfaceEntry){const s=document.createElement('script');s.src=`${config.root}/interface/entry.js`;s.onload=()=>interfaceReadyResolve();s.onerror=()=>interfaceReadyResolve();document.head.append(s);}else interfaceReadyResolve();}catch{interfaceReadyResolve();}},{once:true});
+  addEventListener('DOMContentLoaded',async()=>{try{if(config.piglinkEntry){const s=document.createElement('script');s.src=`${config.root}/piglink/entry.js`;s.onload=()=>piglinkReadyResolve();s.onerror=()=>piglinkReadyResolve();document.head.append(s);}else piglinkReadyResolve();}catch{piglinkReadyResolve();}},{once:true});
 }
 
 export class WursterWebSession {
@@ -777,12 +779,16 @@ export class WursterWebSession {
   }
   async _serve({ scope, path, method = 'GET', range }) {
     let data, mime, total; const head = String(method).toUpperCase() === 'HEAD';
-    if (scope === 'app' || scope === 'interface') {
+    if (scope === 'app' || scope === 'piglink' || scope === 'piglet') {
       let resource;
-      if (scope === 'interface') {
-        const interfacePath = this.reader.manifest?.interface?.entry || '';
-        const entry = interfacePath ? this.reader.entry(interfacePath) : null;
-        resource = entry ? { entry, mime: entry.mime || mimeFor(interfacePath), logicalPath: interfacePath } : null;
+      if (scope === 'piglink') {
+        const piglinkPath = this.reader.manifest?.piglink?.entry || '';
+        const entry = piglinkPath ? this.reader.entry(piglinkPath) : null;
+        resource = entry ? { entry, mime: entry.mime || mimeFor(piglinkPath), logicalPath: piglinkPath } : null;
+      } else if (scope === 'piglet') {
+        const child = this.piglets().find((item) => item.id === String(path || '').replace(/\.wurst$/i, ''));
+        const entry = child ? this.reader.entry(child.entry) : null;
+        resource = entry ? { entry, mime: entry.mime || 'application/vnd.wrst.wurst', logicalPath: child.entry } : null;
       } else resource = await this._applicationResource(path);
       if (!resource) return { status: 404, headers: { 'Content-Type': 'text/plain' }, body: head ? null : te.encode('Not found').buffer };
       const entry = resource.entry; total = entry.encryption?.plainLength ?? entry.length;
@@ -827,9 +833,55 @@ export class WursterWebSession {
       case 'fs.beginWrite': return this.fs.beginWrite(args[0], args[1] || {}); case 'fs.writeChunk': return this.fs.writeChunk(args[0], args[1]); case 'fs.commitWrite': return this.fs.commitWrite(args[0]); case 'fs.abortWrite': return this.fs.abortWrite(args[0]);
       case 'fs.remove': return this.fs.remove(args[0], args[1] || {}); case 'fs.mkdir': return this.fs.mkdir(args[0], args[1] || {}); case 'fs.rename': return this.fs.rename(args[0], args[1]);
       case 'snapshot.export': { const blob = await this.fs.snapshotBlob(); this.downloadSnapshot(blob); return { ok: true, size: blob.size }; }
-      case 'interface.describe': return this.reader.manifest.interface || null; case 'window.close': this.frame?.remove(); return true; case 'window.minimize': return false;
+      case 'piglink.describe': return this.reader.manifest.piglink || null;
+      case 'piglet.children': return this.piglets();
+      case 'piglet.url': return this.pigletUrl(args[0]);
+      case 'pigsty.status': return this.pigstyStatus();
+      case 'pigsty.run': throw new Error('Pigsty execution is unavailable in Wurster Web');
+      case 'pigsty.build': throw new Error('Pigsty execution is unavailable in Wurster Web');
+      case 'window.close': this.frame?.remove(); return true; case 'window.minimize': return false;
       default: throw new Error(`Unsupported Wurster Web bridge method: ${method}`);
     }
+  }
+  piglets() {
+    return structuredClone(this.reader.manifest?.piglet?.children ?? []);
+  }
+  pigletEntry(id) {
+    const key = String(id ?? '');
+    const child = this.piglets().find((item) => item.id === key);
+    if (!child) throw new Error(`Unknown Piglet child: ${key}`);
+    const entry = this.reader.entry(child.entry);
+    if (!entry || entry.scope !== 'piglet' || entry.encryption) throw new Error(`Piglet child is unavailable: ${key}`);
+    return { child, entry };
+  }
+  pigletUrl(id) {
+    const { child } = this.pigletEntry(id);
+    return `${this._virtualBase()}/piglet/${encodeURIComponent(child.id)}.wurst`;
+  }
+  async pigletBytes(id) {
+    const { child, entry } = this.pigletEntry(id);
+    const data = await this._readImmutable(entry, 0, entry.length);
+    const digest = await sha256Hex(data);
+    if (digest !== child.sha256) throw new Error(`Piglet child failed integrity check: ${child.id}`);
+    return data;
+  }
+  async openPiglet(id, options = {}) {
+    const data = await this.pigletBytes(id);
+    return WursterWebSession.open(new Blob([data]), {
+      ...options,
+      sessionId: options.sessionId || `${this.id}-piglet-${String(id).replace(/[^a-z0-9_-]+/gi, '-')}`
+    });
+  }
+  pigstyStatus() {
+    const declared = this.reader.manifest?.pigsty ?? null;
+    return {
+      declared: Boolean(declared),
+      policy: structuredClone(declared),
+      state: declared ? 'unavailable' : 'undeclared',
+      runtime: 'web',
+      builds: declared ? Object.keys(declared.builds ?? {}).sort() : [],
+      reason: declared ? 'pigsty-node-runtime-unavailable-in-web' : 'not-declared'
+    };
   }
   _cap(name) {
     const declared = normalizeCapabilityDeclaration(this.reader.manifest.capabilities), value = declared?.[name];

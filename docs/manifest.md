@@ -12,7 +12,7 @@ order: 2
 {
   "id": "io.wrst.example",
   "name": "Example Wurst",
-  "version": "0.20.0",
+  "version": "0.32.0",
   "type": "widget",
   "entry": "index.html",
   "source": "src",
@@ -155,14 +155,15 @@ The runtime reports whether a declared capability is actually available on that 
 
 `files.open` and `files.save` are trusted user-selected host-file bridges. Desktop Wurster owns the file dialogs and returns only the selected file/destination. They are RED capabilities and require a valid package signature.
 
-## Wurst Interface
+## PigLink
 
 A Wurst may declare Actions and Events for headless/agent use:
 
 ```json
 {
-  "interface": {
-    "format": "wurst/interface-1",
+  "piglink": {
+    "format": "wurst/piglink-1",
+    "source": "piglink.js",
     "headless": true,
     "actions": {
       "ping": {
@@ -174,7 +175,62 @@ A Wurst may declare Actions and Events for headless/agent use:
 }
 ```
 
-The same declared interface is used by embedded UI and headless tooling.
+The same declared PigLink is used by embedded UI, child Wursts, headless tooling and future MCP/CLI adapters.
+
+The old `interface` manifest field was removed before 1.0. Use `piglink`.
+
+## Pigsty
+
+Pigsty is declared as a runtime capability, not as bundled host access:
+
+```json
+{
+  "pigsty": {
+    "version": "node-lts-1",
+    "tools": ["eleventy", "typescript"],
+    "offline": true,
+    "builds": {
+      "site": {
+        "source": "pigsty-build.js",
+        "description": "Build the static site artifacts.",
+        "outputs": ["dist"]
+      }
+    }
+  }
+}
+```
+
+This does not make Node a universal Wurst requirement. A runtime without Pigsty still opens the Wurst and reports Pigsty as unavailable for build operations.
+
+`pigsty.builds` declares named build scripts stored inside the Wurst app workspace. A runtime with Pigsty can run one with `wurst.pigsty.build("site")`.
+
+Engine selection is deliberately not part of the manifest. A Wurst asks for Pigsty; Wurster decides whether the local runtime can provide a conforming internal engine. Fields such as `mode: "node"` are rejected rather than treated as a host-Node fallback.
+
+Successful declared builds may be published as `wurst/pigsty-publication-1` workspace files under `data/builds/<build>/...`. The publication stores generated artifacts separately from authored source and writes a `wurst/pigsty-artifact-store-1` record so Wurster can later report `fresh`, `stale`, `missing` or `invalid` instead of guessing whether source and generated output still match.
+
+## Piglet
+
+Child Wursts are ordinary Wurst resources handled through the Piglet runtime system. A fixed built-in child is immutable content whose exact bytes are covered by the parent signature and whose own package signature is checked independently.
+
+Installed child Wursts live in the parent's mutable WurstFS state and are verified independently of the parent package signature.
+
+Current built-in child syntax:
+
+```json
+{
+  "piglet": {
+    "children": [
+      {
+        "id": "child-tool",
+        "source": "child-tool.wurst",
+        "label": "Child Tool"
+      }
+    ]
+  }
+}
+```
+
+MeatGrinder writes the child into immutable `piglet` scope and records its hash in the parent manifest.
 
 ## Platform-specific behavior
 

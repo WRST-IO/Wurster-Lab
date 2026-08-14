@@ -53,6 +53,12 @@ A local-model client can run everywhere while explaining that a runtime without 
 
 Conformance therefore means understanding the request and denying or marking unavailable what cannot be supplied, not refusing to open the whole Wurst.
 
+## Pigsty follows the same law
+
+Pigsty may exist on Desktop before it exists on mobile or Web. That does not split the Wurst format.
+
+A Wurst can display and edit its data everywhere while enabling source builds only where Pigsty is available. Built output remains ordinary Wurst content or WurstFS state with provenance. The absence of Pigsty disables the build operation, not the Wurst.
+
 ## Portable secrets
 
 The same rule applies to cryptography. Meatphrase is the universal recovery/unlock route for user-owned sealed content. Local hardware or OS security may make a particular Wurster more comfortable or safer, but never becomes a requirement embedded in the Wurst file.

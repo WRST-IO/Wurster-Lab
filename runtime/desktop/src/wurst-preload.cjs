@@ -3,11 +3,11 @@ const { contextBridge, ipcRenderer } = require('electron');
 const invoke = (channel, ...args) => ipcRenderer.invoke(channel, ...args);
 const authSession = new Map();
 const authResultListeners = new Set();
-const interfaceHandlers = new Map();
-let interfaceDeclaration = null;
-let interfaceLoadError = null;
-let interfaceReadyResolve;
-const interfaceReady = new Promise((resolve) => { interfaceReadyResolve = resolve; });
+const piglinkHandlers = new Map();
+let piglinkDeclaration = null;
+let piglinkLoadError = null;
+let piglinkReadyResolve;
+const piglinkReady = new Promise((resolve) => { piglinkReadyResolve = resolve; });
 let nextAuthId = 1;
 let nextIdentityId = 1;
 let authSyncScheduled = false;
@@ -147,61 +147,61 @@ ipcRenderer.on('wurst:auth:result', (_event, payload = {}) => {
 });
 
 window.addEventListener('DOMContentLoaded', installAuthAnchors, { once: true });
-window.addEventListener('DOMContentLoaded', () => { void loadWurstInterface(); }, { once: true });
+window.addEventListener('DOMContentLoaded', () => { void loadPigLink(); }, { once: true });
 
-contextBridge.exposeInMainWorld('WurstInterface', Object.freeze({ define: defineWurstInterface }));
+contextBridge.exposeInMainWorld('PigLink', Object.freeze({ define: definePigLink }));
 
 
-function defineWurstInterface(definition = {}) {
+function definePigLink(definition = {}) {
   const actions = definition && typeof definition === 'object' ? definition.actions : null;
-  if (!actions || typeof actions !== 'object') throw new Error('WurstInterface.define requires { actions }');
+  if (!actions || typeof actions !== 'object') throw new Error('PigLink.define requires { actions }');
   for (const [name, handler] of Object.entries(actions)) {
-    if (typeof handler !== 'function') throw new Error(`Wurst Interface action must be a function: ${name}`);
-    if (interfaceDeclaration?.actions && !Object.hasOwn(interfaceDeclaration.actions, name)) {
+    if (typeof handler !== 'function') throw new Error(`PigLink action must be a function: ${name}`);
+    if (piglinkDeclaration?.actions && !Object.hasOwn(piglinkDeclaration.actions, name)) {
       throw new Error(`Action is not declared in the Wurst manifest: ${name}`);
     }
-    interfaceHandlers.set(name, handler);
+    piglinkHandlers.set(name, handler);
   }
   return true;
 }
 
-async function loadWurstInterface() {
+async function loadPigLink() {
   try {
-    interfaceDeclaration = await invoke('wurst:interface:describe');
-    if (!interfaceDeclaration?.entry) return;
+    piglinkDeclaration = await invoke('wurst:piglink:describe');
+    if (!piglinkDeclaration?.entry) return;
     const script = document.createElement('script');
-    script.src = 'wurst://interface/entry.js';
+    script.src = 'wurst://piglink/entry.js';
     script.async = true;
     await new Promise((resolve, reject) => {
       script.addEventListener('load', resolve, { once: true });
-      script.addEventListener('error', () => reject(new Error('Wurst Interface failed to load')), { once: true });
+      script.addEventListener('error', () => reject(new Error('PigLink failed to load')), { once: true });
       document.head.appendChild(script);
     });
   } catch (error) {
-    interfaceLoadError = error;
-    console.error('[Wurster] Wurst Interface load failed:', error);
+    piglinkLoadError = error;
+    console.error('[Wurster] PigLink load failed:', error);
   } finally {
-    interfaceReadyResolve();
+    piglinkReadyResolve();
   }
 }
 
-ipcRenderer.on('wurst:interface:invoke-request', async (_event, request = {}) => {
+ipcRenderer.on('wurst:piglink:invoke-request', async (_event, request = {}) => {
   const requestId = String(request.requestId || '');
   if (!requestId) return;
   try {
-    await interfaceReady;
-    if (interfaceLoadError) throw interfaceLoadError;
+    await piglinkReady;
+    if (piglinkLoadError) throw piglinkLoadError;
     const name = String(request.name || '');
-    const handler = interfaceHandlers.get(name);
+    const handler = piglinkHandlers.get(name);
     if (!handler) throw new Error(`Wurst action is declared but not registered: ${name}`);
     const result = await handler(structuredClone(request.input ?? {}));
-    ipcRenderer.send('wurst:interface:invoke-result', {
+    ipcRenderer.send('wurst:piglink:invoke-result', {
       requestId,
       ok: true,
       result: structuredClone(result == null ? null : result)
     });
   } catch (error) {
-    ipcRenderer.send('wurst:interface:invoke-result', {
+    ipcRenderer.send('wurst:piglink:invoke-result', {
       requestId,
       ok: false,
       error: error?.message || String(error)
@@ -223,11 +223,20 @@ contextBridge.exposeInMainWorld('wurst', Object.freeze({
       return true;
     }
   }),
-  interface: Object.freeze({
-    ready: () => interfaceReady.then(() => Boolean(interfaceDeclaration)),
-    describe: () => invoke('wurst:interface:describe'),
-    invoke: (name, input = {}) => invoke('wurst:interface:invoke', String(name ?? ''), input),
-    emit: (name, payload = null) => { ipcRenderer.send('wurst:interface:event', String(name ?? ''), payload); return true; }
+  piglink: Object.freeze({
+    ready: () => piglinkReady.then(() => Boolean(piglinkDeclaration)),
+    describe: () => invoke('wurst:piglink:describe'),
+    invoke: (name, input = {}) => invoke('wurst:piglink:invoke', String(name ?? ''), input),
+    emit: (name, payload = null) => { ipcRenderer.send('wurst:piglink:event', String(name ?? ''), payload); return true; }
+  }),
+  piglet: Object.freeze({
+    children: () => invoke('wurst:piglet:children'),
+    url: (id) => invoke('wurst:piglet:url', String(id ?? ''))
+  }),
+  pigsty: Object.freeze({
+    status: () => invoke('wurst:pigsty:status'),
+    run: (request = {}) => invoke('wurst:pigsty:run', request),
+    build: (name = 'default', request = {}) => invoke('wurst:pigsty:build', String(name ?? 'default'), request)
   }),
   identity: Object.freeze({
     session: () => invoke('wurst:identity:session')

@@ -18,12 +18,14 @@ import {
   normalizeCapabilities,
   openWurstFile,
   sealApplicationFiles,
+  sha256,
   verifyPackageSignature,
   verifyPackageSignatureFromReader,
   verifyPublisherCertificate,
   verifyPublisherCertificateRequest
 } from '@wurster/format';
-import { normalizeWurstInterface, publicInterfaceManifest } from '@wurster/interface';
+import { normalizePigLink, publicPigLinkManifest } from '@wurster/piglink';
+import { normalizePigstyPolicy } from '@wurster/pigsty';
 import { TRUSTED_AUTHORITIES, TRUST_BUNDLE } from './trust-data.mjs';
 
 function withOfficialCertificateTrust(signature, additionalRoots = []) {
@@ -154,6 +156,63 @@ function normalizeRealmDataPolicy(raw) {
   return { format: 'wurst/data-realms-1', writable: true, realms };
 }
 
+const PIG_NAME_RE = /^[A-Za-z][A-Za-z0-9_.:-]{0,95}$/;
+
+function normalizeProjectRelativePath(raw, field) {
+  const value = String(raw ?? '').replaceAll('\\', '/').replace(/^\/+/, '');
+  const parts = [];
+  for (const part of value.split('/')) {
+    if (!part || part === '.') continue;
+    if (part === '..') throw new Error(`${field} must stay inside the Wurst project`);
+    parts.push(part);
+  }
+  const normalized = parts.join('/');
+  if (!normalized) throw new Error(`${field} may not be empty`);
+  if (normalized.startsWith('__wurst/')) throw new Error(`${field} may not target Wurster internals`);
+  return normalized;
+}
+
+function pigstyToolchainConfig(rawPigsty, pigstyPolicy) {
+  if (!pigstyPolicy) return null;
+  const raw = rawPigsty?.toolchain && typeof rawPigsty.toolchain === 'object' && !Array.isArray(rawPigsty.toolchain)
+    ? rawPigsty.toolchain
+    : {};
+  const root = normalizeProjectRelativePath(pigstyPolicy.toolchain?.root ?? 'pigsty-toolchain', 'pigsty.toolchain.root');
+  const source = normalizeProjectRelativePath(raw.source ?? root, 'pigsty.toolchain.source');
+  return {
+    root,
+    source,
+    explicitSource: raw.source != null
+  };
+}
+
+function removeFilesAtPrefix(files, prefix) {
+  return files.filter((file) => file.path !== prefix && !file.path.startsWith(`${prefix}/`));
+}
+
+function normalizePigletPolicy(raw) {
+  if (raw == null) return [];
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('piglet must be an object');
+  const children = Array.isArray(raw.children) ? raw.children : [];
+  if (children.length > 64) throw new Error('piglet.children may list at most 64 child Wursts');
+  const ids = new Set();
+  return children.map((child, index) => {
+    if (!child || typeof child !== 'object' || Array.isArray(child)) throw new Error(`piglet.children[${index}] must be an object`);
+    const id = String(child.id ?? '').trim();
+    if (!PIG_NAME_RE.test(id)) throw new Error(`piglet.children[${index}].id must match ${PIG_NAME_RE}`);
+    if (ids.has(id)) throw new Error(`Duplicate Piglet child id: ${id}`);
+    ids.add(id);
+    const source = String(child.source ?? '').replaceAll('\\', '/').replace(/^\/+/, '');
+    if (!source || source.includes('..') || source.startsWith('__wurst/')) throw new Error(`piglet.children[${index}].source must be a project-relative .wurst/.wrst file`);
+    if (!/\.(?:wurst|wrst)$/i.test(source)) throw new Error(`piglet.children[${index}].source must point to a .wurst or .wrst file`);
+    return {
+      id,
+      source,
+      ...(child.label == null ? {} : { label: String(child.label).slice(0, 120) })
+    };
+  });
+}
+
 export async function buildWurst(projectDir, explicitOutput, options = {}) {
   const root = path.resolve(projectDir);
   const configPath = path.join(root, 'wurst.json');
@@ -163,7 +222,10 @@ export async function buildWurst(projectDir, explicitOutput, options = {}) {
     : await defaultProjectConfig(root);
   options.onProgress?.({ stage: 'scan', progress: 0.08, message: hasConfig ? 'Reading wurst.json' : 'No manifest. Sniffing project defaults.' });
   const sourceDir = path.resolve(root, config.source ?? 'src');
-  const interfaceCfg = normalizeWurstInterface(config.interface ?? null);
+  if (Object.hasOwn(config, 'interface')) throw new Error('interface was renamed before Wurster 1.0; use piglink');
+  const piglinkCfg = normalizePigLink(config.piglink ?? null);
+  const pigstyPolicy = normalizePigstyPolicy(config.pigsty ?? null);
+  const pigletChildrenCfg = normalizePigletPolicy(config.piglet ?? null);
   const sealedDir = path.resolve(root, config.sealedSource ?? 'sealed');
   const appCfg = config.application && typeof config.application === 'object' ? config.application : {};
   const appProtection = appCfg.protection ?? 'public';
@@ -175,20 +237,66 @@ export async function buildWurst(projectDir, explicitOutput, options = {}) {
   } : {});
   if (files.length === 0) throw new Error('Pig entered the Meat Grinder, but there was no meat in src/.');
 
-  let interfaceManifest = null;
-  if (interfaceCfg) {
-    const interfaceSource = path.resolve(root, interfaceCfg.source);
-    const relativeInterfaceSource = path.relative(root, interfaceSource);
-    if (relativeInterfaceSource.startsWith('..') || path.isAbsolute(relativeInterfaceSource)) throw new Error('interface.source must stay inside the Wurst project');
-    if (!await exists(interfaceSource)) throw new Error(`Wurst Interface source not found: ${interfaceCfg.source}`);
-    const interfaceEntry = '__wurst/interface/entry.js';
+  const pigstyToolchain = pigstyToolchainConfig(config.pigsty, pigstyPolicy);
+  if (pigstyToolchain) {
+    const toolchainSource = path.resolve(root, pigstyToolchain.source);
+    const relativeToolchainSource = path.relative(root, toolchainSource);
+    if (relativeToolchainSource.startsWith('..') || path.isAbsolute(relativeToolchainSource)) throw new Error('pigsty.toolchain.source must stay inside the Wurst project');
+    const hasToolchainSource = await exists(toolchainSource);
+    if (!hasToolchainSource && pigstyToolchain.explicitSource) throw new Error(`Pigsty toolchain source not found: ${pigstyToolchain.source}`);
+    if (hasToolchainSource) {
+      files = removeFilesAtPrefix(files, pigstyToolchain.root);
+      files.push(...await collectDirectory(toolchainSource, 'app', pigstyToolchain.root, {
+        skipDirs: new Set(['.git']),
+        skipFiles: new Set(['.DS_Store'])
+      }));
+    }
+  }
+
+  let piglinkManifest = null;
+  if (piglinkCfg) {
+    const piglinkSource = path.resolve(root, piglinkCfg.source);
+    const relativePiglinkSource = path.relative(root, piglinkSource);
+    if (relativePiglinkSource.startsWith('..') || path.isAbsolute(relativePiglinkSource)) throw new Error('piglink.source must stay inside the Wurst project');
+    if (!await exists(piglinkSource)) throw new Error(`PigLink source not found: ${piglinkCfg.source}`);
+    const piglinkEntry = '__wurst/piglink/entry.js';
     files.push({
-      path: interfaceEntry,
-      data: await fs.readFile(interfaceSource),
-      scope: 'interface',
+      path: piglinkEntry,
+      data: await fs.readFile(piglinkSource),
+      scope: 'piglink',
       mime: 'text/javascript; charset=utf-8'
     });
-    interfaceManifest = publicInterfaceManifest(interfaceCfg, interfaceEntry);
+    piglinkManifest = publicPigLinkManifest(piglinkCfg, piglinkEntry);
+  }
+
+  const pigletChildren = [];
+  for (const child of pigletChildrenCfg) {
+    const childSource = path.resolve(root, child.source);
+    const relativeChildSource = path.relative(root, childSource);
+    if (relativeChildSource.startsWith('..') || path.isAbsolute(relativeChildSource)) throw new Error('piglet child source must stay inside the Wurst project');
+    if (!await exists(childSource)) throw new Error(`Piglet child not found: ${child.source}`);
+    const data = await fs.readFile(childSource);
+    const childPackage = decodeWurst(data);
+    const childHash = sha256(data);
+    const childEntry = `__wurst/piglet/${child.id}.wurst`;
+    files.push({
+      path: childEntry,
+      data,
+      scope: 'piglet',
+      mime: 'application/vnd.wrst.wurst'
+    });
+    pigletChildren.push({
+      id: child.id,
+      label: child.label ?? childPackage.manifest?.name ?? child.id,
+      entry: childEntry,
+      sha256: childHash,
+      bytes: data.byteLength,
+      application: {
+        id: childPackage.manifest?.id ?? null,
+        name: childPackage.manifest?.name ?? null,
+        version: childPackage.manifest?.version ?? null
+      }
+    });
   }
 
   options.onProgress?.({ stage: 'grind', progress: 0.28, message: `Grinding ${files.length} project files` });
@@ -246,7 +354,9 @@ export async function buildWurst(projectDir, explicitOutput, options = {}) {
       storedIdentity: protectionCfg.storedIdentity !== false
     },
     presentation: Object.keys(presentation).length ? presentation : null,
-    interface: interfaceManifest,
+    piglink: piglinkManifest,
+    piglet: pigletChildren.length ? { format: 'wurst/piglet-1', children: pigletChildren } : null,
+    pigsty: pigstyPolicy,
     window: {
       width: 720,
       height: 480,
@@ -262,7 +372,7 @@ export async function buildWurst(projectDir, explicitOutput, options = {}) {
       signed: signingEnabled
     },
     build: {
-      meatGrinder: '0.20.0',
+      meatGrinder: '0.32.0',
       generatedManifest: Boolean(config.__generated),
       createdAt: new Date().toISOString()
     }

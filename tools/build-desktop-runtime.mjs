@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { prepareDesktopEdgeRuntimes } from './wurster-edge-runtime.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ENV_FILE = path.join(ROOT, '.env.signing.local');
@@ -22,6 +23,11 @@ function parseEnvFile(file) {
   return out;
 }
 
+
+export function shouldBundlePigsty(env = process.env) {
+  return /^(1|true|yes)$/i.test(String(env.WURSTER_BUNDLE_PIGSTY ?? ''));
+}
+
 export function npmInvocation(args, {
   execPath = process.execPath,
   npmExecPath = process.env.npm_execpath
@@ -32,12 +38,12 @@ export function npmInvocation(args, {
   return { command: execPath, args: [npmExecPath, ...args] };
 }
 
-export function runDesktopBuild(argv = process.argv.slice(2)) {
+export async function runDesktopBuild(argv = process.argv.slice(2)) {
   const fileEnv = parseEnvFile(ENV_FILE);
   const env = { ...process.env, ...fileEnv };
   const target = String(argv[0] || '').toLowerCase();
   const arch = String(argv[1] || '').toLowerCase();
-  if (!['windows', 'mac'].includes(target)) throw new Error('Usage: node tools/build-desktop-runtime.mjs <windows|mac> [x64|arm64|universal]');
+  if (!['windows', 'mac', 'linux'].includes(target)) throw new Error('Usage: node tools/build-desktop-runtime.mjs <windows|mac|linux> [x64|arm64|universal]');
 
   const args = ['exec', '--', 'electron-builder'];
   if (target === 'windows') {
@@ -53,12 +59,24 @@ export function runDesktopBuild(argv = process.argv.slice(2)) {
       args.push(`--config.win.azureSignOptions.certificateProfileName=${azure[2]}`);
       args.push(`--config.win.azureSignOptions.codeSigningAccountName=${azure[3]}`);
     }
-  } else {
+  } else if (target === 'mac') {
     args.push('--mac', 'dmg', 'zip', `--${arch || 'universal'}`, '--config.directories.output=../mac/dist');
     if (env.WURSTER_MAC_CSC_LINK) env.CSC_LINK = env.WURSTER_MAC_CSC_LINK;
     if (env.WURSTER_MAC_CSC_KEY_PASSWORD) env.CSC_KEY_PASSWORD = env.WURSTER_MAC_CSC_KEY_PASSWORD;
     if (env.WURSTER_MAC_IDENTITY) args.push(`--config.mac.identity=${env.WURSTER_MAC_IDENTITY}`);
     if (/^(1|true|yes)$/i.test(env.WURSTER_MAC_NOTARIZE || '')) args.push('--config.mac.notarize=true');
+  } else {
+    args.push('--linux', 'AppImage', `--${arch || 'x64'}`, '--config.directories.output=../linux/dist');
+  }
+
+  if (shouldBundlePigsty(env)) {
+    console.log(`[Wurster Lab] preparing Pigsty Edge runtime for ${target}${arch ? `/${arch}` : ''}`);
+    const edgeRuntime = await prepareDesktopEdgeRuntimes({ target, arch, env });
+    for (const item of edgeRuntime.targets) {
+      console.log(`[Wurster Lab] Pigsty runtime: ${item.target} ${item.manifest.version} (${item.source})`);
+    }
+  } else {
+    console.log('[Wurster Lab] Pigsty Edge runtime is not bundled in this release (coming soon)');
   }
 
   console.log(`[Wurster Lab] building ${target}${arch ? `/${arch}` : ''}`);
@@ -85,4 +103,7 @@ export function runDesktopBuild(argv = process.argv.slice(2)) {
 }
 
 const isMain = Boolean(process.argv[1]) && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (isMain) runDesktopBuild();
+if (isMain) runDesktopBuild().catch((error) => {
+  console.error(`[Wurster Lab] ${error?.message || error}`);
+  process.exit(1);
+});

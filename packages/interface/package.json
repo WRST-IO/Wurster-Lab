@@ -1,7 +1,7 @@
 {
-  "name": "@wurster/interface",
-  "version": "0.20.1",
-  "description": "Runtime-neutral Wurst Interface declarations, actions, events and validation.",
+  "name": "@wurster/piglink",
+  "version": "0.32.0",
+  "description": "Runtime-neutral PigLink declarations, actions, events and validation.",
   "type": "module",
   "exports": {
     ".": "./src/index.js"

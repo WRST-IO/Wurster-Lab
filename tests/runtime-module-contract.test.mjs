@@ -8,7 +8,8 @@ const ROOT = path.resolve(HERE, '..');
 
 const PUBLIC_MODULES = new Map([
   ['@wurster/format', path.join(ROOT, 'packages/format/src/index.js')],
-  ['@wurster/interface', path.join(ROOT, 'packages/interface/src/index.js')],
+  ['@wurster/piglink', path.join(ROOT, 'packages/interface/src/index.js')],
+  ['@wurster/pigsty', path.join(ROOT, 'packages/pigsty/src/index.js')],
   ['@wurster/session', path.join(ROOT, 'packages/session/src/index.js')]
 ]);
 

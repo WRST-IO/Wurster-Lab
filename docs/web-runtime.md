@@ -18,7 +18,7 @@ wurster-embed-host.html
 
 The core runtime uses a service worker to give each Wurst a virtual application resource surface while the visible Wurst runs in a sandboxed iframe. Normal relative HTML/CSS/JavaScript URLs therefore keep working inside a Wurst.
 
-## 0.20.0 runtime surface
+## 0.32.0 runtime surface
 
 Wurster Web can:
 
@@ -197,7 +197,7 @@ The viewer is intentionally built on `<wurst-embed>` rather than a separate priv
 
 ## Remaining browser parity work
 
-0.20.0 completes WurstKey application execution, but not every Desktop trust/auth feature is browser-equivalent yet.
+0.32.0 completes WurstKey application execution, but not every Desktop trust/auth feature is browser-equivalent yet.
 
 Still before 1.0:
 
@@ -206,7 +206,7 @@ Still before 1.0:
 - the cryptographic return leg for Desktop Wurster identity/auth handoff;
 - browser presentation of the full publisher DNS/Authority trust chain and `<wurst-identity>` parity;
 - Undercover PNG source adaptation in Wurster Web;
-- complete Wurst Interface host/event conformance and browser-platform capability audit.
+- complete PigLink host/event conformance and browser-platform capability audit.
 
 The runtime must report unsupported behavior honestly rather than pretending that browser and desktop capabilities are identical.
 

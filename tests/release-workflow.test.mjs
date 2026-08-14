@@ -10,16 +10,38 @@ const pages = await fs.readFile(path.join(root, '.github', 'workflows', 'pages.y
 const runtimePage = await fs.readFile(path.join(root, 'site', 'src', 'runtime.md'), 'utf8');
 const releaseData = await fs.readFile(path.join(root, 'site', 'src', '_data', 'releases.js'), 'utf8');
 const desktopBuilder = await fs.readFile(path.join(root, 'tools', 'build-desktop-runtime.mjs'), 'utf8');
+const edgeRuntimeTool = await fs.readFile(path.join(root, 'tools', 'wurster-edge-runtime.mjs'), 'utf8');
+const edgeRuntimeLock = JSON.parse(await fs.readFile(path.join(root, 'runtime', 'edge-runtime.lock.json'), 'utf8'));
 const webBuilder = await fs.readFile(path.join(root, 'runtime', 'web', 'build.mjs'), 'utf8');
 
 await assert.rejects(fs.stat(path.join(root, 'examples')), /ENOENT/);
 for (const [name, command] of Object.entries(pkg.scripts)) assert.doesNotMatch(command, /\bexamples\//, `script ${name} still depends on /examples`);
 assert.equal(desktop.build.win.artifactName, 'Wurster-Setup-${version}-${arch}.${ext}');
 assert.equal(desktop.build.mac.artifactName, 'Wurster-${version}-mac-${arch}.${ext}');
+assert.equal(desktop.build.linux.artifactName, 'Wurster-${version}-linux-${arch}.${ext}');
+assert.deepEqual(desktop.build.extraResources, [{ from: 'runtimes', to: 'runtimes', filter: ['wurster-edge-runtime-*/**/*'] }]);
+assert.equal(pkg.scripts['dist:linux'], 'npm run dist:linux --workspace @wurster/desktop');
+assert.equal(pkg.scripts['runtime:edge:prepare'], 'node tools/wurster-edge-runtime.mjs prepare');
 
 assert.match(desktopBuilder, /process\.env\.npm_execpath/);
 assert.match(desktopBuilder, /process\.execPath/);
 assert.doesNotMatch(desktopBuilder, /spawn\([^\n]*npm\.cmd/);
+assert.match(desktopBuilder, /prepareDesktopEdgeRuntimes/);
+assert.match(desktopBuilder, /WURSTER_BUNDLE_PIGSTY/);
+assert.match(desktopBuilder, /Pigsty Edge runtime is not bundled in this release \(coming soon\)/);
+assert.match(desktopBuilder, /'windows', 'mac', 'linux'/);
+assert.match(desktopBuilder, /--linux', 'AppImage'/);
+
+assert.equal(edgeRuntimeLock.repository, 'WRST-IO/wurster-edge-runtime');
+assert.equal(edgeRuntimeLock.tag, 'v0.1.0-dev.2');
+assert.deepEqual(edgeRuntimeLock.targets['linux-amd64'], { asset: 'wurster-edge-runtime-linux-amd64.tar.gz', archiveFormat: 'tar.gz' });
+assert.deepEqual(edgeRuntimeLock.targets['darwin-arm64'], { asset: 'wurster-edge-runtime-darwin-arm64.tar.gz', archiveFormat: 'tar.gz' });
+assert.deepEqual(edgeRuntimeLock.targets['darwin-amd64'], { asset: 'wurster-edge-runtime-darwin-amd64.tar.gz', archiveFormat: 'tar.gz' });
+assert.deepEqual(edgeRuntimeLock.targets['windows-amd64'], { asset: 'wurster-edge-runtime-windows-amd64.zip', archiveFormat: 'zip' });
+assert.match(edgeRuntimeTool, /WURSTER_EDGE_RUNTIME_TOKEN/);
+assert.match(edgeRuntimeTool, /releases\/tags/);
+assert.match(edgeRuntimeTool, /archive checksum mismatch/);
+assert.match(edgeRuntimeTool, /verifyEdgeRuntimeDirectory/);
 
 assert.match(webBuilder, /wurster\.js/);
 assert.match(webBuilder, /wurster\.min\.js/);
@@ -33,6 +55,10 @@ assert.match(release, /\n\s*web:\s*\n/);
 assert.match(release, /npm run runtime:web:build/);
 assert.match(release, /Wurster-Web-\$\{version\}\.zip/);
 assert.match(release, /runtime-web/);
+assert.doesNotMatch(release, /pigsty-linux-amd64:/);
+assert.doesNotMatch(release, /runtime:edge:prepare/);
+assert.doesNotMatch(release, /WURSTER_EDGE_RUNTIME_TOKEN/);
+assert.doesNotMatch(release, /pigsty-edge-wasix\.test\.mjs/);
 assert.match(release, /needs: \[web, mac-arm64, mac-x64, windows-x64\]/);
 assert.match(release, /npm run dist:mac:arm64/);
 assert.match(release, /npm run dist:mac:x64/);
@@ -61,4 +87,4 @@ assert.match(releaseData, /wurster\.js/);
 assert.match(releaseData, /wurster\.min\.js/);
 assert.match(releaseData, /Wurster-Web-\$\{pkg\.version\}\.zip/);
 
-console.log('✓ GitHub tag releases publish Windows, macOS and Web Wurster runtimes from one versioned release');
+console.log('✓ GitHub tag releases publish Windows, macOS and Web without waiting for the optional Pigsty bundle');

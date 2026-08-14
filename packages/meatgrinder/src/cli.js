@@ -96,7 +96,7 @@ async function readTrustedRoot(value) {
 
 function help() {
   console.log(`
-🥩 Meat Grinder 0.20.0
+🥩 Meat Grinder 0.32.0
 
 Usage:
   meatgrinder build [projectDir] [output] [options]
@@ -184,7 +184,9 @@ try {
     console.log(`   WurstFS: ${filesystemLabel(result.manifest)}`);
     if (result.wurstFs) console.log(filesystemGenerationLabel(result.wurstFs));
     console.log(`   stored identities: ${result.manifest.protection?.storedIdentity === false ? 'forbidden' : 'allowed'}`);
-    if (result.manifest.interface) console.log(`   Wurst Interface: ${Object.keys(result.manifest.interface.actions ?? {}).length} action(s) / ${Object.keys(result.manifest.interface.events ?? {}).length} event(s)${result.manifest.interface.headless ? ' / headless' : ''}`);
+    if (result.manifest.piglink) console.log(`   PigLink: ${Object.keys(result.manifest.piglink.actions ?? {}).length} action(s) / ${Object.keys(result.manifest.piglink.events ?? {}).length} event(s)${result.manifest.piglink.headless ? ' / headless' : ''}`);
+    if (result.manifest.piglet) console.log(`   Piglet: ${result.manifest.piglet.children?.length ?? 0} child Wurst(s)`);
+    if (result.manifest.pigsty) console.log(`   Pigsty: ${result.manifest.pigsty.version}${result.manifest.pigsty.offline ? ' / offline toolchain' : ''}`);
     if (result.generatedWurstKey) {
       console.log('\n🔐 GENERATED WURSTKEY — THIS IS SHOWN ONCE:');
       console.log(`   ${result.generatedWurstKey.wurstKey}`);
@@ -204,7 +206,9 @@ try {
     console.log(`   WurstFS: ${filesystemLabel(result.manifest)}`);
     if (result.wurstFs) console.log(filesystemGenerationLabel(result.wurstFs));
     console.log(`   stored identities: ${result.manifest.protection?.storedIdentity === false ? 'forbidden' : 'allowed'}`);
-    if (result.manifest.interface) console.log(`   Wurst Interface: ${Object.keys(result.manifest.interface.actions ?? {}).length} action(s) / ${Object.keys(result.manifest.interface.events ?? {}).length} event(s)${result.manifest.interface.headless ? ' / headless' : ''}`);
+    if (result.manifest.piglink) console.log(`   PigLink: ${Object.keys(result.manifest.piglink.actions ?? {}).length} action(s) / ${Object.keys(result.manifest.piglink.events ?? {}).length} event(s)${result.manifest.piglink.headless ? ' / headless' : ''}`);
+    if (result.manifest.piglet) console.log(`   Piglet: ${result.manifest.piglet.children?.length ?? 0} child Wurst(s)`);
+    if (result.manifest.pigsty) console.log(`   Pigsty: ${result.manifest.pigsty.version}${result.manifest.pigsty.offline ? ' / offline toolchain' : ''}`);
     console.log(`   files: ${result.files.length}`);
     console.log(`   size: ${(result.bytes / 1024).toFixed(1)} KiB`);
     if (result.carrier) console.log(`   carrier: PNG / ${result.carrier.chunks} wuSt slice${result.carrier.chunks === 1 ? '' : 's'} / ${(result.wurstBytes / 1024).toFixed(1)} KiB embedded Wurst`);

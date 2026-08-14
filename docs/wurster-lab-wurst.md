@@ -45,9 +45,9 @@ unlocking `/data/operator`.
 The workspace updater always writes a new filename:
 
 ```text
-WursterLab_v0.20.0_r001.wurst
-WursterLab_v0.20.0_r002.wurst
-WursterLab_v0.20.0_r001.wurst
+WursterLab_v0.31.0_r001.wurst
+WursterLab_v0.31.0_r002.wurst
+WursterLab_v0.31.0_r001.wurst
 ```
 
 The old Wurst is never overwritten. This is useful for explicit handoff,
@@ -55,7 +55,7 @@ backup, and clients that cache downloaded files by filename.
 
 ```bash
 npm run build:wurster-lab-wurst
-npm run update:wurster-lab-wurst -- /path/to/WursterLab_v0.20.0_r001.wurst
+npm run update:wurster-lab-wurst -- /path/to/WursterLab_v0.31.0_r001.wurst
 ```
 
 An incremental update synchronizes only `/data/workspace` and release metadata.
