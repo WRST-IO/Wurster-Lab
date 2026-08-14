@@ -11,7 +11,8 @@ import {
   shell,
   safeStorage,
   session,
-  systemPreferences
+  systemPreferences,
+  webContents as electronWebContents
 } from 'electron';
 import crypto from 'node:crypto';
 import { resolveTxt } from 'node:dns/promises';
@@ -117,7 +118,6 @@ let launcherReturnMode = 'launcher';
 let launcherView = 'launcher';
 let verificationPayload = null;
 let verificationReturnMode = 'launcher';
-let devToolsWindow = null;
 let pendingTotpSetup = null;
 let pendingMacOpenFile = null;
 let pendingRuntimeHandoff = null;
@@ -1578,6 +1578,8 @@ async function ensureWurstFsStore(context) {
   if (context.readOnlyPackage) throw new Error('Nested Piglet WurstFS is read-only until transactional child write-back is available');
   if (context.wurstFsStore) return context.wurstFsStore;
   if (context.reader.carrier) throw new Error('WurstFS realm writes are not available for carrier Wursts');
+  if (!context.filePath && context.ensurePigletBacking) await context.ensurePigletBacking();
+  if (!context.filePath) throw new Error('Writable WurstFS needs a local runtime backing file');
   context.wurstFsStore = bindPigletWurstFsPersistence(
     await openLocalWurstFsStore(context.filePath, context.reader),
     context.pigletPersistence
@@ -2945,64 +2947,28 @@ function openLauncherWindow({ show = true } = {}) {
   return win;
 }
 
+function inspectedWurstWebContents() {
+  const focused = electronWebContents.getFocusedWebContents?.();
+  if (focused && !focused.isDestroyed() && runtimeContextByWebContents.has(focused.id)) return focused;
+  if (currentWindow && !currentWindow.isDestroyed() && runtimeContextByWebContents.has(currentWindow.webContents.id)) return currentWindow.webContents;
+  return null;
+}
+
 function closeDetachedDevTools() {
-  try { currentWindow?.webContents?.closeDevTools(); } catch {}
-  if (devToolsWindow && !devToolsWindow.isDestroyed()) {
-    const win = devToolsWindow;
-    devToolsWindow = null;
-    try { win.destroy(); } catch {}
+  for (const webContentsId of runtimeContextByWebContents.keys()) {
+    const inspected = electronWebContents.fromId(webContentsId);
+    try { if (inspected && !inspected.isDestroyed() && inspected.isDevToolsOpened()) inspected.closeDevTools(); } catch {}
   }
 }
 
 function openDetachedWurstDevTools() {
-  if (!currentWindow || currentWindow.isDestroyed()) return;
-  if (devToolsWindow && !devToolsWindow.isDestroyed()) {
-    devToolsWindow.show();
-    devToolsWindow.focus();
+  const inspected = inspectedWurstWebContents();
+  if (!inspected) return;
+  if (inspected.isDevToolsOpened()) {
+    inspected.closeDevTools();
     return;
   }
-  const inspected = currentWindow.webContents;
-  const tools = new BrowserWindow({
-    title: `${currentContext?.manifest?.name ?? 'Wurst'} · Developer Tools`,
-    width: 1120,
-    height: 780,
-    minWidth: 720,
-    minHeight: 480,
-    show: true,
-    backgroundColor: '#202124',
-    autoHideMenuBar: true,
-    webPreferences: { devTools: false }
-  });
-  tools.setMenuBarVisibility(false);
-  devToolsWindow = tools;
-  inspected.setDevToolsWebContents(tools.webContents);
-  tools.on('closed', () => {
-    if (devToolsWindow === tools) devToolsWindow = null;
-    try { inspected.closeDevTools(); } catch {}
-  });
-  inspected.once('devtools-opened', () => {
-    // With a custom DevTools WebContents the inspector lives in this top-level
-    // BrowserWindow regardless of the Wurst window's own dimensions.
-    if (!tools.isDestroyed()) {
-      tools.show();
-      tools.focus();
-    }
-  });
-  // Electron remembers the last dock state. With a custom DevTools WebContents
-  // that can produce a comical half-blank "window containing a docked inspector".
-  // Force detach so this BrowserWindow is the DevTools surface itself.
   inspected.openDevTools({ mode: 'detach', activate: true });
-  setTimeout(() => {
-    if (tools.isDestroyed()) return;
-    const actual = inspected.devToolsWebContents;
-    if (!actual || actual.id !== tools.webContents.id) {
-      try {
-        inspected.closeDevTools();
-        inspected.setDevToolsWebContents(tools.webContents);
-        inspected.openDevTools({ mode: 'detach', activate: true });
-      } catch {}
-    }
-  }, 120);
 }
 
 async function openWurstFromMenu() {
@@ -3053,8 +3019,7 @@ function installApplicationMenu() {
       accelerator: process.platform === 'darwin' ? 'Alt+Command+I' : 'Ctrl+Shift+I',
       click: () => {
         if (!currentWindow || currentWindow.isDestroyed()) return;
-        if (devToolsWindow && !devToolsWindow.isDestroyed()) closeDetachedDevTools();
-        else openDetachedWurstDevTools();
+        openDetachedWurstDevTools();
       }
     },
     { label: 'Reload Wurst', accelerator: 'CommandOrControl+R', click: () => currentWindow?.webContents.reload() }

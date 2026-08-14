@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import path from 'node:path';
-import { MAX_PIGLET_BYTES, PIGLET_MIME, inspectPigletBytes, normalizePigletBytes } from './piglet-package.mjs';
+import { MAX_PIGLET_BYTES, PIGLET_MIME, inspectPigletBytes, inspectPigletSource, normalizePigletBytes, sha256PigletSource } from './piglet-package.mjs';
 
 const PIGLET_EXT_RE = /\.(?:wurst|wrst)$/i;
 const MAX_DISCOVERY_ENTRIES = 1024;
@@ -26,20 +26,29 @@ export function createPigletStorageAdapter({
   normalizeDataPath,
   waitForMaintenance
 }) {
-  async function readFile(context, rawPath) {
+  async function openSource(context, rawPath) {
     const target = normalizeDataPath(rawPath);
     const options = await readOptions(context, target);
     const stat = await context.reader.fsStat(target, options);
     if (!stat || stat.type !== 'file') throw new Error(`Stored Piglet file not found: /${target}`);
     if (stat.size > MAX_PIGLET_BYTES) throw new Error(`Stored Piglet exceeds ${MAX_PIGLET_BYTES} byte runtime limit`);
+    return {
+      size: stat.size,
+      path: publicPath(target),
+      async read(offset, length) {
+        if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length) || offset < 0 || length < 0 || offset + length > stat.size) throw new Error('Invalid stored Piglet range');
+        const result = await context.reader.fsReadRange(target, offset, length, options);
+        return Buffer.from(result?.data ?? []);
+      }
+    };
+  }
+
+  async function readFile(context, rawPath) {
+    const source = await openSource(context, rawPath);
     const chunks = [];
     const chunkSize = 4 * 1024 * 1024;
-    for (let offset = 0; offset < stat.size || (stat.size === 0 && offset === 0); offset += chunkSize) {
-      const result = await context.reader.fsReadRange(target, offset, Math.min(chunkSize, Math.max(0, stat.size - offset)), options);
-      chunks.push(Buffer.from(result.data));
-      if (stat.size === 0) break;
-    }
-    return Buffer.concat(chunks, stat.size);
+    for (let offset = 0; offset < source.size; offset += chunkSize) chunks.push(Buffer.from(await source.read(offset, Math.min(chunkSize, source.size - offset))));
+    return Buffer.concat(chunks, source.size);
   }
 
   async function candidates(context) {
@@ -67,8 +76,8 @@ export function createPigletStorageAdapter({
     const descriptors = [];
     for (const storedPath of await candidates(context)) {
       try {
-        const bytes = await readFile(context, storedPath);
-        descriptors.push(await inspectPigletBytes(bytes, {
+        const source = await openSource(context, storedPath);
+        descriptors.push(await inspectPigletSource(source, {
           ref: `wurstfs:${storedPath}`,
           id: storedPath,
           label: null,
@@ -163,21 +172,20 @@ export function createPigletStorageAdapter({
     return `/data/${realm.id}/piglets/.runtime/${descriptor.sha256}.wurst`;
   }
 
-  async function prepareRuntimeSource(context, descriptor, bytes) {
+  async function prepareRuntimeSource(context, descriptor, source) {
     if (descriptor.source === 'wurstfs') {
-      return { bytes: normalizePigletBytes(bytes), path: descriptor.path, expectedSha256: descriptor.sha256, materializedFrom: null };
+      return { source, path: descriptor.path, expectedSha256: null, materializedFrom: null };
     }
-    if (!descriptor.data?.writable) return { bytes: normalizePigletBytes(bytes), path: null, expectedSha256: descriptor.sha256, materializedFrom: descriptor.ref };
+    if (!descriptor.data?.writable) return { source, path: null, expectedSha256: descriptor.sha256 ?? null, materializedFrom: descriptor.ref };
     const destination = runtimeCopyPath(context, descriptor);
     if (!destination) throw new Error('Writable built-in Piglets require a writable ordinary parent WurstFS realm');
     try {
-      const existing = await readFile(context, destination);
-      const inspected = await inspectPigletBytes(existing);
+      const existingSource = await openSource(context, destination);
+      const inspected = await inspectPigletSource(existingSource);
       if (inspected.signature?.status === 'invalid' || inspected.application?.id !== descriptor.application?.id) throw new Error('Invalid materialized Piglet runtime copy');
-      return { bytes: existing, path: destination, expectedSha256: crypto.createHash('sha256').update(existing).digest('hex'), materializedFrom: descriptor.ref };
+      return { source: existingSource, path: destination, expectedSha256: null, materializedFrom: descriptor.ref };
     } catch {
-      const installedSha = await writeExact(context, destination, bytes);
-      return { bytes: normalizePigletBytes(bytes), path: destination, expectedSha256: installedSha, materializedFrom: descriptor.ref };
+      return { source, path: destination, expectedSha256: null, materializedFrom: descriptor.ref };
     }
   }
 
@@ -185,6 +193,10 @@ export function createPigletStorageAdapter({
     if (!source?.path) throw new Error('This Piglet has no persistent parent WurstFS backing');
     source.expectedSha256 = await writeExact(context, source.path, bytes, { expectedSha256: source.expectedSha256 });
     return source.expectedSha256;
+  }
+
+  async function fingerprintRuntimeSource(source) {
+    return sha256PigletSource(source);
   }
 
   async function remove(context, rawRef) {
@@ -200,5 +212,5 @@ export function createPigletStorageAdapter({
     return Boolean(removed);
   }
 
-  return { readFile, discover, install, remove, prepareRuntimeSource, persistRuntimeSource };
+  return { openSource, readFile, discover, install, remove, prepareRuntimeSource, persistRuntimeSource, fingerprintRuntimeSource };
 }

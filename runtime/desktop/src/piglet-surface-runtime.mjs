@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
-import { classifyRisk, openWurstFile, verifyPackageSignatureFromReader } from '@wurster/format';
-import { createPigletBackingFile } from './piglet-backing-runtime.mjs';
+import { classifyRisk, openWurstFile, openWurstRangeSource, verifyPackageSignatureFromReader } from '@wurster/format';
+import { createPigletBackingFileFromSource } from './piglet-backing-runtime.mjs';
 
 function normalizedBounds(raw, hostBounds) {
   const source = raw && typeof raw === 'object' ? raw : {};
@@ -28,7 +28,7 @@ export function createPigletSurfaceManager({
 }) {
   const surfaces = new Map();
 
-  async function open(parentContext, descriptor, bytes, options = {}) {
+  async function open(parentContext, descriptor, source, options = {}) {
     const existing = [...surfaces.values()].find((surface) => !surface.closed && surface.parentContext === parentContext && surface.descriptor.ref === descriptor.ref);
     if (existing) {
       if (options.bounds) {
@@ -41,9 +41,9 @@ export function createPigletSurfaceManager({
     }
     const hostWindow = getHostWindow();
     if (!hostWindow || hostWindow.isDestroyed()) throw new Error('Piglet host window is unavailable');
-    const runtimeSource = await storage.prepareRuntimeSource(parentContext, descriptor, bytes);
-    const backing = await createPigletBackingFile(runtimeSource.bytes);
-    const reader = await openWurstFile(backing.filePath);
+    const runtimeSource = await storage.prepareRuntimeSource(parentContext, descriptor, source);
+    let backing = null;
+    let reader = await openWurstRangeSource(runtimeSource.source);
     let view = null;
     try {
       const manifest = reader.manifest;
@@ -52,7 +52,7 @@ export function createPigletSurfaceManager({
       const authorization = await authorizePackage(manifest, risk, signature);
       const handle = `piglet-${crypto.randomUUID()}`;
       const context = {
-        filePath: backing.filePath,
+        filePath: null,
         reader,
         manifest,
         signature,
@@ -76,11 +76,23 @@ export function createPigletSurfaceManager({
         pigletPersistence: runtimeSource.path ? {
           source: runtimeSource,
           async flush() {
-            const updated = await backing.bytes();
+            const updated = await context.pigletBacking.bytes();
             await storage.persistRuntimeSource(parentContext, runtimeSource, updated);
           }
         } : null,
-        pigletBacking: backing
+        pigletBacking: null,
+        async ensurePigletBacking() {
+          if (context.pigletBacking) return context.pigletBacking;
+          if (runtimeSource.path && !runtimeSource.expectedSha256) runtimeSource.expectedSha256 = await storage.fingerprintRuntimeSource(runtimeSource.source);
+          const created = await createPigletBackingFileFromSource(runtimeSource.source);
+          const replacement = await openWurstFile(created.filePath);
+          await context.reader.close().catch(() => {});
+          context.reader = replacement;
+          context.filePath = created.filePath;
+          context.pigletBacking = created;
+          backing = created;
+          return created;
+        }
       };
       const childSession = sessionForChild(manifest, `${parentContext.manifest.id}:${descriptor.ref}`);
       configureSession(childSession, context);
@@ -107,6 +119,7 @@ export function createPigletSurfaceManager({
       view.setBounds(normalizedBounds(options.bounds, hostBounds));
       surfaces.set(handle, surface);
       if (manifest?.application?.protection === 'sealed') {
+        await context.ensurePigletBacking();
         context.bootstrapWebContents = view.webContents;
         const sealedBootstrapHtml = await loadSealedBootstrap();
         await view.webContents.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(sealedBootstrapHtml)}`);
@@ -117,7 +130,7 @@ export function createPigletSurfaceManager({
     } catch (error) {
       if (view?.webContents && !view.webContents.isDestroyed()) view.webContents.close();
       await reader.close().catch(() => {});
-      await backing.destroy().catch(() => {});
+      if (backing) await backing.destroy().catch(() => {});
       throw error;
     }
   }

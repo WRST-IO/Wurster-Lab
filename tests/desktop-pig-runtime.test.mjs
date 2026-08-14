@@ -39,7 +39,7 @@ const context = {
   },
   reader: {
     entry(name) {
-      if (name === '__wurst/piglet/child.wurst') return { scope: 'piglet', encryption: null };
+      if (name === '__wurst/piglet/child.wurst') return { scope: 'piglet', encryption: null, length: pigletBytes.length };
       if (name === '__wurst/piglink/entry.js') return { scope: 'piglink', encryption: null };
       return null;
     },
@@ -47,6 +47,10 @@ const context = {
       if (name === '__wurst/piglet/child.wurst') return { data: pigletBytes };
       if (name === '__wurst/piglink/entry.js') return { data: pigLinkBytes };
       return null;
+    },
+    async readRange(name, offset, length) {
+      if (name !== '__wurst/piglet/child.wurst') return null;
+      return { data: pigletBytes.subarray(offset, offset + length) };
     },
     entries() { return []; }
   }
@@ -57,6 +61,11 @@ const pigletIpc = new MockIpc();
 const installed = [];
 const storage = {
   async discover() { return installed; },
+  async openSource(_context, storedPath) {
+    const item = installed.find((candidate) => candidate.path === storedPath || candidate.ref === `wurstfs:${storedPath}`);
+    if (!item) throw new Error('missing stored piglet');
+    return { size: pigletBytes.length, async read(offset, length) { return pigletBytes.subarray(offset, offset + length); } };
+  },
   async readFile(_context, storedPath) {
     const item = installed.find((candidate) => candidate.path === storedPath || candidate.ref === `wurstfs:${storedPath}`);
     if (!item) throw new Error('missing stored piglet');
@@ -84,7 +93,8 @@ const storage = {
 };
 const opened = [];
 const surfaces = {
-  async open(_context, descriptor, bytes, options) {
+  async open(_context, descriptor, source, options) {
+    const bytes = await source.read(0, source.size);
     assert.equal(sha256(bytes), childDigest);
     const surface = { handle: `surface-${opened.length + 1}`, ref: descriptor.ref, bounds: options.bounds ?? null };
     opened.push(surface);
@@ -159,7 +169,8 @@ const surfaceManager = createPigletSurfaceManager({
   unbindContext: (webContents) => boundContexts.delete(webContents.id),
   preload: '/mock/wurst-preload.cjs',
   storage: {
-    async prepareRuntimeSource(_context, _descriptor, bytes) { return { bytes, path: null, expectedSha256: sha256(bytes), materializedFrom: 'builtin:child' }; },
+    async prepareRuntimeSource(_context, _descriptor, source) { return { source, path: null, expectedSha256: childDigest, materializedFrom: 'builtin:child' }; },
+    async fingerprintRuntimeSource() { return childDigest; },
     async persistRuntimeSource() { throw new Error('unexpected persistence'); }
   },
   loadSealedBootstrap: async () => '<html></html>',
@@ -171,11 +182,13 @@ const realSurface = await surfaceManager.open(context, {
   ref: 'builtin:child',
   application: { id: 'io.wrst.child', name: 'Child Wurst', version: '0.32.0' },
   signature: { status: 'unsigned' }
-}, pigletBytes, { bounds: { x: 50, y: 60, width: 400, height: 300 } });
+}, { size: pigletBytes.length, async read(offset, length) { return pigletBytes.subarray(offset, offset + length); } }, { bounds: { x: 50, y: 60, width: 400, height: 300 } });
 assert.deepEqual(realSurface.bounds, { x: 50, y: 60, width: 400, height: 300 });
 assert.ok(attachedView, 'Piglet open must attach a managed child view to the host window');
 assert.equal(boundContexts.get(77).manifest.id, 'io.wrst.child');
 assert.equal(boundContexts.get(77).parentContext, context);
+assert.equal(boundContexts.get(77).filePath, null, 'Piglet open must stay on the range source until a write/protection path needs local backing');
+assert.equal(boundContexts.get(77).pigletBacking, null, 'Piglet open must not eagerly materialize the whole child Wurst');
 assert.equal((await surfaceManager.focus(context, realSurface.handle)).focused, true);
 assert.deepEqual(surfaceManager.setBounds(context, realSurface.handle, { x: 10, y: 15, width: 200, height: 150 }).bounds, { x: 10, y: 15, width: 200, height: 150 });
 assert.equal(await surfaceManager.close(context, realSurface.handle), true);

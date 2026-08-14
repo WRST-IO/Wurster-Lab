@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.32.0 r011 - Piglet Runtime Debuggability and Sliced Startup
+
+- Changed Desktop Piglet execution to open child packages from random-access range sources instead of eagerly reading the complete nested `.wurst` into memory. Built-in children read verified ranges from the parent package and WurstFS children read through `fsReadRange`; a local writable backing file is created lazily only when child writes or protected-app unlock require it.
+- Repaired Wurst Developer Tools by attaching Electron's native detached inspector to the actually focused Wurst renderer. Focused managed Piglet surfaces therefore open their own DOM/console instead of an empty custom DevTools window.
+- Made `<wurst-identity>` trusted surfaces honor DOM viewport and overflow clipping while remaining Wurster-owned. The renderer reports the visible clip rectangle and Wurster clips/offsets its trusted surface instead of floating across `overflow:hidden` containers. Expanded authentication controls intentionally remain trusted overlays.
+- Added regressions for lazy Piglet backing, DevTools attachment and trusted identity clipping contracts.
+
 ## 0.32.0 r010 - Piglets Become Real Tools
 
 - Made managed Desktop Piglets fully writable when their child manifest declares writable WurstFS. Child commits fsync their private runtime backing and then persist the complete updated child Wurst back into the parent-held WurstFS file.

@@ -21,9 +21,9 @@ export function pigletSha256(bytes) {
   return crypto.createHash('sha256').update(bytes).digest('hex');
 }
 
-export async function openPigletBytes(value) {
+export function pigletByteSource(value) {
   const bytes = normalizePigletBytes(value);
-  const source = {
+  return {
     size: bytes.length,
     async read(offset, length) {
       if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length) || offset < 0 || length < 0 || offset + length > bytes.length) {
@@ -32,18 +32,30 @@ export async function openPigletBytes(value) {
       return bytes.subarray(offset, offset + length);
     }
   };
-  const reader = await openWurstRangeSource(source);
-  return { bytes, reader };
 }
 
-export async function inspectPigletBytes(value, metadata = {}) {
-  const { bytes, reader } = await openPigletBytes(value);
+export async function sha256PigletSource(source, { chunkSize = 4 * 1024 * 1024 } = {}) {
+  const hash = crypto.createHash('sha256');
+  for (let offset = 0; offset < source.size; offset += chunkSize) {
+    hash.update(await source.read(offset, Math.min(chunkSize, source.size - offset)));
+  }
+  return hash.digest('hex');
+}
+
+export async function openPigletSource(source) {
+  if (!source || typeof source.read !== 'function' || !Number.isSafeInteger(source.size) || source.size <= 0) throw new Error('Piglet source requires size and range reads');
+  if (source.size > MAX_PIGLET_BYTES) throw new Error(`Piglet Wurst exceeds ${MAX_PIGLET_BYTES} byte runtime limit`);
+  return openWurstRangeSource(source);
+}
+
+export async function inspectPigletSource(source, metadata = {}) {
+  const reader = await openPigletSource(source);
   try {
     const signature = await verifyPackageSignatureFromReader(reader);
     return {
       ...metadata,
-      bytes: bytes.length,
-      sha256: pigletSha256(bytes),
+      bytes: source.size,
+      sha256: metadata.sha256 ?? null,
       application: {
         id: reader.manifest?.id ?? null,
         name: reader.manifest?.name ?? null,
@@ -66,4 +78,15 @@ export async function inspectPigletBytes(value, metadata = {}) {
   } finally {
     await reader.close().catch(() => {});
   }
+}
+
+export async function openPigletBytes(value) {
+  const bytes = normalizePigletBytes(value);
+  const reader = await openPigletSource(pigletByteSource(bytes));
+  return { bytes, reader };
+}
+
+export async function inspectPigletBytes(value, metadata = {}) {
+  const bytes = normalizePigletBytes(value);
+  return inspectPigletSource(pigletByteSource(bytes), { ...metadata, sha256: metadata.sha256 ?? pigletSha256(bytes) });
 }

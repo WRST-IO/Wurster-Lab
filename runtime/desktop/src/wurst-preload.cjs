@@ -40,6 +40,46 @@ function authAnchorPayload() {
   });
 }
 
+
+function intersectRects(a, b) {
+  const left = Math.max(a.left, b.left);
+  const top = Math.max(a.top, b.top);
+  const right = Math.min(a.right, b.right);
+  const bottom = Math.min(a.bottom, b.bottom);
+  return { left, top, right, bottom, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
+}
+
+function clippedElementGeometry(el, rect) {
+  let visible = {
+    left: Math.max(0, rect.left),
+    top: Math.max(0, rect.top),
+    right: Math.min(window.innerWidth, rect.right),
+    bottom: Math.min(window.innerHeight, rect.bottom)
+  };
+  visible.width = Math.max(0, visible.right - visible.left);
+  visible.height = Math.max(0, visible.bottom - visible.top);
+  for (let node = el.parentElement; node && visible.width > 0 && visible.height > 0; node = node.parentElement) {
+    const style = getComputedStyle(node);
+    const clipsX = /^(?:hidden|clip|auto|scroll)$/.test(style.overflowX);
+    const clipsY = /^(?:hidden|clip|auto|scroll)$/.test(style.overflowY);
+    if (!clipsX && !clipsY) continue;
+    const parent = node.getBoundingClientRect();
+    const clip = {
+      left: clipsX ? parent.left : -Infinity,
+      right: clipsX ? parent.right : Infinity,
+      top: clipsY ? parent.top : -Infinity,
+      bottom: clipsY ? parent.bottom : Infinity
+    };
+    visible = intersectRects(visible, clip);
+  }
+  return {
+    visible: visible.width > 0 && visible.height > 0,
+    clipX: Math.max(0, Math.round(visible.left - rect.left)),
+    clipY: Math.max(0, Math.round(visible.top - rect.top)),
+    clipWidth: Math.max(0, Math.round(visible.width)),
+    clipHeight: Math.max(0, Math.round(visible.height))
+  };
+}
 function ensureIdentityElementIds() {
   for (const el of document.querySelectorAll('wurst-identity')) {
     if (!el.dataset.wursterIdentityId) el.dataset.wursterIdentityId = `wi-${nextIdentityId++}`;
@@ -51,14 +91,19 @@ function identityAnchorPayload() {
   return [...document.querySelectorAll('wurst-identity')].map((el) => {
     const rect = el.getBoundingClientRect();
     const style = getComputedStyle(el);
-    const visible = rect.width > 8 && rect.height > 8 && style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) > 0;
+    const clip = clippedElementGeometry(el, rect);
+    const visible = rect.width > 8 && rect.height > 8 && clip.visible && style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) > 0;
     return {
       id: el.dataset.wursterIdentityId,
       visible,
       x: Math.round(rect.left),
       y: Math.round(rect.top),
       width: Math.max(0, Math.round(rect.width)),
-      height: Math.max(0, Math.round(rect.height))
+      height: Math.max(0, Math.round(rect.height)),
+      clipX: clip.clipX,
+      clipY: clip.clipY,
+      clipWidth: clip.clipWidth,
+      clipHeight: clip.clipHeight
     };
   });
 }

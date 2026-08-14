@@ -55,3 +55,10 @@ macOS keeps normal `.wurst` / `.wrst` Finder/Open-With association. A dedicated 
 ## Trust stays separate from capability
 
 Identity verification never grants a Wurst extra capabilities. It answers "who signed this immutable package, and does this Wurster have an independent reason to trust that identity?" Runtime permissions remain a separate decision.
+
+
+### DOM clipping
+
+The compact `<wurst-identity>` seal remains Wurster-owned, but it now follows the visible geometry of its DOM anchor. The preload intersects the anchor with the viewport and clipping/scrolling ancestors (`overflow: hidden`, `clip`, `auto`, or `scroll`). Desktop Wurster clips its separate trusted view to that visible rectangle and offsets the seal inside it, so normal scrolling and clipped cards do not leak the badge across surrounding UI.
+
+Expanded authentication or verification UI is different by design: it is a trusted Wurster overlay and may rise above application content so the Wurst cannot obscure or counterfeit the security interaction.

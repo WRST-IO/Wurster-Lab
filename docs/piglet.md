@@ -24,6 +24,10 @@ Nesting never re-signs the child as the parent. A child signed by one publisher 
 
 Desktop Piglet now has a managed runtime slice:
 
+Piglet package access follows the same random-access principle as top-level Wursts. Opening a child does not require buffering the entire child package first: built-in children expose verified ranges from their immutable parent resource and WurstFS children expose ranges from their stored file. Wurster only materializes a private local backing file when a child actually needs writable WurstFS or protected application unlock. This keeps large read-mostly Piglets fast to inspect and start.
+
+Container applications such as WurstOS must call `wurst.piglet.open(ref, { bounds })` to create a managed renderer. `wurst.piglet.url(ref)` is intentionally only a package-byte transport/debug URL and is not an iframe document. A UI that still displays a "waiting for managed child renderer" placeholder is application-side code that has not switched from the old URL/display pattern to `open()`.
+
 - fixed MeatGrinder children remain byte-identical immutable Wurst resources;
 - runtime-installed children are stored as ordinary WurstFS `.wurst` / `.wrst` files;
 - `wurst.piglet.children()` discovers both built-in children and valid Wurst files in readable WurstFS realms;

@@ -51,6 +51,16 @@ const root = path.resolve(import.meta.dirname, '..');
 const preload = await fs.readFile(path.join(root, 'runtime/desktop/src/wurst-preload.cjs'), 'utf8');
 assert.match(preload, /querySelectorAll\('wurst-identity'\)/);
 assert.match(preload, /wurst:identity:anchors/);
+assert.match(preload, /clippedElementGeometry/);
+assert.match(preload, /overflowX/);
+assert.match(preload, /clipWidth/);
+
+
+const trustedSurfaceRuntime = await fs.readFile(path.join(root, 'runtime/desktop/src/trusted-surface-runtime.mjs'), 'utf8');
+assert.match(trustedSurfaceRuntime, /wurster:identity:layout/);
+assert.match(trustedSurfaceRuntime, /controlBounds/);
+const identityControl = await fs.readFile(path.join(root, 'runtime/desktop/src/identity-control.html'), 'utf8');
+assert.match(identityControl, /wurster-identity-layout/);
 
 const installer = await fs.readFile(path.join(root, 'runtime/desktop/build/installer.nsh'), 'utf8');
 assert.match(installer, /Wurster\.Wurst\\shell\\VerifyWurstIdentity/);
@@ -65,6 +75,9 @@ for (const relative of ['runtime/desktop/src/launcher.html', 'runtime/desktop/sr
 }
 const desktopMain = await fs.readFile(path.join(root, 'runtime/desktop/src/main.mjs'), 'utf8');
 assert.match(desktopMain, /publisherCertificate: signerMaterial\?\.certificate/, 'GUI-signed Wursts must carry a stored WRST.IO publisher certificate');
+assert.match(desktopMain, /electronWebContents\.getFocusedWebContents/);
+assert.match(desktopMain, /openDevTools\(\{ mode: 'detach', activate: true \}\)/);
+assert.doesNotMatch(desktopMain, /setDevToolsWebContents/);
 assert.match(desktopMain, /\/v1\/email\/challenge/);
 assert.match(await fs.readFile(path.join(root, 'runtime/desktop/src/launcher.html'), 'utf8'), /Verify with WRST\.IO/);
 assert.match(await fs.readFile(path.join(root, 'runtime/desktop/src/settings.html'), 'utf8'), /oink@wrst\.io/);

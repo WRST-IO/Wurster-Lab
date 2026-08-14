@@ -76,3 +76,8 @@ Desktop Wurster supports two explicit red-risk capabilities for tools that must 
 A Wurst with `files.open` may call `wurst.files.open(...)`. Wurster always owns the open dialog and returns only the single file the user selected. `files.save` similarly opens a Wurster-owned save dialog and writes only to the destination chosen by the user. The Wurst never receives a reusable host directory capability or unrestricted path access. Both capabilities are RED and therefore require a valid package signature on Desktop.
 
 `WursterLab.wurst` uses this narrow bridge to import operator files and emit a local production workspace while its operator material stays inside a personal sealed WurstFS realm.
+
+
+## Developer Tools
+
+`View → Toggle Wurst Developer Tools` opens Electron's native detached DevTools for the currently focused Wurst renderer. If a managed Piglet surface has focus, its DOM, console and network activity are inspected; otherwise the top-level Wurst is inspected. Wurster does not host DevTools in a separate custom inspector WebContents.
