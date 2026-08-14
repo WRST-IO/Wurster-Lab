@@ -27,7 +27,19 @@ try {
   }, null, 2));
   const childOutput = path.join(tmp, 'child-tool.wurst');
   await buildWurst(childProject, childOutput);
-  const childBytes = await fs.readFile(childOutput);
+  const childUnsigned = decodeWurst(await fs.readFile(childOutput));
+  const childPhrase = 'peppered-bacon smoked-wurst cured-bratwurst crispy-sausage salted-ham roasted-pork grilled-brisket seared-rib charred-steak buttered-chop garlic-cutlet mustard-schnitzel';
+  const childSeller = createPublisherKeyBundle({ email: 'joe@example.com', meatphrase: childPhrase });
+  const childSignature = createPackageSignature(childUnsigned, childSeller.bundle, childPhrase);
+  const childSignedFiles = [
+    ...descriptorsFromPackage(childUnsigned).filter((file) => file.path !== SIGNATURE_PATH),
+    { path: SIGNATURE_PATH, data: Buffer.from(JSON.stringify(childSignature)), scope: 'signature', mime: 'application/json; charset=utf-8' }
+  ];
+  const childBytes = encodeWurst({ manifest: childUnsigned.manifest, files: childSignedFiles });
+  await fs.writeFile(childOutput, childBytes);
+  const independentlySignedChild = decodeWurst(childBytes);
+  assert.equal(verifyPackageSignature(independentlySignedChild).status, 'signed');
+  assert.equal(verifyPackageSignature(independentlySignedChild).publisher.email, 'joe@example.com');
 
   const parentProject = path.join(tmp, 'parent');
   await fs.mkdir(path.join(parentProject, 'src'), { recursive: true });
@@ -75,6 +87,11 @@ Pigsty.define(async (ctx) => {
   assert.equal(child.entry, '__wurst/piglet/child-tool.wurst');
   assert.equal(child.sha256, sha256(childBytes));
   assert.equal(parentPackage.get(child.entry).scope, 'piglet');
+  const embeddedChild = decodeWurst(parentPackage.get(child.entry).data);
+  const embeddedChildSignature = verifyPackageSignature(embeddedChild);
+  assert.equal(embeddedChildSignature.status, 'signed');
+  assert.equal(embeddedChildSignature.publisher.email, 'joe@example.com');
+  assert.equal(sha256(parentPackage.get(child.entry).data), sha256(childBytes), 'MeatGrinder must preserve child Wurst bytes exactly');
   assert.equal(parentPackage.manifest.pigsty.format, 'wurst/pigsty-1');
   assert.equal(parentPackage.manifest.pigsty.version, 'node-lts-1');
   assert.deepEqual(parentPackage.manifest.pigsty.tools, ['typescript']);
@@ -88,7 +105,12 @@ Pigsty.define(async (ctx) => {
     { path: SIGNATURE_PATH, data: Buffer.from(JSON.stringify(signature)), scope: 'signature', mime: 'application/json; charset=utf-8' }
   ];
   const signedPackage = decodeWurst(encodeWurst({ manifest: parentPackage.manifest, files: signedFiles }));
-  assert.equal(verifyPackageSignature(signedPackage).status, 'signed');
+  const parentSignature = verifyPackageSignature(signedPackage);
+  assert.equal(parentSignature.status, 'signed');
+  assert.equal(parentSignature.publisher.email, 'piglet@example.com');
+  const childInsideSignedParent = decodeWurst(signedPackage.get(child.entry).data);
+  assert.equal(verifyPackageSignature(childInsideSignedParent).publisher.email, 'joe@example.com');
+  assert.notEqual(parentSignature.publisher.fingerprint, verifyPackageSignature(childInsideSignedParent).publisher.fingerprint);
   const tamperedFiles = descriptorsFromPackage(signedPackage).map((file) => file.path === child.entry
     ? { ...file, data: Buffer.from('not a child wurst anymore') }
     : file);

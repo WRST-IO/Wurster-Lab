@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.32.0 r010 - Piglets Become Real Tools
+
+- Made managed Desktop Piglets fully writable when their child manifest declares writable WurstFS. Child commits fsync their private runtime backing and then persist the complete updated child Wurst back into the parent-held WurstFS file.
+- Added conflict-checked child write-back. A running Piglet refuses to overwrite a parent-held child file that changed independently and reports `WURST_PIGLET_CONFLICT` instead of using last-writer-wins.
+- Writable built-in Piglets now materialize an exact runtime copy in the parent ordinary WurstFS, preserving the immutable built-in bytes covered by the parent signature while allowing the child instance to grow its own mutable WurstFS tail.
+- Preserved child package identity across mutable writes: regression coverage verifies immutable child bytes and publisher fingerprint remain unchanged after nested WurstFS commits and close/reopen.
+- Made Wurster Auth and Identity trusted controls runtime-instance-bound. Parent and child Wursts can own the same Auth anchor ids without collision, child results route only to the child renderer, and trusted controls are laid out inside the child surface.
+- Enabled sealed/protected child surfaces to use the same WurstKey and Wurster Identity flow as top-level Wursts without exposing secrets through the parent renderer.
+- Split trusted Auth/Identity surface ownership out of Desktop `main.mjs`; the central Electron bootstrap drops to roughly 3.3k lines while Piglet persistence/backing concerns remain in focused modules.
+
+## 0.32.0 r009 - Piglets Leave The Crate
+
+- Expanded Piglet from immutable child-byte discovery into a managed Desktop composition runtime. `wurst.piglet.open()` now creates Wurster-owned child renderer surfaces with lifecycle handles for bounds, focus and close instead of treating `.wurst` bytes as iframe documents.
+- Added runtime WurstFS Piglet discovery. Valid `.wurst` / `.wrst` files stored in readable WurstFS realms are discovered alongside built-in children without a separate Piglet database or manifest mutation.
+- Added `wurst.piglet.install()` for drag-and-drop/application import flows. The runtime validates the child then persists the exact supplied package bytes as an ordinary WurstFS file; no repackaging or parent re-signing occurs.
+- Added independent child inspection metadata and regression coverage proving an independently signed child keeps its own publisher fingerprint after MeatGrinder embedding and after the parent receives a different package signature.
+- Added per-renderer runtime-context binding so child IPC resolves to the child Wurst instead of the Desktop singleton `currentContext`. Managed children receive separate protocol sessions, manifests, capability contexts and runtime bindings.
+- Added explicit fail-closed handling for protected/sealed child surfaces until child-scoped Wurster Auth is implemented. Nested child WurstFS is readable but currently read-only; transactional write-back into the parent-held child file remains follow-up work.
+- Documented Piglet as a runtime relationship around ordinary Wurst files, including drag-and-drop installation, discovery, trust separation and WurstOS-style managed child surfaces.
+
 ## 0.32.0 r008 - Clean Stall Release Lane
 
 - Decoupled normal Windows, macOS and Web releases from Pigsty native-runtime availability. Tagged v0.32 releases no longer download Edge/Wasmer bundles or wait for platform Pigsty smoke jobs.

@@ -28,7 +28,11 @@ import { generateTotpSecret, totpUri, verifyTotp } from './identity-core.mjs';
 import { publisherDisplayName, secureTrustPresentation, verificationTrustRoute } from './publisher-trust-presentation.mjs';
 import { dataFsPath } from './wurst-fs-paths.mjs';
 import { createDesktopPigLinkRuntime, loadPigLinkEntry } from './piglink-runtime.mjs';
-import { loadPigletResource, pigletChildren, registerDesktopPigletRuntime } from './piglet-runtime.mjs';
+import { loadPigletResource, pigletChildren, createDesktopPigletRuntime } from './piglet-runtime.mjs';
+import { createPigletStorageAdapter } from './piglet-storage-runtime.mjs';
+import { createPigletSurfaceManager } from './piglet-surface-runtime.mjs';
+import { bindPigletWurstFsPersistence } from './piglet-wurstfs-runtime.mjs';
+import { createTrustedSurfaceRuntime } from './trusted-surface-runtime.mjs';
 import { createDesktopPigstyRuntime } from './pigsty-runtime.mjs';
 import { cspFor, networkRequestAllowed, parseHttpRange, partitionFor, responseFor, safeRequestPath } from './web-sandbox-runtime.mjs';
 import {
@@ -107,10 +111,7 @@ if (process.platform === 'win32') {
 let currentFile = null;
 let currentWindow = null;
 let currentContext = null;
-const authSurfaces = new Map();
-const authSurfaceByWebContents = new Map();
-const identitySurfaces = new Map();
-const identitySurfaceByWebContents = new Map();
+const runtimeContextByWebContents = new Map();
 let launcherWindow = null;
 let launcherReturnMode = 'launcher';
 let launcherView = 'launcher';
@@ -1217,276 +1218,44 @@ async function markIdentityUsed(identityId) {
   await writeMeatLocker(locker);
 }
 
-function authSurfaceForEvent(event) {
-  const surface = authSurfaceByWebContents.get(event.sender.id);
-  if (!surface || surface.destroyed || surface.context !== currentContext) throw new Error('Invalid Wurster Auth surface');
-  return surface;
+function runtimeRenderer(context) {
+  if (context?.pigletSurface?.view?.webContents && !context.pigletSurface.view.webContents.isDestroyed()) return context.pigletSurface.view.webContents;
+  if (context === currentContext && currentWindow && !currentWindow.isDestroyed()) return currentWindow.webContents;
+  return null;
 }
 
-function authResultPayload(surface, ok, extra = {}) {
-  return {
-    id: surface.anchorId,
-    ok,
-    type: surface.type,
-    purpose: surface.purpose,
-    target: surface.target || null,
-    ...extra
-  };
-}
-
-function sendAuthResultToWurst(surface, ok, extra = {}) {
-  if (!currentWindow || currentWindow.isDestroyed()) return;
-  currentWindow.webContents.send('wurst:auth:result', authResultPayload(surface, ok, extra));
-}
-
-function authSurfaceLayout(surface, expanded = surface.expanded) {
-  const base = surface.baseBounds;
-  const content = currentWindow?.getContentBounds?.() ?? { width: 800, height: 600 };
-  const baseWidth = Math.max(220, Math.min(base.width, Math.max(220, content.width - 8)));
-  const baseHeight = Math.max(60, base.height);
-  const anchorX = Math.max(4, Math.min(base.x, Math.max(4, content.width - baseWidth - 4)));
-  const anchorY = Math.max(4, Math.min(base.y, Math.max(4, content.height - baseHeight - 4)));
-
-  if (!expanded) {
-    return {
-      viewBounds: { x: anchorX, y: anchorY, width: baseWidth, height: baseHeight },
-      controlBounds: { x: 0, y: 0, width: baseWidth, height: baseHeight },
-      expanded: false
-    };
+function runtimeViewport(context) {
+  if (context?.pigletSurface?.view) {
+    const bounds = context.pigletSurface.view.getBounds();
+    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
   }
-
-  // While the identity picker is open, the trusted Wurster view temporarily
-  // covers the whole Wurst window. This keeps the popup independent from the
-  // DOM anchor's clipping/overflow rules while still keeping all secret UI in
-  // a separate WebContents owned by Wurster.
-  return {
-    viewBounds: { x: 0, y: 0, width: Math.max(1, content.width), height: Math.max(1, content.height) },
-    controlBounds: { x: anchorX, y: anchorY, width: baseWidth, height: baseHeight },
-    expanded: true
-  };
+  const bounds = currentWindow?.getContentBounds?.() ?? { width: 800, height: 600 };
+  return { x: 0, y: 0, width: bounds.width, height: bounds.height };
 }
 
-function applyAuthSurfaceLayout(surface) {
-  if (!surface || surface.destroyed) return;
-  const layout = authSurfaceLayout(surface, surface.expanded);
-  // Re-adding an existing child view moves it to the top of the view stack.
-  // Do this for an expanded picker so the dropdown can never end up hidden
-  // behind the Wurst renderer or another embedded surface.
-  if (surface.expanded && currentWindow && !currentWindow.isDestroyed()) {
-    currentWindow.contentView.addChildView(surface.view);
-  }
-  surface.view.setBounds(layout.viewBounds);
-  if (!surface.view.webContents.isDestroyed()) {
-    surface.view.webContents.send('wurster:auth:layout', {
-      ...layout.controlBounds,
-      expanded: layout.expanded
-    });
-  }
-}
-
-function destroyAuthSurface(surface) {
-  if (!surface || surface.destroyed) return;
-  surface.destroyed = true;
-  if (surface.pendingMeatphrase) surface.pendingMeatphrase = null;
-  authSurfaces.delete(surface.anchorId);
-  authSurfaceByWebContents.delete(surface.view.webContents.id);
-  try { currentWindow?.contentView.removeChildView(surface.view); } catch {}
-  try { surface.view.webContents.close(); } catch {}
-}
-
-function destroyAllAuthSurfaces() {
-  for (const surface of [...authSurfaces.values()]) destroyAuthSurface(surface);
-  authSurfaces.clear();
-  authSurfaceByWebContents.clear();
-}
-
-function createAuthSurface(context, anchor) {
-  if (!currentWindow || currentWindow.isDestroyed()) return null;
-  const view = new WebContentsView({
-    webPreferences: {
-      preload: AUTH_CONTROL_PRELOAD,
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
-      webSecurity: true,
-      devTools: false
-    }
-  });
-  const surface = {
-    anchorId: anchor.id,
-    type: anchor.type,
-    purpose: anchor.purpose,
-    target: anchor.target,
-    session: anchor.session || '',
-    context,
-    view,
-    baseBounds: { x: anchor.x, y: anchor.y, width: anchor.width, height: anchor.height },
-    expanded: false,
-    destroyed: false,
-    pendingIdentity: null,
-    pendingMeatphrase: null
-  };
-  authSurfaces.set(surface.anchorId, surface);
-  authSurfaceByWebContents.set(view.webContents.id, surface);
-  currentWindow.contentView.addChildView(view);
-  applyAuthSurfaceLayout(surface);
-  try { view.setBackgroundColor('#00000000'); } catch {}
-  view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  view.webContents.on('will-navigate', (event) => event.preventDefault());
-  void view.webContents.loadFile(AUTH_CONTROL_HTML).then(() => applyAuthSurfaceLayout(surface));
-  return surface;
-}
-
-function updateAuthSurface(surface, anchor) {
-  surface.type = anchor.type;
-  surface.purpose = anchor.purpose;
-  surface.target = anchor.target;
-  surface.session = anchor.session || '';
-  surface.baseBounds = { x: anchor.x, y: anchor.y, width: anchor.width, height: anchor.height };
-  applyAuthSurfaceLayout(surface);
-}
-
-ipcMain.on('wurst:auth:anchors', (event, rawAnchors) => {
-  if (!currentContext || !currentWindow || currentWindow.isDestroyed() || event.sender.id !== currentWindow.webContents.id) return;
-  const anchors = Array.isArray(rawAnchors) ? rawAnchors.slice(0, 8) : [];
-  const seen = new Set();
-  for (const raw of anchors) {
-    const id = String(raw?.id ?? '').slice(0, 80);
-    const type = raw?.type === 'wurstkey' ? 'wurstkey' : 'identity';
-    const requestedPurpose = String(raw?.purpose ?? '').toLowerCase();
-    const purpose = type === 'wurstkey'
-      ? 'application'
-      : ['identity', 'filesystem', 'realm'].includes(requestedPurpose) ? requestedPurpose : 'identity';
-    const width = Math.round(Number(raw?.width));
-    const height = Math.round(Number(raw?.height));
-    const x = Math.round(Number(raw?.x));
-    const y = Math.round(Number(raw?.y));
-    if (!id || !raw?.visible || !Number.isFinite(width) || !Number.isFinite(height) || width < 180 || height < 54) continue;
-    if (![x, y].every(Number.isFinite)) continue;
-    const anchor = { id, type, purpose, target: String(raw?.target ?? '').slice(0, 256), session: String(raw?.session ?? '').slice(0, 32), width, height, x, y };
-    seen.add(id);
-    const existing = authSurfaces.get(id);
-    if (existing) updateAuthSurface(existing, anchor);
-    else createAuthSurface(currentContext, anchor);
-  }
-  for (const [id, surface] of [...authSurfaces]) if (!seen.has(id)) destroyAuthSurface(surface);
+const trustedSurfaceRuntime = createTrustedSurfaceRuntime({
+  ipcMain,
+  createView: (webPreferences) => new WebContentsView({ webPreferences }),
+  getHostWindow: () => currentWindow,
+  getRuntimeRenderer: runtimeRenderer,
+  getRuntimeViewport: runtimeViewport,
+  assertWurstSender,
+  authControlPreload: AUTH_CONTROL_PRELOAD,
+  authControlHtml: AUTH_CONTROL_HTML,
+  identityControlPreload: IDENTITY_CONTROL_PRELOAD,
+  identityControlHtml: IDENTITY_CONTROL_HTML,
+  secureTrustPresentation,
+  showIdentityVerificationForContext
 });
-
-function identitySurfaceForEvent(event) {
-  const surface = identitySurfaceByWebContents.get(event.sender.id);
-  if (!surface || surface.destroyed || surface.context !== currentContext) throw new Error('Invalid Wurst Identity surface');
-  return surface;
-}
-
-function identitySurfaceLayout(surface) {
-  const base = surface.baseBounds;
-  const content = currentWindow?.getContentBounds?.() ?? { width: 800, height: 600 };
-  const width = Math.max(190, Math.min(base.width, Math.max(190, content.width - 8)));
-  const height = Math.max(50, Math.min(base.height, 110));
-  const x = Math.max(4, Math.min(base.x, Math.max(4, content.width - width - 4)));
-  const y = Math.max(4, Math.min(base.y, Math.max(4, content.height - height - 4)));
-  return { x, y, width, height };
-}
-
-function raiseExpandedAuthSurfaces() {
-  if (!currentWindow || currentWindow.isDestroyed()) return;
-  for (const surface of authSurfaces.values()) {
-    if (surface.expanded && !surface.destroyed) currentWindow.contentView.addChildView(surface.view);
-  }
-}
-
-function applyIdentitySurfaceLayout(surface) {
-  if (!surface || surface.destroyed || !currentWindow || currentWindow.isDestroyed()) return;
-  surface.view.setBounds(identitySurfaceLayout(surface));
-  raiseExpandedAuthSurfaces();
-}
-
-function destroyIdentitySurface(surface) {
-  if (!surface || surface.destroyed) return;
-  surface.destroyed = true;
-  identitySurfaces.delete(surface.anchorId);
-  identitySurfaceByWebContents.delete(surface.view.webContents.id);
-  try { currentWindow?.contentView.removeChildView(surface.view); } catch {}
-  try { surface.view.webContents.close(); } catch {}
-}
-
-function destroyAllIdentitySurfaces() {
-  for (const surface of [...identitySurfaces.values()]) destroyIdentitySurface(surface);
-  identitySurfaces.clear();
-  identitySurfaceByWebContents.clear();
-}
-
-function createIdentitySurface(context, anchor) {
-  if (!currentWindow || currentWindow.isDestroyed()) return null;
-  const view = new WebContentsView({
-    webPreferences: {
-      preload: IDENTITY_CONTROL_PRELOAD,
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
-      webSecurity: true,
-      devTools: false
-    }
-  });
-  const surface = {
-    anchorId: anchor.id,
-    context,
-    view,
-    baseBounds: { x: anchor.x, y: anchor.y, width: anchor.width, height: anchor.height },
-    destroyed: false
-  };
-  identitySurfaces.set(surface.anchorId, surface);
-  identitySurfaceByWebContents.set(view.webContents.id, surface);
-  currentWindow.contentView.addChildView(view);
-  applyIdentitySurfaceLayout(surface);
-  try { view.setBackgroundColor('#00000000'); } catch {}
-  view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  view.webContents.on('will-navigate', (event) => event.preventDefault());
-  void view.webContents.loadFile(IDENTITY_CONTROL_HTML).then(() => applyIdentitySurfaceLayout(surface));
-  return surface;
-}
-
-function updateIdentitySurface(surface, anchor) {
-  surface.baseBounds = { x: anchor.x, y: anchor.y, width: anchor.width, height: anchor.height };
-  applyIdentitySurfaceLayout(surface);
-}
-
-ipcMain.on('wurst:identity:anchors', (event, rawAnchors) => {
-  if (!currentContext || !currentWindow || currentWindow.isDestroyed() || event.sender.id !== currentWindow.webContents.id) return;
-  const anchors = Array.isArray(rawAnchors) ? rawAnchors.slice(0, 8) : [];
-  const seen = new Set();
-  for (const raw of anchors) {
-    const id = String(raw?.id ?? '').slice(0, 80);
-    const width = Math.round(Number(raw?.width));
-    const height = Math.round(Number(raw?.height));
-    const x = Math.round(Number(raw?.x));
-    const y = Math.round(Number(raw?.y));
-    if (!id || !raw?.visible || !Number.isFinite(width) || !Number.isFinite(height) || width < 190 || height < 50) continue;
-    if (![x, y].every(Number.isFinite)) continue;
-    const anchor = { id, width, height, x, y };
-    seen.add(id);
-    const existing = identitySurfaces.get(id);
-    if (existing) updateIdentitySurface(existing, anchor);
-    else createIdentitySurface(currentContext, anchor);
-  }
-  for (const [id, surface] of [...identitySurfaces]) if (!seen.has(id)) destroyIdentitySurface(surface);
-});
-
-ipcMain.handle('wurster:identity-control:context', async (event) => {
-  const surface = identitySurfaceForEvent(event);
-  return {
-    id: surface.context.manifest.id,
-    name: surface.context.manifest.name,
-    version: surface.context.manifest.version,
-    trust: secureTrustPresentation(surface.context)
-  };
-});
-
-ipcMain.handle('wurster:identity-control:verify', async (event) => {
-  const surface = identitySurfaceForEvent(event);
-  await showIdentityVerificationForContext(surface.context);
-  return true;
-});
+const {
+  authSurfaceForEvent,
+  identitySurfaceForEvent,
+  sendAuthResultToWurst,
+  applyAuthSurfaceLayout
+} = trustedSurfaceRuntime;
+function destroyAllAuthSurfaces() { trustedSurfaceRuntime.destroyAll(); }
+function destroyAllIdentitySurfaces() {}
+function destroyContextTrustedSurfaces(context) { trustedSurfaceRuntime.cleanupContext(context); }
 
 function protectionSessionBinding(context) {
   return context.runtimeBinding;
@@ -1575,9 +1344,13 @@ async function completeAuthSurface(surface, secret, identity = null) {
   if (surface.type === 'wurstkey') {
     await unlockApplicationWithWurstKey(surface.context, normalizeWurstKey(secret), surface.session || '60m');
     sendAuthResultToWurst(surface, true);
-    if (fullySealedApplication(surface.context.manifest) && surface.context.bootstrapWindow === currentWindow) {
-      const map = await sealedApplicationMap(surface.context);
-      await currentWindow.loadURL(`wurst://app/${map.entry}`);
+    if (fullySealedApplication(surface.context.manifest)) {
+      const renderer = runtimeRenderer(surface.context);
+      if (renderer && surface.context.bootstrapWebContents === renderer) {
+        const map = await sealedApplicationMap(surface.context);
+        surface.context.bootstrapWebContents = null;
+        await renderer.loadURL(`wurst://app/${map.entry}`);
+      }
     }
     return;
   }
@@ -1668,6 +1441,8 @@ ipcMain.handle('wurster:auth:totp', async (event, code) => {
 
 async function clearCurrentContext() {
   if (currentContext) pigLinkRuntime.closeContext(currentContext);
+  if (currentContext) await pigletRuntime.closeContext(currentContext);
+  if (currentWindow?.webContents) unbindRuntimeContext(currentWindow.webContents);
 
   destroyAllAuthSurfaces();
   destroyAllIdentitySurfaces();
@@ -1687,19 +1462,57 @@ function metadataPackage(context) {
   return { manifest: context.manifest, index: context.reader.index, wurstFsRoot: context.reader.wurstFsRoot };
 }
 
-function assertWurstSender(event) {
-  if (!currentWindow || currentWindow.isDestroyed() || event.sender.id !== currentWindow.webContents.id || !currentContext) {
-    throw new Error('Invalid Wurst runtime caller');
-  }
-  return currentContext;
+function bindRuntimeContext(webContents, context) {
+  runtimeContextByWebContents.set(webContents.id, context);
 }
 
-registerDesktopPigletRuntime({ ipcMain, assertWurstSender });
+function unbindRuntimeContext(webContents) {
+  if (webContents) runtimeContextByWebContents.delete(webContents.id);
+}
+
+function assertWurstSender(event) {
+  const context = runtimeContextByWebContents.get(event.sender.id);
+  if (!context) throw new Error('Invalid Wurst runtime caller');
+  return context;
+}
+
+const pigletStorage = createPigletStorageAdapter({
+  realmDataMode,
+  realmRuntimeSummary,
+  readOptions: fsReadOptions,
+  ensureInitializedStore: ensureWurstFsInitializedForWrite,
+  activeActor: activeFilesystemIdentity,
+  refreshContext: refreshWurstFsContext,
+  scheduleHygiene: scheduleWurstFsHygiene,
+  normalizeDataPath: dataFsPath,
+  waitForMaintenance: waitForWurstFsMaintenance
+});
+const pigletSurfaces = createPigletSurfaceManager({
+  getHostWindow: () => currentWindow,
+  createView: (webPreferences) => new WebContentsView({ webPreferences }),
+  sessionForChild: (manifest, instanceKey) => session.fromPartition(partitionFor(manifest, instanceKey), { cache: false }),
+  configureSession,
+  authorizePackage,
+  bindContext: bindRuntimeContext,
+  unbindContext: unbindRuntimeContext,
+  preload: WURST_PRELOAD,
+  storage: pigletStorage,
+  loadSealedBootstrap: () => fs.readFile(SEALED_BOOTSTRAP_HTML, 'utf8'),
+  destroyProtectionHandle: (handle) => protectionClient.destroy(handle),
+  cleanupContextUi: destroyContextTrustedSurfaces,
+  layoutContextUi: (context) => trustedSurfaceRuntime.layoutContext(context)
+});
+const pigletRuntime = createDesktopPigletRuntime({
+  ipcMain,
+  assertWurstSender,
+  assertCapability: assertRuntimeCapability,
+  storage: pigletStorage,
+  surfaces: pigletSurfaces
+});
 const pigLinkRuntime = createDesktopPigLinkRuntime({
   ipcMain,
   assertWurstSender,
-  getWindow: () => currentWindow,
-  isCurrentContext: (context) => currentContext === context
+  getWebContents: (context) => context?.pigletSurface?.view?.webContents ?? (context === currentContext ? currentWindow?.webContents : null)
 });
 const pigstyRuntime = createDesktopPigstyRuntime({ app, ipcMain, assertWurstSender });
 
@@ -1762,9 +1575,13 @@ function grantFilesystemIdentitySession(context, material, identity = null, requ
 
 async function ensureWurstFsStore(context) {
   if (!realmDataMode(context.manifest)) throw new Error('This Wurst does not use WurstFS realms');
+  if (context.readOnlyPackage) throw new Error('Nested Piglet WurstFS is read-only until transactional child write-back is available');
   if (context.wurstFsStore) return context.wurstFsStore;
   if (context.reader.carrier) throw new Error('WurstFS realm writes are not available for carrier Wursts');
-  context.wurstFsStore = await openLocalWurstFsStore(context.filePath, context.reader);
+  context.wurstFsStore = bindPigletWurstFsPersistence(
+    await openLocalWurstFsStore(context.filePath, context.reader),
+    context.pigletPersistence
+  );
   return context.wurstFsStore;
 }
 
@@ -1843,6 +1660,7 @@ async function currentWurstFsUsage(context) {
 }
 
 async function compactCurrentWurstFs(context, { reason = 'manual' } = {}) {
+  if (context.readOnlyPackage) return { compacted: false, reason: 'read-only-piglet-snapshot', ...await currentWurstFsUsage(context) };
   if (context.reader.carrier) return { compacted: false, reason: 'carrier-read-only' };
   if (!realmDataMode(context.manifest)) return { compacted: false, reason: 'no-data' };
   if (context.reader.wurstFsRoot?.historyMode === 'integrity') return { compacted: false, reason: 'integrity-history-retained' };
@@ -2019,13 +1837,15 @@ ipcMain.handle('wurst:identity:session', async (event) => {
 });
 
 ipcMain.handle('wurst:window:close', async (event) => {
-  assertWurstSender(event);
+  const context = assertWurstSender(event);
+  if (context.pigletSurface) return pigletRuntime.closeChildContext(context);
   currentWindow?.close();
   return true;
 });
 
 ipcMain.handle('wurst:window:minimize', async (event) => {
-  assertWurstSender(event);
+  const context = assertWurstSender(event);
+  if (context.pigletSurface) return false;
   currentWindow?.minimize();
   return true;
 });
@@ -2087,12 +1907,12 @@ ipcMain.handle('wurst:snapshot:export', async (event) => {
   if (result.canceled || !result.filePath) return { saved: false };
 
   const destination = path.resolve(result.filePath);
-  const sourcePath = path.resolve(context.filePath);
-  if (!context.reader.carrier && destination === sourcePath) {
+  const sourcePath = context.filePath ? path.resolve(context.filePath) : null;
+  if (sourcePath && !context.reader.carrier && destination === sourcePath) {
     // The current raw file already *is* the committed standalone snapshot.
     return { saved: true };
   }
-  if (context.reader.carrier && destination === sourcePath) {
+  if (sourcePath && context.reader.carrier && destination === sourcePath) {
     throw new Error('Choose a different path when exporting a carrier Wurst as standalone .wurst');
   }
 
@@ -2285,11 +2105,11 @@ ipcMain.handle('wurst:fs:capabilities', async (event) => {
   }
   return {
     read: true,
-    write: Boolean(context.manifest.data?.writable && !context.reader.carrier),
+    write: Boolean(context.manifest.data?.writable && !context.reader.carrier && !context.readOnlyPackage),
     persistent: true,
     snapshot: true,
     mediaUrls: true,
-    compact: !context.reader.carrier && ((context.reader.wurstFsRoot?.historyMode ?? null) === 'none' || (!context.reader.wurstFsRoot && !(context.manifest.data?.realms ?? []).some((realm) => realmTemplateGovernance(realm) === 'shared'))),
+    compact: !context.readOnlyPackage && !context.reader.carrier && ((context.reader.wurstFsRoot?.historyMode ?? null) === 'none' || (!context.reader.wurstFsRoot && !(context.manifest.data?.realms ?? []).some((realm) => realmTemplateGovernance(realm) === 'shared'))),
     protection: 'realms',
     format: 'wurst/fs-2',
     realms: true,
@@ -2408,7 +2228,7 @@ ipcMain.handle('wurst:fs:read', async (event, rawPath, options = {}) => {
 ipcMain.handle('wurst:fs:begin-write', async (event, rawPath, options = {}) => {
   const context = assertWurstSender(event);
   await waitForWurstFsMaintenance(context);
-  if (!realmDataMode(context.manifest) || !context.manifest.data?.writable || context.reader.carrier) throw new Error('This Wurst data filesystem is not writable');
+  if (!realmDataMode(context.manifest) || !context.manifest.data?.writable || context.reader.carrier || context.readOnlyPackage) throw new Error('This Wurst data filesystem is not writable');
   const target = dataFsPath(rawPath);
   if (target === 'data') throw new Error('Cannot write the WurstFS root');
   const mime = typeof options?.mime === 'string' && options.mime.length <= 160 && !/[\r\n]/.test(options.mime)
@@ -2452,7 +2272,7 @@ ipcMain.handle('wurst:fs:abort-write', async (event, rawId) => {
 ipcMain.handle('wurst:fs:remove', async (event, rawPath, options = {}) => {
   const context = assertWurstSender(event);
   await waitForWurstFsMaintenance(context);
-  if (!realmDataMode(context.manifest) || !context.manifest.data?.writable || context.reader.carrier) throw new Error('This Wurst data filesystem is not writable');
+  if (!realmDataMode(context.manifest) || !context.manifest.data?.writable || context.reader.carrier || context.readOnlyPackage) throw new Error('This Wurst data filesystem is not writable');
   const store = await ensureWurstFsInitializedForWrite(context);
   const removed = await store.remove(dataFsPath(rawPath), { actor: activeFilesystemIdentity(context), recursive: Boolean(options?.recursive) });
   if (removed) { await refreshWurstFsContext(context); scheduleWurstFsHygiene(context, 700); }
@@ -2462,7 +2282,7 @@ ipcMain.handle('wurst:fs:remove', async (event, rawPath, options = {}) => {
 ipcMain.handle('wurst:fs:mkdir', async (event, rawPath, options = {}) => {
   const context = assertWurstSender(event);
   await waitForWurstFsMaintenance(context);
-  if (!realmDataMode(context.manifest) || !context.manifest.data?.writable || context.reader.carrier) throw new Error('This Wurst data filesystem is not writable');
+  if (!realmDataMode(context.manifest) || !context.manifest.data?.writable || context.reader.carrier || context.readOnlyPackage) throw new Error('This Wurst data filesystem is not writable');
   const store = await ensureWurstFsInitializedForWrite(context);
   const entry = await store.mkdir(dataFsPath(rawPath), { actor: activeFilesystemIdentity(context), recursive: options?.recursive !== false });
   await refreshWurstFsContext(context);
@@ -2473,7 +2293,7 @@ ipcMain.handle('wurst:fs:mkdir', async (event, rawPath, options = {}) => {
 ipcMain.handle('wurst:fs:rename', async (event, rawFrom, rawTo) => {
   const context = assertWurstSender(event);
   await waitForWurstFsMaintenance(context);
-  if (!realmDataMode(context.manifest) || !context.manifest.data?.writable || context.reader.carrier) throw new Error('This Wurst data filesystem is not writable');
+  if (!realmDataMode(context.manifest) || !context.manifest.data?.writable || context.reader.carrier || context.readOnlyPackage) throw new Error('This Wurst data filesystem is not writable');
   const store = await ensureWurstFsInitializedForWrite(context);
   const entry = await store.rename(dataFsPath(rawFrom), dataFsPath(rawTo), { actor: activeFilesystemIdentity(context) });
   if (!entry) return null;
@@ -3302,7 +3122,8 @@ async function loadPackage(filePath) {
       identitySession: null,
       wurstIdentityMaterial: null,
       filesystemIdentityTimer: null,
-      bootstrapWindow: null
+      bootstrapWindow: null,
+      bootstrapWebContents: null
     };
     reader = null;
     currentContext = context;
@@ -3339,6 +3160,7 @@ async function loadPackage(filePath) {
       }
     });
     currentWindow = newWindow;
+    bindRuntimeContext(newWindow.webContents, context);
     if (launcherWindow && !launcherWindow.isDestroyed()) launcherWindow.hide();
 
     newWindow.setMenuBarVisibility(false);
@@ -3347,7 +3169,9 @@ async function loadPackage(filePath) {
       if (!url.startsWith('wurst://app/')) event.preventDefault();
     });
     newWindow.once('ready-to-show', () => newWindow.show());
+    newWindow.on('resize', () => pigletRuntime.layoutFillSurfaces());
     newWindow.on('closed', () => {
+      unbindRuntimeContext(newWindow.webContents);
       if (currentWindow !== newWindow) return;
       closeDetachedDevTools();
       currentWindow = null;
@@ -3360,6 +3184,7 @@ async function loadPackage(filePath) {
 
     if (fullySealedApplication(manifest)) {
       context.bootstrapWindow = newWindow;
+      context.bootstrapWebContents = newWindow.webContents;
       const bootstrapHtml = await fs.readFile(SEALED_BOOTSTRAP_HTML, 'utf8');
       await newWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(bootstrapHtml)}`);
     } else {

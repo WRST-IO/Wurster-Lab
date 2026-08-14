@@ -40,6 +40,15 @@ Local raw Wursts can compact stale append-only history in the background. Applic
 
 `wurst.snapshot.export()` opens trusted Wurster save UI and streams the currently committed virtual WRST representation to a standalone `.wurst` file. The application chooses when to offer a snapshot, but Wurster chooses the destination with the user. Pending, uncommitted WurstFS transactions are not part of the snapshot.
 
+
+## Piglet child surfaces
+
+Desktop Wurster treats a child `.wurst` as a package, not an iframe document. `wurst.piglet.url(ref)` exposes package bytes for transport/debugging; `wurst.piglet.open(ref, { bounds })` is the execution API and creates a Wurster-owned managed child renderer.
+
+Parents can discover immutable built-ins and valid `.wurst` / `.wrst` files stored anywhere in readable WurstFS realms with `wurst.piglet.children()`. `wurst.piglet.install(name, bytes, { path })` is a convenience for drag-and-drop shells: it validates the child and stores the exact supplied bytes as an ordinary WurstFS file. The child's own package signature is never replaced by the parent publisher identity.
+
+Managed children currently support open/move/resize/focus/close. Sealed child auth and nested child-WurstFS write-back are intentionally still fail-closed/follow-up work.
+
 ## Runtime capability availability
 
 A Wurst can ask what this particular runtime can actually provide:

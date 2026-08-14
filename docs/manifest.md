@@ -212,7 +212,7 @@ Successful declared builds may be published as `wurst/pigsty-publication-1` work
 
 Child Wursts are ordinary Wurst resources handled through the Piglet runtime system. A fixed built-in child is immutable content whose exact bytes are covered by the parent signature and whose own package signature is checked independently.
 
-Installed child Wursts live in the parent's mutable WurstFS state and are verified independently of the parent package signature.
+Installed child Wursts live as ordinary `.wurst` / `.wrst` files in the parent's mutable WurstFS state and are verified independently of the parent package signature. They are not added to `piglet.children`, because that manifest field describes immutable package content only.
 
 Current built-in child syntax:
 
@@ -230,7 +230,7 @@ Current built-in child syntax:
 }
 ```
 
-MeatGrinder writes the child into immutable `piglet` scope and records its hash in the parent manifest.
+MeatGrinder writes the exact child bytes into immutable `piglet` scope and records their hash in the parent manifest. It never rebuilds or re-signs the child. Runtime-installed children require no manifest entry; Piglet discovers valid Wurst files from readable WurstFS realms.
 
 ## Platform-specific behavior
 

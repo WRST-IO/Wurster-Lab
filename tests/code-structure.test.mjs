@@ -17,6 +17,12 @@ const web = await text('runtime/web/src/wurster-web.mjs');
 const format = await text('packages/format/src/index.js');
 const pigsty = await text('packages/pigsty/src/index.js');
 const pigletRuntime = await text('runtime/desktop/src/piglet-runtime.mjs');
+const pigletPackageRuntime = await text('runtime/desktop/src/piglet-package.mjs');
+const pigletStorageRuntime = await text('runtime/desktop/src/piglet-storage-runtime.mjs');
+const pigletSurfaceRuntime = await text('runtime/desktop/src/piglet-surface-runtime.mjs');
+const pigletBackingRuntime = await text('runtime/desktop/src/piglet-backing-runtime.mjs');
+const pigletWurstFsRuntime = await text('runtime/desktop/src/piglet-wurstfs-runtime.mjs');
+const trustedSurfaceRuntime = await text('runtime/desktop/src/trusted-surface-runtime.mjs');
 const piglinkRuntime = await text('runtime/desktop/src/piglink-runtime.mjs');
 const pigstyRuntime = await text('runtime/desktop/src/pigsty-runtime.mjs');
 const webSandboxRuntime = await text('runtime/desktop/src/web-sandbox-runtime.mjs');
@@ -30,6 +36,12 @@ assert.ok(lines(pigsty) <= 1000, `Pigsty core exceeded temporary 1000-line budge
 
 for (const [name, source] of [
   ['piglet-runtime', pigletRuntime],
+  ['piglet-package-runtime', pigletPackageRuntime],
+  ['piglet-storage-runtime', pigletStorageRuntime],
+  ['piglet-surface-runtime', pigletSurfaceRuntime],
+  ['piglet-backing-runtime', pigletBackingRuntime],
+  ['piglet-wurstfs-runtime', pigletWurstFsRuntime],
+  ['trusted-surface-runtime', trustedSurfaceRuntime],
   ['piglink-runtime', piglinkRuntime],
   ['pigsty-runtime', pigstyRuntime],
   ['web-sandbox-runtime', webSandboxRuntime]

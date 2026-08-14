@@ -33,7 +33,7 @@ Pre-1.0 Wursts that depend on a discarded contract are rebuilt against the curre
 Primary work includes:
 
 - keep the v0.3x Desktop/Web release lane buildable and documented without requiring unfinished Pigsty native bundles;
-- finish Piglet Desktop lifecycle surfaces and tree-level resource budgets on top of the already working built-in-child format;
+- finish Piglet suspend/resume, tree-level resource budgets, Wurster-owned child trust presentation and brokered Parent↔Child PigLink on top of managed Desktop child surfaces, child-scoped Auth and persistent nested WurstFS;
 - finish PigLink brokers, runtime handles, lifecycle/revocation and capability-composition prompts on top of the working Action/Event contract;
 - mature Pigsty independently: complete native runtime distribution, durable WurstFS commit, network capability mediation and native-runtime conformance before enabling it in normal Desktop releases;
 - define derived artifact provenance so source, generated output and toolchain state cannot silently drift;

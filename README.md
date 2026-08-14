@@ -54,7 +54,7 @@ npm test
 The v0.32 line stabilizes the current Wurst runtime while the three new runtime primitives mature independently:
 
 - **PigLink** is active: declared Actions/Events run through UI, Desktop and headless paths. Cross-Wurst broker handles are still follow-up work.
-- **Piglet** has a functional built-in-child slice: signed child bytes, runtime-owned child URLs and Web child sessions. Managed Desktop child surfaces and lifecycle handles are still follow-up work.
+- **Piglet** now supports independently signed built-in children plus runtime-installed WurstFS children and managed Desktop child surfaces. Child auth, nested WurstFS write-back, tree budgets and direct Parent↔Child PigLink handles remain follow-up work.
 - **Pigsty** remains experimental and is **not bundled in normal v0.32 Desktop releases yet**. Its contracts, worker harness and Edge/WASIX integration stay in-tree and tested, but native Edge/Wasmer runtime availability does not block Windows, macOS or Web releases.
 
 See `docs/status.md` for the current maturity matrix instead of inferring feature readiness from the presence of implementation code.

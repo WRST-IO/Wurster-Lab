@@ -14,8 +14,7 @@ export async function loadPigLinkEntry(context, rawPath) {
 export function createDesktopPigLinkRuntime({
   ipcMain,
   assertWurstSender,
-  getWindow,
-  isCurrentContext
+  getWebContents
 }) {
   let nextRequestId = 1;
   const pendingInvocations = new Map();
@@ -27,10 +26,8 @@ export function createDesktopPigLinkRuntime({
     if (!spec) throw new Error(`Unknown Wurst action: ${name}`);
     validateJsonValue(payload, spec.input, '$input');
 
-    const window = getWindow();
-    if (!window || window.isDestroyed() || !isCurrentContext(context)) {
-      throw new Error('Wurst renderer is not available');
-    }
+    const webContents = getWebContents(context);
+    if (!webContents || webContents.isDestroyed?.()) throw new Error('Wurst renderer is not available');
 
     const requestId = `pl-${nextRequestId++}`;
     const timeoutMs = Math.min(Number(spec.timeoutMs ?? 5000), 60000);
@@ -40,7 +37,7 @@ export function createDesktopPigLinkRuntime({
         reject(new Error(`Wurst action exceeded ${timeoutMs} ms: ${name}`));
       }, timeoutMs);
       pendingInvocations.set(requestId, { context, name, spec, resolve, reject, timer });
-      window.webContents.send('wurst:piglink:invoke-request', { requestId, name, input: payload });
+      webContents.send('wurst:piglink:invoke-request', { requestId, name, input: payload });
     });
   }
 

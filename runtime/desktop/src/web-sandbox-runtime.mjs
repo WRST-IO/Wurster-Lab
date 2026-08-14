@@ -67,8 +67,9 @@ export function parseHttpRange(value, total) {
   return { offset: start, length: end - start + 1, total };
 }
 
-export function partitionFor(manifest) {
-  const id = crypto.createHash('sha256').update(String(manifest.id)).digest('hex').slice(0, 24);
+export function partitionFor(manifest, instanceKey = null) {
+  const identity = instanceKey == null ? String(manifest.id) : `${manifest.id}\0${String(instanceKey)}`;
+  const id = crypto.createHash('sha256').update(identity).digest('hex').slice(0, 24);
   const capabilities = normalizeCapabilities(manifest.capabilities);
   return capabilities['storage.local'] ? `persist:wurst-${id}` : `wurst-${id}-${crypto.randomUUID()}`;
 }

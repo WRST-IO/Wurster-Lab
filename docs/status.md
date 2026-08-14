@@ -28,9 +28,9 @@ Still before the first stable PigLink contract: brokered links between separate 
 
 ## Piglet
 
-**Functional composition slice, active in v0.32.** A parent Wurst can carry immutable child Wurst bytes. Parent integrity covers those exact bytes while the child remains independently signed. Wurster Web can open a child as an internal session; Desktop exposes child discovery and runtime-owned child URLs.
+**Functional composition runtime, active in v0.32 development.** Built-in child bytes remain independently signed and byte-identical. Desktop additionally discovers normal `.wurst`/`.wrst` files stored in readable WurstFS realms, can install exact dropped Wurst bytes into ordinary WurstFS, and runs children as managed `WebContentsView` surfaces with move/resize/focus/close handles. Child WurstFS writes persist transactionally back into the parent-held child file, and sealed/protected children use child-scoped Wurster Auth surfaces. Wurster Web keeps the built-in-child internal-session path.
 
-Still before the first stable Piglet contract: managed Desktop child renderer surfaces, start/stop/focus lifecycle handles, tree-level resource budgets, installed mutable children and direct brokered PigLink handles to child instances.
+Still before the first stable Piglet contract: suspend/resume and tree-level resource budgets, direct brokered PigLink handles to child instances, Wurster-owned trust/revocation presentation for shell UIs, and equivalent runtime-installed managed surfaces on Web.
 
 ## Pigsty
 

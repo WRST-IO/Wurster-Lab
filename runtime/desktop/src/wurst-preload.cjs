@@ -231,7 +231,21 @@ contextBridge.exposeInMainWorld('wurst', Object.freeze({
   }),
   piglet: Object.freeze({
     children: () => invoke('wurst:piglet:children'),
-    url: (id) => invoke('wurst:piglet:url', String(id ?? ''))
+    url: (ref) => invoke('wurst:piglet:url', String(ref ?? '')),
+    inspect: (ref) => invoke('wurst:piglet:inspect', String(ref ?? '')),
+    install: async (name, data, options = {}) => {
+      let bytes;
+      if (data instanceof Uint8Array) bytes = data;
+      else if (data instanceof ArrayBuffer) bytes = new Uint8Array(data);
+      else throw new TypeError('wurst.piglet.install expects Uint8Array or ArrayBuffer Wurst bytes');
+      return invoke('wurst:piglet:install', String(name ?? 'Piglet.wurst'), bytes, options);
+    },
+    remove: (ref) => invoke('wurst:piglet:remove', String(ref ?? '')),
+    open: (ref, options = {}) => invoke('wurst:piglet:open', String(ref ?? ''), options),
+    surfaces: () => invoke('wurst:piglet:surfaces'),
+    setBounds: (handle, bounds) => invoke('wurst:piglet:bounds', String(handle ?? ''), bounds),
+    focus: (handle) => invoke('wurst:piglet:focus', String(handle ?? '')),
+    close: (handle) => invoke('wurst:piglet:close', String(handle ?? ''))
   }),
   pigsty: Object.freeze({
     status: () => invoke('wurst:pigsty:status'),

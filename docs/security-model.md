@@ -74,9 +74,11 @@ Pigsty permission is independent of package signature. A signature identifies a 
 
 ## Piglet boundary
 
-Piglet lets a parent Wurst embed and orchestrate child Wursts. It does not merge trust domains. A child keeps its own signature, publisher, realms, WurstKey state, Pigsty permission and PigLink declarations.
+Piglet lets a parent Wurst keep and orchestrate child Wursts. It does not merge trust domains. MeatGrinder preserves built-in child bytes exactly, and runtime installation writes the supplied child bytes unchanged into WurstFS. A child keeps its own signature, publisher, realms, WurstKey state, Pigsty permission and PigLink declarations.
 
-Parenthood grants orchestration, not omnipotence.
+Managed Desktop children run in separate renderer/runtime contexts. Invalid child signatures fail before execution. Sealed child surfaces currently fail closed until authentication is child-context aware.
+
+Parenthood grants orchestration, not authorship or omnipotence.
 
 ## PigLink boundary
 
