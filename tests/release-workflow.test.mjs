@@ -68,6 +68,14 @@ assert.match(release, /actions\/download-artifact@v8/);
 assert.match(release, /SHA256SUMS\.txt/);
 assert.match(release, /gh release create/);
 
+assert.match(pages, /workflow_call:/);
+assert.match(pages, /workflow_dispatch:/);
+assert.doesNotMatch(pages, /branches:\s*\[main\]/);
+assert.match(pages, /ref:\s*\$\{\{ inputs\.ref \}\}/);
+assert.match(pages, /node tools\/sync-site-docs\.mjs/);
+assert.match(release, /\n\s*site:\s*\n\s*needs: publish/);
+assert.match(release, /uses: \.\/\.github\/workflows\/pages\.yml/);
+assert.match(release, /ref: \$\{\{ github\.sha \}\}/);
 assert.match(pages, /actions\/upload-pages-artifact@v5/);
 assert.match(pages, /include-hidden-files: true/);
 assert.match(pages, /actions\/deploy-pages@v5/);
@@ -87,4 +95,4 @@ assert.match(releaseData, /wurster\.js/);
 assert.match(releaseData, /wurster\.min\.js/);
 assert.match(releaseData, /Wurster-Web-\$\{pkg\.version\}\.zip/);
 
-console.log('✓ GitHub tag releases publish Windows, macOS and Web without waiting for the optional Pigsty bundle');
+console.log('✓ GitHub tag releases publish Windows, macOS and Web without Pigsty and deploy release-matched canonical docs');

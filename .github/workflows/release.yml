@@ -316,3 +316,14 @@ jobs:
             --title "Wurster ${GITHUB_REF_NAME#v}" \
             --generate-notes \
             $prerelease
+
+  site:
+    needs: publish
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+      actions: read
+    uses: ./.github/workflows/pages.yml
+    with:
+      ref: ${{ github.sha }}
