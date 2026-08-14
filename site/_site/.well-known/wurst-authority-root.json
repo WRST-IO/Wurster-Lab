@@ -1,9 +1,0 @@
-{
-  "format": "wurst/authority-root-1",
-  "authority": "wrst.io",
-  "algorithm": "ed25519",
-  "name": "WRST.IO Root Authority",
-  "fingerprint": "5ed4c12bd45ab66d44da809182a140cabce20f44d5e7e20464adc0e7147f3914",
-  "publicKeySpki": "MCowBQYDK2VwAyEAhg+OCoDjNYtcF0CQRKhjXnyYWB2r+yZXBG0/roLxWl0=",
-  "createdAt": "2026-08-12T11:44:16.580Z"
-}
