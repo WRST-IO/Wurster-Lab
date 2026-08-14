@@ -1,6 +1,6 @@
 ---
 title: WRST.IO Authority
-group: Trust & Identity
+group: Security & Trust
 groupOrder: 4
 order: 4
 ---
@@ -155,8 +155,8 @@ Normal Wurst verification does not require either endpoint to be reachable becau
 
 ## Wurster Lab operator realm
 
-The normal development workspace is disposable and release exports never include `authority/wrst.io/private/`. `WursterLab.wurst` carries operator state in its personal sealed `/data/operator` realm.
+The normal development workspace is disposable and release exports never include `authority/wrst.io/private/`. `WursterLab.wurst` carries operator state in its personal sealed `/operator` realm.
 
 It stores exactly the public production Root, Issuer certificate, Trust Bundle and the already-encrypted `issuer.wurstissuer` backup. Root and Issuer Meatphrases are deliberately not stored in the Wurst.
 
-The Lab validates the Root fingerprint, Root→Issuer signature, Trust Bundle signature and issuer-backup fingerprint before it marks the operator kit ready. It can then materialize a local production workspace without exposing that private realm to another maintainer who updates `/data/workspace`.
+The Lab validates the Root fingerprint, Root→Issuer signature, Trust Bundle signature and issuer-backup fingerprint before it marks the operator kit ready. It can then materialize a local production workspace without exposing that private realm to another maintainer who updates `/workspace`.

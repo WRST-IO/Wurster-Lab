@@ -7,10 +7,10 @@ import { fileURLToPath } from 'node:url';
 import { buildWurst, createPublisher } from '../packages/meatgrinder/src/index.js';
 import {
   mimeFor,
-  openLocalWurstFsStore,
+  openLocalPigFsStore,
   openWurstFile,
   writeCompactedWurstFile,
-  wurstFsRealmGovernance
+  pigFsRealmGovernance
 } from '../packages/format/src/index.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -73,14 +73,14 @@ async function syncWorkspace(store, files) {
   let removed = 0;
   const extraFiles = [...existing.values()].filter((entry) => entry.type === 'file' && !wanted.has(entry.path)).sort((a, b) => b.path.length - a.path.length);
   for (const entry of extraFiles) {
-    await store.remove(`/data/workspace/${entry.path}`);
+    await store.remove(`/workspace/${entry.path}`);
     removed += 1;
   }
 
   let changed = 0;
   let unchanged = 0;
   for (const [rel, bytes] of [...files.entries()].sort(([a], [b]) => a.localeCompare(b))) {
-    const target = `/data/workspace/${rel}`;
+    const target = `/workspace/${rel}`;
     if (await sameFile(store, target, bytes)) { unchanged += 1; continue; }
     await writeBuffer(store, target, bytes, mimeFor(rel));
     changed += 1;
@@ -104,9 +104,9 @@ async function writeReleaseMeta(store, version, revision, sourceFiles, sync = nu
     tests: 'workspace packaged; run the repository test suite after extraction for platform verification',
     sync
   };
-  await writeBuffer(store, '/data/lab/release.json', Buffer.from(`${JSON.stringify(payload, null, 2)}\n`), 'application/json');
-  const notes = await store.stat('/data/lab/notes.md');
-  if (!notes) await writeBuffer(store, '/data/lab/notes.md', Buffer.from('## Wurster Lab notes\n\n- Oink responsibly.\n'), 'text/markdown');
+  await writeBuffer(store, '/lab/release.json', Buffer.from(`${JSON.stringify(payload, null, 2)}\n`), 'application/json');
+  const notes = await store.stat('/lab/notes.md');
+  if (!notes) await writeBuffer(store, '/lab/notes.md', Buffer.from('## Wurster Lab notes\n\n- Oink responsibly.\n'), 'text/markdown');
 }
 
 async function freshBuild(output = null) {
@@ -124,7 +124,7 @@ async function freshBuild(output = null) {
     if (built.signature.status !== 'signed') throw new Error('WursterLab.wurst must be signed because it uses user-selected host-file import');
 
     let reader = await openWurstFile(unsignedDataPath);
-    let store = await openLocalWurstFsStore(unsignedDataPath, reader);
+    let store = await openLocalPigFsStore(unsignedDataPath, reader);
     await store.initialize({
       realms: [
         { id: 'workspace', label: 'Wurster Workspace' },
@@ -169,12 +169,12 @@ async function updateExisting(input, output = null) {
   try {
     reader = await openWurstFile(finalPath);
     if (reader.manifest?.id !== 'io.wrst.wurster-lab') throw new Error('Input is not WursterLab.wurst');
-    if (reader.wurstFsRoot?.format !== 'wurst/fs-2') throw new Error('WursterLab.wurst has no WurstFS v2 workspace');
-    store = await openLocalWurstFsStore(finalPath, reader);
+    if (reader.pigFsRoot?.format !== 'wurst/pigfs-1') throw new Error('WursterLab.wurst has no PigFS workspace');
+    store = await openLocalPigFsStore(finalPath, reader);
     const workspace = store.realm('workspace');
     const operator = store.realm('operator');
-    if (!workspace || wurstFsRealmGovernance(workspace) !== 'ordinary') throw new Error('Wurster Lab workspace realm is not ordinary mutable storage');
-    if (!operator || wurstFsRealmGovernance(operator) !== 'personal') throw new Error('Wurster Lab operator realm is not personal storage');
+    if (!workspace || pigFsRealmGovernance(workspace) !== 'ordinary') throw new Error('Wurster Lab workspace realm is not ordinary mutable storage');
+    if (!operator || pigFsRealmGovernance(operator) !== 'personal') throw new Error('Wurster Lab operator realm is not personal storage');
     const files = await collectWorkspaceFiles();
     const sync = await syncWorkspace(store, files);
     await writeReleaseMeta(store, version, revision, files.size, sync);

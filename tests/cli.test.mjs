@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { SEALED_APP_INDEX_PATH, createAuthorityIssuer, createAuthorityRoot, createPublisherCertificateFromIssuer, createPublisherCertificateRequest, createPublisherKeyBundle, decodeWurst, openLocalWurstFsStore, openWurstFile, unlockApplication, verifyPackageSignature } from '../packages/format/src/index.js';
+import { SEALED_APP_INDEX_PATH, createAuthorityIssuer, createAuthorityRoot, createPublisherCertificateFromIssuer, createPublisherCertificateRequest, createPublisherKeyBundle, decodeWurst, openLocalPigFsStore, openWurstFile, unlockApplication, verifyPackageSignature } from '../packages/format/src/index.js';
 import { buildWurst } from '../packages/meatgrinder/src/index.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -120,30 +120,30 @@ try {
 
   const fsProject = path.join(tmp, 'wurst-fs-project');
   await fs.mkdir(path.join(fsProject, 'src'), { recursive: true });
-  await fs.writeFile(path.join(fsProject, 'src', 'index.html'), '<h1>WurstFS</h1>');
+  await fs.writeFile(path.join(fsProject, 'src', 'index.html'), '<h1>PigFS</h1>');
   await fs.writeFile(path.join(fsProject, 'wurst.json'), JSON.stringify({
-    id: 'io.wrst.fs-project', name: 'WurstFS Project', entry: 'index.html',
-    data: { format: 'wurst/data-realms-1', writable: true, realms: [{ id: 'files' }] }
+    id: 'io.wrst.fs-project', name: 'PigFS Project', entry: 'index.html',
+    pigfs: { format: 'wurst/pigfs-policy-1', writable: true, realms: [{ id: 'files' }] }
   }, null, 2));
   const fsOutput = path.join(tmp, 'fs-project.wurst');
   const fsBuild = run('build', fsProject, fsOutput);
-  assert.match(fsBuild, /WurstFS: realms \/ ordinary \/ 1 genesis template/);
+  assert.match(fsBuild, /PigFS: realms \/ ordinary \/ 1 genesis template/);
   const fsReader = await openWurstFile(fsOutput);
-  assert.equal(fsReader.manifest.data.realms[0].id, 'files');
-  assert.equal(Object.hasOwn(fsReader.manifest.data.realms[0], 'governance'), false);
-  assert.equal(fsReader.wurstFsRoot, null, 'mutable runtime data starts empty rather than being baked into the immutable package');
+  assert.equal(fsReader.manifest.pigfs.realms[0].id, 'files');
+  assert.equal(Object.hasOwn(fsReader.manifest.pigfs.realms[0], 'governance'), false);
+  assert.equal(fsReader.pigFsRoot, null, 'mutable runtime data starts empty rather than being baked into the immutable package');
   await fsReader.close();
 
   const mutableReader = await openWurstFile(fsOutput);
-  const mutableStore = await openLocalWurstFsStore(fsOutput, mutableReader);
+  const mutableStore = await openLocalPigFsStore(fsOutput, mutableReader);
   await mutableStore.initialize({ realms: [{ id: 'files' }, { id: 'private', governance: 'personal' }] });
-  const mutableTx = mutableStore.beginWrite('/data/files/hello.txt', { mime: 'text/plain' });
+  const mutableTx = mutableStore.beginWrite('/files/hello.txt', { mime: 'text/plain' });
   await mutableStore.writeChunk(mutableTx, Buffer.from('oink'));
   await mutableStore.commitWrite(mutableTx);
   await mutableStore.closeFile();
   await mutableReader.close();
   const mutableInspect = run('inspect', fsOutput);
-  assert.match(mutableInspect, /WurstFS generation: \d+ \/ 2 realm\(s\) \/ current snapshot/);
+  assert.match(mutableInspect, /PigFS generation: \d+ \/ 2 realm\(s\) \/ current snapshot/);
 
   const seededDataProject = path.join(tmp, 'seeded-data-project');
   await fs.mkdir(path.join(seededDataProject, 'src'), { recursive: true });
@@ -152,7 +152,7 @@ try {
   await fs.writeFile(path.join(seededDataProject, 'data', 'old.txt'), 'nope');
   await fs.writeFile(path.join(seededDataProject, 'wurst.json'), JSON.stringify({
     id: 'io.wrst.seeded-data', name: 'Seeded Data', entry: 'index.html',
-    data: { format: 'wurst/data-realms-1', writable: true, realms: [{ id: 'files' }] }
+    pigfs: { format: 'wurst/pigfs-policy-1', writable: true, realms: [{ id: 'files' }] }
   }, null, 2));
   assert.match(runFail('build', seededDataProject), /runtime data starts empty|top-level data\//i);
 
@@ -208,7 +208,7 @@ try {
   console.log('✓ Meat Grinder rejects Wurst-controlled Wurster Auth styling');
   console.log('✓ Meat Grinder PNG carrier build produces a real inspectable Undercover Wurst');
   console.log('✓ Meat Grinder builds a normal web folder with no wurst.json');
-  console.log('✓ Meat Grinder keeps runtime WurstFS empty at build time and rejects top-level mutable factory data');
+  console.log('✓ Meat Grinder keeps runtime PigFS empty at build time and rejects top-level mutable factory data');
 } finally {
   await fs.rm(tmp, { recursive: true, force: true });
 }

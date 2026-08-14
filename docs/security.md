@@ -10,10 +10,10 @@ Wurster separates four questions:
 
 1. **Application integrity:** who signed the immutable Wurst application?
 2. **Application confidentiality:** does immutable developer content require a WurstKey?
-3. **Mutable-data confidentiality:** is a WurstFS realm ordinary, personal sealed, or shared sealed?
+3. **Mutable-data confidentiality:** is a PigFS realm ordinary, personal sealed, or shared sealed?
 4. **Mutable-data governance:** does a realm use Wurster Identity based write/admin authorization or signed audit?
 
-Ordinary WurstFS storage opts into none of the identity machinery.
+Ordinary PigFS storage opts into none of the identity machinery.
 
 A Meatphrase is the portable secret behind a Wurster Identity. It deterministically recovers the identity's Ed25519 signing and X25519 encryption identities. Local Meat Locker storage is only a protected convenience copy.
 

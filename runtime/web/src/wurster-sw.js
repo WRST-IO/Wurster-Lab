@@ -9,7 +9,7 @@ function route(url) {
   const marker = parts.lastIndexOf('__wurster');
   if (marker < 0 || parts.length - marker < 4) return null;
   const [sessionId, scope, ...rest] = parts.slice(marker + 1);
-  if (!['app','data','piglink','piglet'].includes(scope)) return null;
+  if (!['app','pigfs','piglink','piglet'].includes(scope)) return null;
   return { sessionId, scope, path: rest.map(decodeURIComponent).join('/') };
 }
 async function probeClient(client, sessionId) {

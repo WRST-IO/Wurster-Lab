@@ -61,9 +61,9 @@ MeatGrinder emits `format: "wurst/7"` into the built package manifest.
 - `partial`: public app files remain readable; developer-protected files from `sealed/` require the WurstKey when requested.
 - `sealed`: the complete application resource map and protected application files require the WurstKey before entry code runs.
 
-WurstKey protects developer-owned immutable content. It is independent of WurstFS user data.
+WurstKey protects developer-owned immutable content. It is independent of PigFS user data.
 
-## Mutable WurstFS data
+## Mutable PigFS data
 
 Mutable data is declared only through `data`:
 
@@ -109,7 +109,7 @@ Shared realms opt into Wurster Identity based read/write/admin policy. `protecti
 
 Multiple realm kinds may coexist in one Wurst.
 
-A project may not bake runtime mutable content through a top-level `data/` source directory. Immutable seed content belongs in the application package (`src/` or developer-protected `sealed/`). Runtime WurstFS starts as runtime-owned mutable state.
+A project may not bake runtime mutable content through a top-level `data/` source directory. Immutable seed content belongs in the application package (`src/` or developer-protected `sealed/`). Runtime PigFS starts as runtime-owned mutable state.
 
 ## Identity release
 
@@ -212,7 +212,7 @@ Successful declared builds may be published as `wurst/pigsty-publication-1` work
 
 Child Wursts are ordinary Wurst resources handled through the Piglet runtime system. A fixed built-in child is immutable content whose exact bytes are covered by the parent signature and whose own package signature is checked independently.
 
-Installed child Wursts live as ordinary `.wurst` / `.wrst` files in the parent's mutable WurstFS state and are verified independently of the parent package signature. They are not added to `piglet.children`, because that manifest field describes immutable package content only.
+Installed child Wursts live as ordinary `.wurst` / `.wrst` files in the parent's mutable PigFS state and are verified independently of the parent package signature. They are not added to `piglet.children`, because that manifest field describes immutable package content only.
 
 Current built-in child syntax:
 
@@ -230,7 +230,7 @@ Current built-in child syntax:
 }
 ```
 
-MeatGrinder writes the exact child bytes into immutable `piglet` scope and records their hash in the parent manifest. It never rebuilds or re-signs the child. Runtime-installed children require no manifest entry; Piglet discovers valid Wurst files from readable WurstFS realms.
+MeatGrinder writes the exact child bytes into immutable `piglet` scope and records their hash in the parent manifest. It never rebuilds or re-signs the child. Runtime-installed children require no manifest entry; Piglet discovers valid Wurst files from readable PigFS realms.
 
 ## Platform-specific behavior
 

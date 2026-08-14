@@ -29,7 +29,7 @@ export function createPigletStorageAdapter({
   async function openSource(context, rawPath) {
     const target = normalizeDataPath(rawPath);
     const options = await readOptions(context, target);
-    const stat = await context.reader.fsStat(target, options);
+    const stat = await context.reader.pigFsStat(target, options);
     if (!stat || stat.type !== 'file') throw new Error(`Stored Piglet file not found: /${target}`);
     if (stat.size > MAX_PIGLET_BYTES) throw new Error(`Stored Piglet exceeds ${MAX_PIGLET_BYTES} byte runtime limit`);
     return {
@@ -37,7 +37,7 @@ export function createPigletStorageAdapter({
       path: publicPath(target),
       async read(offset, length) {
         if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length) || offset < 0 || length < 0 || offset + length > stat.size) throw new Error('Invalid stored Piglet range');
-        const result = await context.reader.fsReadRange(target, offset, length, options);
+        const result = await context.reader.pigFsReadRange(target, offset, length, options);
         return Buffer.from(result?.data ?? []);
       }
     };
@@ -52,15 +52,15 @@ export function createPigletStorageAdapter({
   }
 
   async function candidates(context) {
-    if (!realmDataMode(context.manifest) || !context.reader.wurstFsRoot) return [];
+    if (!realmDataMode(context.manifest) || !context.reader.pigFsRoot) return [];
     const realms = realmRuntimeSummary(context).filter((realm) => realm.initialized && !realm.locked && realm.capabilities?.read);
     const found = [];
     let visited = 0;
     for (const realm of realms) {
-      const queue = [`data/${realm.id}`];
+      const queue = [realm.mount || `/${realm.id}`];
       while (queue.length) {
         const directory = queue.shift();
-        const entries = await context.reader.fsList(directory, await readOptions(context, directory));
+        const entries = await context.reader.pigFsList(directory, await readOptions(context, directory));
         for (const entry of entries) {
           visited += 1;
           if (visited > MAX_DISCOVERY_ENTRIES) return found;
@@ -78,10 +78,10 @@ export function createPigletStorageAdapter({
       try {
         const source = await openSource(context, storedPath);
         descriptors.push(await inspectPigletSource(source, {
-          ref: `wurstfs:${storedPath}`,
+          ref: `pigfs:${storedPath}`,
           id: storedPath,
           label: null,
-          source: 'wurstfs',
+          source: 'pigfs',
           path: storedPath,
           mutable: true
         }));
@@ -94,8 +94,8 @@ export function createPigletStorageAdapter({
 
   function defaultPath(context, requestedName) {
     const realm = realmRuntimeSummary(context).find((item) => item.governance === 'ordinary' && !item.locked && (item.capabilities?.write || !item.initialized));
-    if (!realm) throw new Error('Piglet installation needs a writable ordinary WurstFS realm or an explicit writable path');
-    return `/data/${realm.id}/piglets/${safeName(requestedName)}`;
+    if (!realm) throw new Error('Piglet installation needs a writable ordinary PigFS realm or an explicit writable path');
+    return `${String(realm.mount || `/${realm.id}`).replace(/\/$/, '')}/piglets/${safeName(requestedName)}`;
   }
 
   async function install(context, value, options = {}) {
@@ -125,10 +125,10 @@ export function createPigletStorageAdapter({
     scheduleHygiene(context);
     return {
       ...inspected,
-      ref: `wurstfs:${destination}`,
+      ref: `pigfs:${destination}`,
       id: destination,
       label: inspected.application?.name ?? path.basename(destination),
-      source: 'wurstfs',
+      source: 'pigfs',
       path: destination,
       mutable: true
     };
@@ -169,16 +169,16 @@ export function createPigletStorageAdapter({
   function runtimeCopyPath(context, descriptor) {
     const realm = realmRuntimeSummary(context).find((item) => item.governance === 'ordinary' && !item.locked && (item.capabilities?.write || !item.initialized));
     if (!realm) return null;
-    return `/data/${realm.id}/piglets/.runtime/${descriptor.sha256}.wurst`;
+    return `${String(realm.mount || `/${realm.id}`).replace(/\/$/, '')}/piglets/.runtime/${descriptor.sha256 || descriptor.application?.id || 'child'}.wurst`;
   }
 
   async function prepareRuntimeSource(context, descriptor, source) {
-    if (descriptor.source === 'wurstfs') {
+    if (descriptor.source === 'pigfs') {
       return { source, path: descriptor.path, expectedSha256: null, materializedFrom: null };
     }
     if (!descriptor.data?.writable) return { source, path: null, expectedSha256: descriptor.sha256 ?? null, materializedFrom: descriptor.ref };
     const destination = runtimeCopyPath(context, descriptor);
-    if (!destination) throw new Error('Writable built-in Piglets require a writable ordinary parent WurstFS realm');
+    if (!destination) throw new Error('Writable built-in Piglets require a writable ordinary parent PigFS realm');
     try {
       const existingSource = await openSource(context, destination);
       const inspected = await inspectPigletSource(existingSource);
@@ -190,7 +190,7 @@ export function createPigletStorageAdapter({
   }
 
   async function persistRuntimeSource(context, source, bytes) {
-    if (!source?.path) throw new Error('This Piglet has no persistent parent WurstFS backing');
+    if (!source?.path) throw new Error('This Piglet has no persistent parent PigFS backing');
     source.expectedSha256 = await writeExact(context, source.path, bytes, { expectedSha256: source.expectedSha256 });
     return source.expectedSha256;
   }
@@ -201,7 +201,7 @@ export function createPigletStorageAdapter({
 
   async function remove(context, rawRef) {
     const raw = String(rawRef ?? '');
-    const storedPath = raw.startsWith('wurstfs:') ? raw.slice('wurstfs:'.length) : raw;
+    const storedPath = raw.startsWith('pigfs:') ? raw.slice('pigfs:'.length) : raw;
     const target = normalizeDataPath(storedPath);
     const store = await ensureInitializedStore(context);
     const removed = await store.remove(target, { actor: activeActor(context), recursive: false });

@@ -55,6 +55,6 @@ This means a future multi-gigabyte Undercover Wurst does not inherently need to 
 
 Carrier mode is camouflage, not cryptography.
 
-A knowledgeable observer can detect private `wuSt` chunks. Confidentiality must come from WurstKey-protected application content and/or a sealed personal/shared WurstFS realm. Package signatures and WRST integrity checks continue to work exactly as they do for native `.wurst` / `.wrst` files.
+A knowledgeable observer can detect private `wuSt` chunks. Confidentiality must come from WurstKey-protected application content and/or a sealed personal/shared PigFS realm. Package signatures and WRST integrity checks continue to work exactly as they do for native `.wurst` / `.wrst` files.
 
 Re-saving or optimizing the PNG in an image editor may remove unknown/private chunks and therefore destroy the embedded Wurst payload. Treat the carrier image as a binary package, not as an editable source image.

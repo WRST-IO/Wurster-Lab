@@ -5,7 +5,7 @@ import path from 'node:path';
 import { encodeWurst, sha256 } from '../packages/format/src/index.js';
 import { createDesktopPigLinkRuntime, loadPigLinkEntry } from '../runtime/desktop/src/piglink-runtime.mjs';
 import { createDesktopPigletRuntime, loadPigletResource } from '../runtime/desktop/src/piglet-runtime.mjs';
-import { createPigletSurfaceManager } from '../runtime/desktop/src/piglet-surface-runtime.mjs';
+import { createPigletEmbedRuntime } from '../runtime/desktop/src/piglet-embed-runtime.mjs';
 import { createPigletStorageAdapter } from '../runtime/desktop/src/piglet-storage-runtime.mjs';
 import { createDesktopPigstyRuntime } from '../runtime/desktop/src/pigsty-runtime.mjs';
 
@@ -17,7 +17,7 @@ class MockIpc {
 }
 
 const pigletBytes = encodeWurst({
-  manifest: { format: 'wurst/7', id: 'io.wrst.child', name: 'Child Wurst', version: '0.32.0', entry: 'index.html' },
+  manifest: { format: 'wurst/7', id: 'io.wrst.child', name: 'Child Wurst', version: '0.32.0', entry: 'index.html', pigfs: { format: 'wurst/pigfs-policy-1', writable: true, realms: [{ id: 'workspace', mount: '/workspace' }] } },
   files: [{ path: 'index.html', data: Buffer.from('<h1>Child</h1>'), scope: 'app', mime: 'text/html; charset=utf-8' }]
 });
 const childDigest = sha256(pigletBytes);
@@ -62,23 +62,23 @@ const installed = [];
 const storage = {
   async discover() { return installed; },
   async openSource(_context, storedPath) {
-    const item = installed.find((candidate) => candidate.path === storedPath || candidate.ref === `wurstfs:${storedPath}`);
+    const item = installed.find((candidate) => candidate.path === storedPath || candidate.ref === `pigfs:${storedPath}`);
     if (!item) throw new Error('missing stored piglet');
     return { size: pigletBytes.length, async read(offset, length) { return pigletBytes.subarray(offset, offset + length); } };
   },
   async readFile(_context, storedPath) {
-    const item = installed.find((candidate) => candidate.path === storedPath || candidate.ref === `wurstfs:${storedPath}`);
+    const item = installed.find((candidate) => candidate.path === storedPath || candidate.ref === `pigfs:${storedPath}`);
     if (!item) throw new Error('missing stored piglet');
     return pigletBytes;
   },
   async install(_context, bytes, options) {
     assert.equal(sha256(bytes), childDigest, 'Piglet installation must receive exact child bytes');
     const descriptor = {
-      ref: 'wurstfs:/data/workspace/piglets/Child.wurst',
-      id: '/data/workspace/piglets/Child.wurst',
+      ref: 'pigfs:/workspace/piglets/Child.wurst',
+      id: '/workspace/piglets/Child.wurst',
       label: 'Child Wurst',
-      source: 'wurstfs',
-      path: '/data/workspace/piglets/Child.wurst',
+      source: 'pigfs',
+      path: '/workspace/piglets/Child.wurst',
       mutable: true,
       bytes: bytes.length,
       sha256: sha256(bytes),
@@ -91,29 +91,17 @@ const storage = {
   },
   async remove() { installed.length = 0; return true; }
 };
-const opened = [];
-const surfaces = {
-  async open(_context, descriptor, source, options) {
-    const bytes = await source.read(0, source.size);
-    assert.equal(sha256(bytes), childDigest);
-    const surface = { handle: `surface-${opened.length + 1}`, ref: descriptor.ref, bounds: options.bounds ?? null };
-    opened.push(surface);
-    return surface;
-  },
-  list() { return [...opened]; },
-  setBounds(_context, handle, bounds) { return { handle, bounds }; },
-  focus(_context, handle) { return { handle, focused: true }; },
-  async close() { return true; },
-  async closeContext() {},
-  async closeChildContext() { return true; },
-  layoutFillSurfaces() {}
-};
+const persistedSnapshots = [];
+storage.prepareRuntimeSource = async (_context, descriptor, source) => ({ source, path: descriptor.source === 'pigfs' ? descriptor.path : null, expectedSha256: null, materializedFrom: descriptor.ref });
+storage.persistRuntimeSource = async (_context, runtimeSource, bytes) => { persistedSnapshots.push(Buffer.from(bytes)); runtimeSource.expectedSha256 = sha256(bytes); return runtimeSource.expectedSha256; };
+storage.fingerprintRuntimeSource = async (source) => sha256(await source.read(0, source.size));
+const embeds = createPigletEmbedRuntime({ storage });
 const pigletRuntime = createDesktopPigletRuntime({
   ipcMain: pigletIpc,
   assertWurstSender,
   assertCapability: (_context, name) => assert.equal(name, 'piglet'),
   storage,
-  surfaces
+  embeds
 });
 
 const builtinChildren = await pigletIpc.handles.get('wurst:piglet:children')({});
@@ -124,122 +112,60 @@ assert.equal(await pigletIpc.handles.get('wurst:piglet:url')({}, 'builtin:child'
 assert.deepEqual((await loadPigletResource(context, 'child')).data, pigletBytes);
 
 const installedChild = await pigletIpc.handles.get('wurst:piglet:install')({}, 'Child.wurst', pigletBytes, {});
-assert.equal(installedChild.source, 'wurstfs');
+assert.equal(installedChild.source, 'pigfs');
 const allChildren = await pigletRuntime.list(context);
-assert.deepEqual(allChildren.map((item) => item.source), ['builtin', 'wurstfs']);
-assert.equal(await pigletIpc.handles.get('wurst:piglet:url')({}, installedChild.ref), 'wurst://data/workspace/piglets/Child.wurst');
-const openedSurface = await pigletIpc.handles.get('wurst:piglet:open')({}, installedChild.ref, { bounds: { x: 10, y: 20, width: 320, height: 200 } });
-assert.equal(openedSurface.handle, 'surface-1');
-assert.deepEqual((await pigletIpc.handles.get('wurst:piglet:surfaces')({})).map((item) => item.handle), ['surface-1']);
+assert.deepEqual(allChildren.map((item) => item.source), ['builtin', 'pigfs']);
+assert.equal(await pigletIpc.handles.get('wurst:piglet:url')({}, installedChild.ref), 'wurst://pigfs/workspace/piglets/Child.wurst');
+const openedEmbed = await pigletIpc.handles.get('wurst:piglet:embed-open')({}, installedChild.ref);
+assert.match(openedEmbed.handle, /^embed-/);
+assert.equal(openedEmbed.size, pigletBytes.length);
+const slice = await pigletIpc.handles.get('wurst:piglet:embed-read')({}, openedEmbed.handle, 0, 24);
+assert.equal(slice.length, 24, 'embed source reads must be ranged');
+await pigletIpc.handles.get('wurst:piglet:embed-persist')({}, openedEmbed.handle, pigletBytes);
+assert.equal(persistedSnapshots.length, 1);
+assert.equal(await pigletIpc.handles.get('wurst:piglet:embed-close')({}, openedEmbed.handle), true);
 assert.equal(await pigletIpc.handles.get('wurst:piglet:remove')({}, installedChild.ref), true);
 
-let attachedView = null;
-const boundContexts = new Map();
-const hostWindow = {
-  isDestroyed: () => false,
-  getContentBounds: () => ({ x: 0, y: 0, width: 800, height: 600 }),
-  contentView: {
-    addChildView(view) { attachedView = view; },
-    removeChildView(view) { if (attachedView === view) attachedView = null; }
-  }
-};
-function mockView() {
-  let bounds = { x: 0, y: 0, width: 1, height: 1 };
-  let focused = false;
-  let closed = false;
-  const webContents = {
-    id: 77,
-    setWindowOpenHandler() {},
-    on() {},
-    async loadURL(url) { assert.equal(url, 'wurst://app/index.html'); },
-    isDestroyed: () => closed,
-    isFocused: () => focused,
-    focus() { focused = true; },
-    close() { closed = true; }
-  };
-  return { webContents, setBounds(value) { bounds = { ...value }; }, getBounds: () => ({ ...bounds }) };
-}
-const surfaceManager = createPigletSurfaceManager({
-  getHostWindow: () => hostWindow,
-  createView: () => mockView(),
-  sessionForChild: (_manifest, key) => ({ key }),
-  configureSession: (_session, childContext) => assert.equal(childContext.readOnlyPackage, false),
-  authorizePackage: async () => ({ publisherTrust: { kind: 'unsigned' } }),
-  bindContext: (webContents, childContext) => boundContexts.set(webContents.id, childContext),
-  unbindContext: (webContents) => boundContexts.delete(webContents.id),
-  preload: '/mock/wurst-preload.cjs',
-  storage: {
-    async prepareRuntimeSource(_context, _descriptor, source) { return { source, path: null, expectedSha256: childDigest, materializedFrom: 'builtin:child' }; },
-    async fingerprintRuntimeSource() { return childDigest; },
-    async persistRuntimeSource() { throw new Error('unexpected persistence'); }
-  },
-  loadSealedBootstrap: async () => '<html></html>',
-  destroyProtectionHandle: async () => false,
-  cleanupContextUi: () => {},
-  layoutContextUi: () => {}
-});
-const realSurface = await surfaceManager.open(context, {
-  ref: 'builtin:child',
-  application: { id: 'io.wrst.child', name: 'Child Wurst', version: '0.32.0' },
-  signature: { status: 'unsigned' }
-}, { size: pigletBytes.length, async read(offset, length) { return pigletBytes.subarray(offset, offset + length); } }, { bounds: { x: 50, y: 60, width: 400, height: 300 } });
-assert.deepEqual(realSurface.bounds, { x: 50, y: 60, width: 400, height: 300 });
-assert.ok(attachedView, 'Piglet open must attach a managed child view to the host window');
-assert.equal(boundContexts.get(77).manifest.id, 'io.wrst.child');
-assert.equal(boundContexts.get(77).parentContext, context);
-assert.equal(boundContexts.get(77).filePath, null, 'Piglet open must stay on the range source until a write/protection path needs local backing');
-assert.equal(boundContexts.get(77).pigletBacking, null, 'Piglet open must not eagerly materialize the whole child Wurst');
-assert.equal((await surfaceManager.focus(context, realSurface.handle)).focused, true);
-assert.deepEqual(surfaceManager.setBounds(context, realSurface.handle, { x: 10, y: 15, width: 200, height: 150 }).bounds, { x: 10, y: 15, width: 200, height: 150 });
-assert.equal(await surfaceManager.close(context, realSurface.handle), true);
-assert.equal(attachedView, null);
-assert.equal(boundContexts.size, 0);
-
 const storedContext = {
-  manifest: { data: { format: 'wurst/data-realms-1', writable: true, realms: [{ id: 'workspace' }] } },
+  manifest: { pigfs: { format: 'wurst/pigfs-policy-1', writable: true, realms: [{ id: 'workspace', mount: '/workspace' }] } },
   reader: {
-    wurstFsRoot: { format: 'wurst/fs-2' },
-    async fsList(target) {
-      if (target === 'data/workspace') return [{ path: 'data/workspace/apps', type: 'directory' }];
-      if (target === 'data/workspace/apps') return [{ path: 'data/workspace/apps/Existing.wurst', type: 'file', size: pigletBytes.length }];
+    pigFsRoot: { format: 'wurst/pigfs-1' },
+    async pigFsList(target) {
+      if (target === '/workspace') return [{ path: '/workspace/apps', type: 'directory' }];
+      if (target === '/workspace/apps') return [{ path: '/workspace/apps/Existing.wurst', type: 'file', size: pigletBytes.length }];
       return [];
     },
-    async fsStat(target) {
-      if (target === 'data/workspace/apps/Existing.wurst') return { path: target, type: 'file', size: pigletBytes.length };
+    async pigFsStat(target) {
+      if (target === '/workspace/apps/Existing.wurst') return { path: target, type: 'file', size: pigletBytes.length };
       return null;
     },
-    async fsReadRange(target, offset, length) {
-      assert.equal(target, 'data/workspace/apps/Existing.wurst');
+    async pigFsReadRange(target, offset, length) {
+      assert.equal(target, '/workspace/apps/Existing.wurst');
       return { data: pigletBytes.subarray(offset, offset + length) };
     }
   }
 };
 const persistedChunks = [];
 const store = {
-  async mkdir(target) { assert.equal(target, 'data/workspace/piglets'); },
-  beginWrite(target, options) { assert.equal(target, 'data/workspace/piglets/Drop.wurst'); assert.equal(options.mime, 'application/vnd.wrst.wurst'); return 'write-1'; },
-  async writeChunk(id, chunk) { assert.equal(id, 'write-1'); await Promise.resolve(); persistedChunks.push(Buffer.from(chunk)); },
+  async mkdir(target) { assert.equal(target, '/workspace/piglets'); },
+  beginWrite(target, options) { assert.equal(target, '/workspace/piglets/Drop.wurst'); assert.equal(options.mime, 'application/vnd.wrst.wurst'); return 'write-1'; },
+  async writeChunk(id, chunk) { assert.equal(id, 'write-1'); persistedChunks.push(Buffer.from(chunk)); },
   async commitWrite(id) { assert.equal(id, 'write-1'); },
   abortWrite() { throw new Error('unexpected abort'); },
   async remove() { return true; }
 };
 const storageAdapter = createPigletStorageAdapter({
   realmDataMode: () => true,
-  realmRuntimeSummary: () => [{ id: 'workspace', governance: 'ordinary', initialized: true, locked: false, capabilities: { read: true, write: true } }],
-  readOptions: async () => ({}),
-  ensureInitializedStore: async () => store,
-  activeActor: () => null,
-  refreshContext: async () => {},
-  scheduleHygiene: () => {},
-  normalizeDataPath: (value) => String(value).replace(/^\/+/, ''),
-  waitForMaintenance: async () => {}
+  realmRuntimeSummary: () => [{ id: 'workspace', mount: '/workspace', governance: 'ordinary', initialized: true, locked: false, capabilities: { read: true, write: true } }],
+  readOptions: async () => ({}), ensureInitializedStore: async () => store, activeActor: () => null,
+  refreshContext: async () => {}, scheduleHygiene: () => {}, normalizeDataPath: (value) => String(value), waitForMaintenance: async () => {}
 });
 const discoveredStored = await storageAdapter.discover(storedContext);
 assert.equal(discoveredStored.length, 1);
-assert.equal(discoveredStored[0].ref, 'wurstfs:/data/workspace/apps/Existing.wurst');
+assert.equal(discoveredStored[0].ref, 'pigfs:/workspace/apps/Existing.wurst');
 const persisted = await storageAdapter.install(storedContext, pigletBytes, { name: 'Drop.wurst' });
-assert.equal(persisted.ref, 'wurstfs:/data/workspace/piglets/Drop.wurst');
-assert.equal(sha256(Buffer.concat(persistedChunks)), childDigest, 'WurstFS Piglet install must persist the original package bytes');
+assert.equal(persisted.ref, 'pigfs:/workspace/piglets/Drop.wurst');
+assert.equal(sha256(Buffer.concat(persistedChunks)), childDigest, 'PigFS Piglet install must persist the original package bytes');
 
 const pigLinkIpc = new MockIpc();
 let sent = null;
@@ -279,4 +205,4 @@ try {
   await fs.rm(temp, { recursive: true, force: true });
 }
 
-console.log('✓ Desktop Piglet discovers immutable + WurstFS children, preserves bytes and exposes managed surface lifecycle');
+console.log('✓ Desktop Piglet discovers immutable + PigFS children, preserves bytes and exposes range-backed universal embed lifecycle');

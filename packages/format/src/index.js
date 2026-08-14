@@ -10,33 +10,34 @@ import {
   openPngWurstSource
 } from './png-carrier.js';
 import {
-  WURST_FS_DEFAULT_CHUNK_SIZE,
-  WURST_FS_RECORD,
+  PIG_FS_DEFAULT_CHUNK_SIZE,
+  PIG_FS_RECORD,
   decodeLatestFsRootFromBuffer,
   loadLatestFsRoot,
   readFsRecord
-} from './wurst-fs-records.js';
+} from './pig-fs-records.js';
 import {
-  WURST_FS_V2_FORMAT,
-  WurstFs2Store,
-  listWurstFs2Directory,
-  loadWurstFs2RealmCatalog,
-  loadWurstFs2RealmChunks,
-  measureWurstFs2Storage,
-  normalizeWurstFsRealmId,
-  readWurstFs2Range,
-  statWurstFs2Entry,
-  verifyWurstFs2History,
-  computeWurstFs2StateHash,
-  computeWurstFs2CommitHash,
-  WURST_FS_V2_HISTORY_NONE,
-  wurstFsRealmGovernance
-} from './wurst-fs-v2.js';
+  PIG_FS_FORMAT,
+  PigFsStore,
+  listPigFsDirectory,
+  loadPigFsRealmCatalog,
+  loadPigFsRealmChunks,
+  measurePigFsStorage,
+  normalizePigFsRealmId,
+  normalizePigFsMount,
+  readPigFsRange,
+  statPigFsEntry,
+  verifyPigFsHistory,
+  computePigFsStateHash,
+  computePigFsCommitHash,
+  PIG_FS_HISTORY_NONE,
+  pigFsRealmGovernance
+} from './pig-fs.js';
 
 export { PNG_SIGNATURE, embedWurstInPng, extractWurstFromPng, isPngBuffer } from './png-carrier.js';
-export * from './wurst-fs-records.js';
+export * from './pig-fs-records.js';
 export * from './wurst-identity.js';
-export * from './wurst-fs-v2.js';
+export * from './pig-fs.js';
 
 export const MAGIC = Buffer.from('WRST');
 export const FORMAT_VERSION = 7;
@@ -44,7 +45,7 @@ export const HEADER_SIZE = 24;
 export const SIGNATURE_PATH = '__wurst/signature.json';
 export const SEALED_APP_INDEX_PATH = '__wurst/sealed-app/index.json';
 export const DEFAULT_INTEGRITY_CHUNK_SIZE = 4 * 1024 * 1024;
-export const DEFAULT_PROTECTED_CHUNK_SIZE = WURST_FS_DEFAULT_CHUNK_SIZE;
+export const DEFAULT_PROTECTED_CHUNK_SIZE = PIG_FS_DEFAULT_CHUNK_SIZE;
 
 const MIME = new Map([
   ['.html', 'text/html; charset=utf-8'],
@@ -242,8 +243,8 @@ export function classifyRisk(manifest) {
     reasons.push({ level: next, reason });
   };
 
-  if (manifest?.data?.writable) {
-    raise('yellow', 'Mutable WurstFS data can modify the .wurst file itself.');
+  if (manifest?.pigfs?.writable) {
+    raise('yellow', 'Mutable PigFS data can modify the .wurst file itself.');
   }
   if (manifest?.piglet?.children?.length) {
     raise('yellow', `Piglet embeds ${manifest.piglet.children.length} child Wurst(s).`);
@@ -322,35 +323,40 @@ function chunkIntegrity(bytes, chunkSize = DEFAULT_INTEGRITY_CHUNK_SIZE) {
 function assertWrst7Manifest(manifest) {
   if (!manifest || typeof manifest !== 'object') throw new Error('manifest must be an object');
   if (manifest.format !== 'wurst/7') throw new Error('WRST v7 requires manifest.format = "wurst/7"');
-  if (Object.hasOwn(manifest, 'vault')) throw new Error('WRST v7 no longer supports vault; mutable data uses data: { format: "wurst/data-realms-1" }');
-  if (manifest.data != null) {
-    if (typeof manifest.data !== 'object' || manifest.data.format !== 'wurst/data-realms-1') throw new Error('WRST v7 data policy must use wurst/data-realms-1');
-    if (manifest.data.writable !== true) throw new Error('WRST v7 data policy requires writable: true');
-    if (manifest.data.realms != null) {
-      if (!Array.isArray(manifest.data.realms) || manifest.data.realms.length > 32) throw new Error('WRST v7 data.realms must be an array of at most 32 realm templates');
+  if (Object.hasOwn(manifest, 'vault')) throw new Error('WRST v7 no longer supports vault; mutable data uses pigfs: { format: "wurst/pigfs-policy-1" }');
+  if (manifest.pigfs != null) {
+    if (typeof manifest.pigfs !== 'object' || manifest.pigfs.format !== 'wurst/pigfs-policy-1') throw new Error('WRST v7 PigFS policy must use wurst/pigfs-policy-1');
+    if (manifest.pigfs.writable !== true) throw new Error('WRST v7 PigFS policy requires writable: true');
+    if (manifest.pigfs.realms != null) {
+      if (!Array.isArray(manifest.pigfs.realms) || manifest.pigfs.realms.length > 32) throw new Error('WRST v7 pigfs.realms must be an array of at most 32 realm templates');
       const ids = new Set();
-      for (const rawRealm of manifest.data.realms) {
-        if (!rawRealm || typeof rawRealm !== 'object') throw new Error('WRST v7 data realm template must be an object');
-        if (Object.hasOwn(rawRealm, 'mode')) throw new Error('WRST v7 data realm mode was removed; omit governance for ordinary storage or use governance: personal/shared');
-        const id = normalizeWurstFsRealmId(rawRealm.id);
-        if (ids.has(id)) throw new Error(`Duplicate WRST v7 data realm template ${id}`);
+      const mounts = [];
+      for (const rawRealm of manifest.pigfs.realms) {
+        if (!rawRealm || typeof rawRealm !== 'object') throw new Error('WRST v7 PigFS realm template must be an object');
+        if (Object.hasOwn(rawRealm, 'mode')) throw new Error('WRST v7 PigFS realm mode was removed; omit governance for ordinary storage or use governance: personal/shared');
+        const id = normalizePigFsRealmId(rawRealm.id);
+        if (ids.has(id)) throw new Error(`Duplicate WRST v7 PigFS realm template ${id}`);
         ids.add(id);
+        const mount = normalizePigFsMount(rawRealm.mount, id);
+        if (mounts.some((existing) => mount === existing || mount.startsWith(`${existing}/`) || existing.startsWith(`${mount}/`))) throw new Error(`Overlapping WRST v7 PigFS realm mount ${mount}`);
+        mounts.push(mount);
+        if (rawRealm.quotaBytes != null && (!Number.isSafeInteger(Number(rawRealm.quotaBytes)) || Number(rawRealm.quotaBytes) <= 0)) throw new Error(`Invalid WRST v7 PigFS quota for realm ${id}`);
         const governance = rawRealm.governance == null ? '' : String(rawRealm.governance).trim().toLowerCase();
-        if (governance && !['personal', 'shared'].includes(governance)) throw new Error(`Unsupported WRST v7 data realm governance ${governance}`);
+        if (governance && !['personal', 'shared'].includes(governance)) throw new Error(`Unsupported WRST v7 PigFS realm governance ${governance}`);
         const audit = String(rawRealm.audit ?? 'none').trim().toLowerCase();
-        if (!['none', 'signed'].includes(audit)) throw new Error(`Unsupported WRST v7 data realm audit mode ${audit}`);
-        if (governance !== 'shared' && audit !== 'none') throw new Error('Only shared WRST v7 data realms can enable signed audit history');
+        if (!['none', 'signed'].includes(audit)) throw new Error(`Unsupported WRST v7 PigFS realm audit mode ${audit}`);
+        if (governance !== 'shared' && audit !== 'none') throw new Error('Only shared WRST v7 PigFS realms can enable signed audit history');
 
         if (!governance) {
           for (const field of ['protection', 'read', 'write']) {
-            if (Object.hasOwn(rawRealm, field)) throw new Error(`Ordinary WRST v7 data realm ${id} must omit ${field}; ordinary storage is public/open by definition`);
+            if (Object.hasOwn(rawRealm, field)) throw new Error(`Ordinary WRST v7 PigFS realm ${id} must omit ${field}; ordinary storage is public/open by definition`);
           }
           continue;
         }
 
         if (governance === 'personal') {
           for (const field of ['protection', 'read', 'write']) {
-            if (Object.hasOwn(rawRealm, field)) throw new Error(`Personal WRST v7 data realm ${id} must omit ${field}; personal storage is sealed owner-only by definition`);
+            if (Object.hasOwn(rawRealm, field)) throw new Error(`Personal WRST v7 PigFS realm ${id} must omit ${field}; personal storage is sealed owner-only by definition`);
           }
           continue;
         }
@@ -405,8 +411,8 @@ function assertWrst7Manifest(manifest) {
 
 function assertFsPolicyMatchesRoot(manifest, root) {
   if (!root) return;
-  if (root.format !== WURST_FS_V2_FORMAT) throw new Error(`Unsupported WurstFS root format ${root.format ?? 'missing'}`);
-  if (manifest.data?.format !== 'wurst/data-realms-1') throw new Error('WurstFS data exists but this Wurst declares no data-realms policy');
+  if (root.format !== PIG_FS_FORMAT) throw new Error(`Unsupported PigFS root format ${root.format ?? 'missing'}`);
+  if (manifest.pigfs?.format !== 'wurst/pigfs-policy-1') throw new Error('PigFS data exists but this Wurst declares no PigFS policy');
 }
 
 export function encodeWurst({ manifest, files }) {
@@ -419,8 +425,8 @@ export function encodeWurst({ manifest, files }) {
 
   for (const file of files) {
     const normalized = normalizeFileDescriptor(file);
-    if (normalized.scope === 'data') {
-      throw new Error('Mutable WurstFS data is runtime state. Build immutable app/meta/PigLink resources, then initialize data realms through WurstFS.');
+    if (normalized.scope === 'pigfs') {
+      throw new Error('Mutable PigFS data is runtime state. Build immutable app/meta/PigLink resources, then initialize PigFS realms through PigFS.');
     }
     if (!['app', 'piglink', 'piglet', 'meta', 'signature'].includes(normalized.scope)) throw new Error(`Unsupported immutable Wurst scope: ${normalized.scope}`);
     const canonicalPath = normalized.path;
@@ -457,7 +463,7 @@ export function encodeWurst({ manifest, files }) {
   header.writeUInt16LE(0, 6);
   header.writeUInt32LE(manifestBytes.length, 8);
   header.writeUInt32LE(indexBytes.length, 12);
-  // v7 length is the immutable payload only. Mutable WurstFS records may follow it.
+  // v7 length is the immutable payload only. Mutable PigFS records may follow it.
   header.writeBigUInt64LE(BigInt(payload.length), 16);
 
   const base = Buffer.concat([header, manifestBytes, indexBytes, payload]);
@@ -511,8 +517,8 @@ export function decodeWurst(buffer, { verify = true } = {}) {
     });
   }
 
-  const { root: wurstFsRoot, commitOffset: wurstFsCommitOffset } = decodeLatestFsRootFromBuffer(bytes, baseLength, WURST_FS_V2_FORMAT);
-  assertFsPolicyMatchesRoot(manifest, wurstFsRoot);
+  const { root: pigFsRoot, commitOffset: pigFsCommitOffset } = decodeLatestFsRootFromBuffer(bytes, baseLength, PIG_FS_FORMAT);
+  assertFsPolicyMatchesRoot(manifest, pigFsRoot);
 
   return {
     version,
@@ -520,8 +526,8 @@ export function decodeWurst(buffer, { verify = true } = {}) {
     manifest,
     index,
     baseLength,
-    wurstFsRoot,
-    wurstFsCommitOffset,
+    pigFsRoot,
+    pigFsCommitOffset,
     raw: bytes,
     get(filePath) {
       return fileMap.get(normalizeWurstPath(filePath));
@@ -605,8 +611,8 @@ export async function openWurstFile(filePath) {
       entries.set(safePath, { ...rawEntry, path: safePath, scope: rawEntry.scope ?? 'app', virtualOffset });
     }
 
-    const { root: wurstFsRoot, commitOffset: wurstFsCommitOffset } = await loadLatestFsRoot(source, baseLength, WURST_FS_V2_FORMAT);
-    assertFsPolicyMatchesRoot(manifest, wurstFsRoot);
+    const { root: pigFsRoot, commitOffset: pigFsCommitOffset } = await loadLatestFsRoot(source, baseLength, PIG_FS_FORMAT);
+    assertFsPolicyMatchesRoot(manifest, pigFsRoot);
 
     return {
       version,
@@ -614,8 +620,8 @@ export async function openWurstFile(filePath) {
       manifest,
       index,
       baseLength,
-      wurstFsRoot,
-      wurstFsCommitOffset,
+      pigFsRoot,
+      pigFsCommitOffset,
       source,
       size: stat.size,
       wurstSize: source.size,
@@ -631,25 +637,25 @@ export async function openWurstFile(filePath) {
         const entry = entries.get(normalizeWurstPath(resourcePath));
         return entry ? { ...entry } : undefined;
       },
-      async fsStat(fsPath, options = {}) {
-        return this.wurstFsRoot ? statWurstFs2Entry(source, this.wurstFsRoot, fsPath, options) : null;
+      async pigFsStat(fsPath, options = {}) {
+        return this.pigFsRoot ? statPigFsEntry(source, this.pigFsRoot, fsPath, options) : null;
       },
-      async fsList(fsPath = '/data', options = {}) {
-        return this.wurstFsRoot ? listWurstFs2Directory(source, this.wurstFsRoot, fsPath, options) : [];
+      async pigFsList(fsPath = '/data', options = {}) {
+        return this.pigFsRoot ? listPigFsDirectory(source, this.pigFsRoot, fsPath, options) : [];
       },
-      async fsReadRange(fsPath, offset = 0, length = null, options = {}) {
-        return this.wurstFsRoot ? readWurstFs2Range(source, this.wurstFsRoot, fsPath, offset, length, options) : null;
+      async pigFsReadRange(fsPath, offset = 0, length = null, options = {}) {
+        return this.pigFsRoot ? readPigFsRange(source, this.pigFsRoot, fsPath, offset, length, options) : null;
       },
-      async fsHistory() {
-        return this.wurstFsRoot ? verifyWurstFs2History(source, this.baseLength) : { valid: true, format: WURST_FS_V2_FORMAT, historyMode: WURST_FS_V2_HISTORY_NONE, root: null, commitOffset: null, commits: [] };
+      async pigFsHistory() {
+        return this.pigFsRoot ? verifyPigFsHistory(source, this.baseLength) : { valid: true, format: PIG_FS_FORMAT, historyMode: PIG_FS_HISTORY_NONE, root: null, commitOffset: null, commits: [] };
       },
       async refreshWurstFs() {
-        const loaded = await loadLatestFsRoot(source, baseLength, WURST_FS_V2_FORMAT);
+        const loaded = await loadLatestFsRoot(source, baseLength, PIG_FS_FORMAT);
         assertFsPolicyMatchesRoot(manifest, loaded.root);
-        this.wurstFsRoot = loaded.root;
-        this.wurstFsCommitOffset = loaded.commitOffset;
+        this.pigFsRoot = loaded.root;
+        this.pigFsCommitOffset = loaded.commitOffset;
         this.wurstSize = source.size;
-        return { root: this.wurstFsRoot, commitOffset: this.wurstFsCommitOffset };
+        return { root: this.pigFsRoot, commitOffset: this.pigFsCommitOffset };
       },
       async read(resourcePath, { verify = true } = {}) {
         if (closed) throw new Error('Wurst file reader is closed');
@@ -1731,29 +1737,29 @@ export function descriptorsFromPackage(pkg) {
   }));
 }
 
-/** Open the current multi-realm WurstFS writer for a local raw Wurst. */
-export async function openLocalWurstFsStore(filePath, reader) {
+/** Open the current multi-realm PigFS writer for a local raw Wurst. */
+export async function openLocalPigFsStore(filePath, reader) {
   if (!reader?.source || !Number.isSafeInteger(reader.baseLength)) throw new Error('A live Wurst reader is required');
-  if (reader.carrier) throw new Error('Incremental WurstFS v2 writes are not yet available for carrier Wursts');
-  if (reader.manifest?.data?.format !== 'wurst/data-realms-1' || reader.manifest.data.writable !== true) throw new Error('This Wurst does not declare writable WurstFS v2 realms');
-  if (reader.wurstFsRoot && reader.wurstFsRoot.format !== WURST_FS_V2_FORMAT) throw new Error(`Unsupported WurstFS root format ${reader.wurstFsRoot.format}`);
+  if (reader.carrier) throw new Error('Incremental PigFS writes are not yet available for carrier Wursts');
+  if (reader.manifest?.pigfs?.format !== 'wurst/pigfs-policy-1' || reader.manifest.pigfs.writable !== true) throw new Error('This Wurst does not declare writable PigFS realms');
+  if (reader.pigFsRoot && reader.pigFsRoot.format !== PIG_FS_FORMAT) throw new Error(`Unsupported PigFS root format ${reader.pigFsRoot.format}`);
   const appendHandle = await fs.open(filePath, 'a');
   let closed = false;
-  const store = new WurstFs2Store({
+  const store = new PigFsStore({
     source: reader.source,
     baseOffset: reader.baseLength,
     append: async (bytes) => {
-      if (closed) throw new Error('WurstFS v2 writer is closed');
+      if (closed) throw new Error('PigFS writer is closed');
       const data = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
       let offset = 0;
       while (offset < data.length) {
         const { bytesWritten } = await appendHandle.write(data, offset, data.length - offset, null);
-        if (bytesWritten <= 0) throw new Error('Could not append WurstFS v2 record');
+        if (bytesWritten <= 0) throw new Error('Could not append PigFS record');
         offset += bytesWritten;
       }
     },
     sync: async () => {
-      if (closed) throw new Error('WurstFS v2 writer is closed');
+      if (closed) throw new Error('PigFS writer is closed');
       await appendHandle.sync();
     }
   });
@@ -1768,9 +1774,9 @@ export async function openLocalWurstFsStore(filePath, reader) {
 }
 
 /**
- * Materialize the current live WurstFS generation into a fresh raw WRST file.
+ * Materialize the current live PigFS generation into a fresh raw WRST file.
  *
- * The immutable application bytes are copied byte-for-byte. Only live WurstFS
+ * The immutable application bytes are copied byte-for-byte. Only live PigFS
  * DATA records are carried forward and all catalog/map records are rebuilt with
  * new physical offsets. Sealed DATA chunks stay ciphertext; only sealed metadata
  * pages are opened/resealed because their record pointers change.
@@ -1825,21 +1831,21 @@ export async function writeCompactedWurstFile(destination, reader, options = {})
       const start = tempSource.size;
       while (written < data.length) {
         const step = await target.write(data, written, data.length - written, start + written);
-        if (step.bytesWritten <= 0) throw new Error('Could not write compacted WurstFS record');
+        if (step.bytesWritten <= 0) throw new Error('Could not write compacted PigFS record');
         written += step.bytesWritten;
       }
       tempSource.size += data.length;
     };
 
-    const root = reader.wurstFsRoot;
+    const root = reader.pigFsRoot;
     if (root) {
-      if ((root.historyMode ?? 'integrity') !== WURST_FS_V2_HISTORY_NONE) {
-        const error = new Error('WurstFS v2 shared/integrity history is not compacted as ordinary CRUD data');
-        error.code = 'WURST_FS_HISTORY_RETAINED';
+      if ((root.historyMode ?? 'integrity') !== PIG_FS_HISTORY_NONE) {
+        const error = new Error('PigFS shared/integrity history is not compacted as ordinary CRUD data');
+        error.code = 'PIG_FS_HISTORY_RETAINED';
         throw error;
       }
       const realmKeys = options.realmKeys ?? new Map();
-      const store = new WurstFs2Store({
+      const store = new PigFsStore({
         source: tempSource,
         baseOffset: reader.baseLength,
         append,
@@ -1849,9 +1855,9 @@ export async function writeCompactedWurstFile(destination, reader, options = {})
       const nextRoot = structuredClone(root);
       for (const [realmId, realm] of Object.entries(root.realms ?? {})) {
         const realmKey = realm.protection === 'sealed' ? realmKeys.get?.(realmId) ?? null : null;
-        const unclaimedPersonal = realm.protection === 'sealed' && wurstFsRealmGovernance(realm) === 'personal' && realm.claimed === false && !(realm.catalogPages?.length);
+        const unclaimedPersonal = realm.protection === 'sealed' && pigFsRealmGovernance(realm) === 'personal' && realm.claimed === false && !(realm.catalogPages?.length);
         if (realm.protection === 'sealed' && !realmKey && !unclaimedPersonal) {
-          const error = new Error(`WurstFS realm ${realmId} must be unlocked before compaction`);
+          const error = new Error(`PigFS realm ${realmId} must be unlocked before compaction`);
           error.code = 'WURST_AUTH_REQUIRED';
           throw error;
         }
@@ -1860,16 +1866,16 @@ export async function writeCompactedWurstFile(destination, reader, options = {})
           continue;
         }
         if (realmKey) store.realmKeys.set(realmId, Buffer.from(realmKey));
-        const entries = await loadWurstFs2RealmCatalog(reader.source, realm, { realmKey });
+        const entries = await loadPigFsRealmCatalog(reader.source, realm, { realmKey });
         const changedMaps = new Map();
         for (const [entryPath, entry] of entries) {
           if (entry.type !== 'file') continue;
-          const chunks = await loadWurstFs2RealmChunks(reader.source, realm, entry, realmKey);
+          const chunks = await loadPigFsRealmChunks(reader.source, realm, entry, realmKey);
           const compactedChunks = [];
           for (const chunk of chunks) {
             const record = await readFsRecord(reader.source, chunk.recordOffset);
-            if (record.type !== WURST_FS_RECORD.DATA) throw new Error('WurstFS v2 chunk points to non-data record during compaction');
-            const appended = await store.appendRecord(WURST_FS_RECORD.DATA, record.payload, 0);
+            if (record.type !== PIG_FS_RECORD.DATA) throw new Error('PigFS chunk points to non-data record during compaction');
+            const appended = await store.appendRecord(PIG_FS_RECORD.DATA, record.payload, 0);
             compactedChunks.push({ ...structuredClone(chunk), recordOffset: appended.recordStart, storedLength: record.payload.length });
           }
           entry.mapPages = [];
@@ -1944,15 +1950,15 @@ export async function openWurstRangeSource(source, { close = async () => {}, phy
     if (virtualOffset + rawEntry.length > baseLength) throw new Error(`Invalid range for ${safePath}`);
     entries.set(safePath, { ...rawEntry, path: safePath, scope: rawEntry.scope ?? 'app', virtualOffset });
   }
-  const loadedFs = await loadLatestFsRoot(source, baseLength, WURST_FS_V2_FORMAT);
+  const loadedFs = await loadLatestFsRoot(source, baseLength, PIG_FS_FORMAT);
   assertFsPolicyMatchesRoot(manifest, loadedFs.root);
   const reader = {
     version, flags, manifest, index, baseLength, payloadStart, source,
     size: physicalSize ?? source.size,
     wurstSize: source.size,
     carrier,
-    wurstFsRoot: loadedFs.root,
-    wurstFsCommitOffset: loadedFs.commitOffset,
+    pigFsRoot: loadedFs.root,
+    pigFsCommitOffset: loadedFs.commitOffset,
     entries: () => [...entries.values()].map((entry) => ({ ...entry })),
     has: (resourcePath) => entries.has(normalizeWurstPath(resourcePath)),
     entry: (resourcePath) => {
@@ -1992,10 +1998,10 @@ export async function openWurstRangeSource(source, { close = async () => {}, phy
       }
       return { ...entry, range: { offset: start, length: total, total: entry.length }, data: Buffer.concat(pieces, total) };
     },
-    fsStat(fsPath, options = {}) { return this.wurstFsRoot ? statWurstFs2Entry(source, this.wurstFsRoot, fsPath, options) : null; },
-    fsList(fsPath = '/data', options = {}) { return this.wurstFsRoot ? listWurstFs2Directory(source, this.wurstFsRoot, fsPath, options) : []; },
-    fsReadRange(fsPath, offset = 0, length = null, options = {}) { return this.wurstFsRoot ? readWurstFs2Range(source, this.wurstFsRoot, fsPath, offset, length, options) : null; },
-    fsHistory() { return this.wurstFsRoot ? verifyWurstFs2History(source, this.baseLength) : Promise.resolve({ valid: true, format: WURST_FS_V2_FORMAT, historyMode: WURST_FS_V2_HISTORY_NONE, root: null, commitOffset: null, commits: [] }); },
+    pigFsStat(fsPath, options = {}) { return this.pigFsRoot ? statPigFsEntry(source, this.pigFsRoot, fsPath, options) : null; },
+    pigFsList(fsPath = '/data', options = {}) { return this.pigFsRoot ? listPigFsDirectory(source, this.pigFsRoot, fsPath, options) : []; },
+    pigFsReadRange(fsPath, offset = 0, length = null, options = {}) { return this.pigFsRoot ? readPigFsRange(source, this.pigFsRoot, fsPath, offset, length, options) : null; },
+    pigFsHistory() { return this.pigFsRoot ? verifyPigFsHistory(source, this.baseLength) : Promise.resolve({ valid: true, format: PIG_FS_FORMAT, historyMode: PIG_FS_HISTORY_NONE, root: null, commitOffset: null, commits: [] }); },
     async close() { if (!closed) { closed = true; await close(); } }
   };
   return reader;

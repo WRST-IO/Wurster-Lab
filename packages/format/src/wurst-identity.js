@@ -258,7 +258,7 @@ export function unwrapKeyForWursterIdentity(wrap, materialOrMeatphrase, { realmI
     decipher.setAAD(Buffer.from(realmWrapAad(expectedRealm, wrap.recipient, wrap.ephemeralPublicKeySpki)));
     decipher.setAuthTag(Buffer.from(wrap.tag, 'base64'));
     const plain = Buffer.concat([decipher.update(Buffer.from(wrap.ciphertext, 'base64')), decipher.final()]);
-    if (plain.length !== 32) throw new Error('Invalid unwrapped WurstFS realm key length');
+    if (plain.length !== 32) throw new Error('Invalid unwrapped PigFS realm key length');
     return plain;
   } catch {
     throw new Error('Wurster Identity could not unwrap this realm key');

@@ -12,14 +12,14 @@ const css = await fs.readFile(path.join(appRoot, 'src', 'styles.css'), 'utf8');
 const tool = await fs.readFile(path.join(root, 'tools', 'wurster-lab-wurst.mjs'), 'utf8');
 
 assert.equal(manifest.id, 'io.wrst.wurster-lab');
-assert.equal(manifest.data.format, 'wurst/data-realms-1');
+assert.equal(manifest.pigfs.format, 'wurst/pigfs-policy-1');
 assert.equal(manifest.capabilities['files.open'], true);
 assert.equal(manifest.capabilities['files.save'], true);
-assert.deepEqual(manifest.data.realms.map((realm) => realm.id), ['workspace', 'lab', 'operator']);
-assert.equal(Object.hasOwn(manifest.data.realms[0], 'mode'), false);
-assert.equal(Object.hasOwn(manifest.data.realms[0], 'governance'), false);
-assert.equal(manifest.data.realms[2].governance, 'personal');
-assert.equal(Object.hasOwn(manifest.data.realms[2], 'mode'), false);
+assert.deepEqual(manifest.pigfs.realms.map((realm) => realm.id), ['workspace', 'lab', 'operator']);
+assert.equal(Object.hasOwn(manifest.pigfs.realms[0], 'mode'), false);
+assert.equal(Object.hasOwn(manifest.pigfs.realms[0], 'governance'), false);
+assert.equal(manifest.pigfs.realms[2].governance, 'personal');
+assert.equal(Object.hasOwn(manifest.pigfs.realms[2], 'mode'), false);
 
 for (const name of ['root.json', 'issuer.json', 'trust-bundle.json', 'issuer.wurstissuer']) assert.match(app, new RegExp(name.replaceAll('.', '\\.')));
 assert.match(app, /verifyOperatorMaterial/);

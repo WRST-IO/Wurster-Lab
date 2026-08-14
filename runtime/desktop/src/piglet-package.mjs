@@ -62,8 +62,8 @@ export async function inspectPigletSource(source, metadata = {}) {
         version: reader.manifest?.version ?? null
       },
       data: {
-        format: reader.manifest?.data?.format ?? null,
-        writable: reader.manifest?.data?.writable === true
+        format: reader.manifest?.pigfs?.format ?? null,
+        writable: reader.manifest?.pigfs?.writable === true
       },
       protection: {
         application: reader.manifest?.application?.protection ?? 'public',

@@ -6,7 +6,7 @@ order: 4
 ---
 # Personal data
 
-Personal WurstFS realms are for the simple case: **this mutable data belongs to one Wurster Identity and is not shareable**.
+Personal PigFS realms are for the simple case: **this mutable data belongs to one Wurster Identity and is not shareable**.
 
 ```json
 {

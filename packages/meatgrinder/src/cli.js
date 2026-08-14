@@ -132,7 +132,7 @@ Environment alternatives:
   WURST_KEY_MEATPHRASE   Publisher private-key Meatphrase.
 
 If a build contains sealed application resources and no WurstKey is supplied, Meat Grinder
-generates a fresh 256-bit WurstKey and prints it once. Mutable WurstFS data is runtime-owned;
+generates a fresh 256-bit WurstKey and prints it once. Mutable PigFS state is runtime-owned;
 personal realms are claimed and unlocked by a Wurster Identity at runtime.
 
 A pig goes in. A Wurst comes out.
@@ -147,15 +147,15 @@ function certificateLabel(signature) {
 }
 
 function filesystemLabel(manifest) {
-  if (manifest?.data?.format !== 'wurst/data-realms-1') return 'none';
-  const realms = Array.isArray(manifest.data.realms) ? manifest.data.realms : [];
+  if (manifest?.pigfs?.format !== 'wurst/pigfs-policy-1') return 'none';
+  const realms = Array.isArray(manifest.pigfs.realms) ? manifest.pigfs.realms : [];
   const governance = [...new Set(realms.map((realm) => String(realm?.governance ?? 'ordinary').toLowerCase()))].join('+') || 'empty';
   return `realms / ${governance} / ${realms.length} genesis template${realms.length === 1 ? '' : 's'}`;
 }
 
 function filesystemGenerationLabel(root) {
   if (!root) return null;
-  return `   WurstFS generation: ${root.generation} / ${root.realmCount ?? Object.keys(root.realms ?? {}).length} realm(s) / ${root.historyMode === 'integrity' ? 'signed lineage' : 'current snapshot'}`;
+  return `   PigFS generation: ${root.generation} / ${root.realmCount ?? Object.keys(root.realms ?? {}).length} realm(s) / ${root.historyMode === 'integrity' ? 'signed lineage' : 'current snapshot'}`;
 }
 
 const { positionals, flags } = parseArgs(process.argv.slice(2));
@@ -181,8 +181,8 @@ try {
     console.log(`   signature: ${result.signature.status}`);
     console.log(`   publisher certificate: ${result.sellerVerification?.status ?? certificateLabel(result.signature)}`);
     console.log(`   application: ${result.manifest.application?.protection ?? 'public'}`);
-    console.log(`   WurstFS: ${filesystemLabel(result.manifest)}`);
-    if (result.wurstFs) console.log(filesystemGenerationLabel(result.wurstFs));
+    console.log(`   PigFS: ${filesystemLabel(result.manifest)}`);
+    if (result.pigFs) console.log(filesystemGenerationLabel(result.pigFs));
     console.log(`   stored identities: ${result.manifest.protection?.storedIdentity === false ? 'forbidden' : 'allowed'}`);
     if (result.manifest.piglink) console.log(`   PigLink: ${Object.keys(result.manifest.piglink.actions ?? {}).length} action(s) / ${Object.keys(result.manifest.piglink.events ?? {}).length} event(s)${result.manifest.piglink.headless ? ' / headless' : ''}`);
     if (result.manifest.piglet) console.log(`   Piglet: ${result.manifest.piglet.children?.length ?? 0} child Wurst(s)`);
@@ -203,8 +203,8 @@ try {
     console.log(`   signature: ${result.signature.status}${result.signature.publisher ? ` (${result.signature.publisher.domain ?? result.signature.publisher.email ?? result.signature.publisher.label ?? result.signature.publisher.fingerprint.slice(0, 16)})` : ''}`);
     console.log(`   publisher certificate: ${certificateLabel(result.signature)}`);
     console.log(`   application: ${result.manifest.application?.protection ?? 'public'}`);
-    console.log(`   WurstFS: ${filesystemLabel(result.manifest)}`);
-    if (result.wurstFs) console.log(filesystemGenerationLabel(result.wurstFs));
+    console.log(`   PigFS: ${filesystemLabel(result.manifest)}`);
+    if (result.pigFs) console.log(filesystemGenerationLabel(result.pigFs));
     console.log(`   stored identities: ${result.manifest.protection?.storedIdentity === false ? 'forbidden' : 'allowed'}`);
     if (result.manifest.piglink) console.log(`   PigLink: ${Object.keys(result.manifest.piglink.actions ?? {}).length} action(s) / ${Object.keys(result.manifest.piglink.events ?? {}).length} event(s)${result.manifest.piglink.headless ? ' / headless' : ''}`);
     if (result.manifest.piglet) console.log(`   Piglet: ${result.manifest.piglet.children?.length ?? 0} child Wurst(s)`);

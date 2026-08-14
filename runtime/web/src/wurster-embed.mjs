@@ -12,6 +12,40 @@ class BlobProvider {
   async read(position, length) { return new Uint8Array(await this.blob.slice(position, position + length).arrayBuffer()); }
 }
 
+
+class RuntimeBridgeProvider {
+  static async open(input, options = {}) {
+    const bridge = globalThis.wurstEmbedRuntime;
+    if (!bridge?.open || !bridge?.read) return null;
+    const opened = await bridge.open(String(input), options);
+    if (opened == null) return null;
+    if (!opened?.handle || !Number.isSafeInteger(opened.size)) throw new Error('Wurster embed runtime returned an invalid source');
+    return new RuntimeBridgeProvider(bridge, opened);
+  }
+  constructor(bridge, opened) {
+    this.bridge = bridge;
+    this.handle = opened.handle;
+    this.size = opened.size;
+    this.kind = 'runtime';
+    this.writable = Boolean(opened.writable);
+    this.descriptor = opened.descriptor || null;
+    this.parent = opened.parent || null;
+  }
+  async read(position, length) {
+    const result = await this.bridge.read(this.handle, position, length);
+    return result instanceof Uint8Array ? result : new Uint8Array(result);
+  }
+  async persist(value) {
+    if (!this.writable || !this.bridge.persist) throw new Error('This embedded Wurst is not writable');
+    return this.bridge.persist(this.handle, value);
+  }
+  async invokeParent(method, args = []) {
+    if (!this.parent || !this.bridge.invoke) throw new Error('This embedded Wurst has no delegated parent runtime access');
+    return this.bridge.invoke(this.handle, String(method ?? ''), args);
+  }
+  async close() { try { await this.bridge.close?.(this.handle); } catch {} }
+}
+
 class HttpProvider {
   static async open(rawUrl) {
     const url = new URL(String(rawUrl), document.baseURI);
@@ -47,18 +81,22 @@ class HttpProvider {
   }
 }
 
-async function providerFrom(input) {
+async function providerFrom(input, options = {}) {
+  if ((typeof input === 'string' || input instanceof URL) && globalThis.wurstEmbedRuntime?.open) {
+    const runtime = await RuntimeBridgeProvider.open(input, options);
+    if (runtime) return runtime;
+  }
   if (input instanceof Blob || input instanceof ArrayBuffer || input instanceof Uint8Array || ArrayBuffer.isView(input)) return new BlobProvider(input);
   if (typeof input === 'string' || input instanceof URL) return HttpProvider.open(input);
   throw new TypeError('<wurst-embed> expects src, File, Blob, ArrayBuffer or Uint8Array');
 }
 
 export class WurstEmbedElement extends HTMLElement {
-  static observedAttributes = ['src', 'wurstkey'];
+  static observedAttributes = ['src', 'wurstkey', 'parent-pigfs'];
   constructor() {
     super();
     this._root = this.attachShadow({ mode: 'closed' });
-    this._frame = null; this._port = null; this._provider = null; this._generation = 0;
+    this._frame = null; this._port = null; this._provider = null; this._generation = 0; this.ready = Promise.resolve(this);
     const style = document.createElement('style');
     style.textContent = ':host{display:block;position:relative;width:100%;height:420px;min-height:180px;contain:layout paint}iframe{width:100%;height:100%;border:0;display:block;background:transparent}.status{position:absolute;inset:0;z-index:2;display:grid;place-items:center;padding:24px;box-sizing:border-box;background:#fff8f6;color:#6d5961;font:600 13px system-ui;text-align:center}.status[hidden]{display:none}.pig{font-size:30px;display:block;margin-bottom:8px}.error{color:#a62f48}';
     this._status = document.createElement('div'); this._status.className = 'status';
@@ -69,21 +107,31 @@ export class WurstEmbedElement extends HTMLElement {
   attributeChangedCallback(name, oldValue, newValue) {
     if (!this.isConnected || oldValue === newValue) return;
     if (name === 'src' && newValue) void this.load(newValue);
-    if (name === 'wurstkey' && this._provider) void this._start(this._provider);
+    if ((name === 'wurstkey' || name === 'parent-pigfs') && this._provider) void this.load(this.getAttribute('src'));
   }
   async load(input) {
     const generation = ++this._generation;
+    let resolveReady, rejectReady;
+    this.ready = new Promise((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
     this._show('🐷', 'Opening Wurst…');
     try {
-      const provider = await providerFrom(input);
+      const provider = await providerFrom(input, this._embedOptions());
       if (generation !== this._generation) return this;
       this._provider = provider;
       await this._start(provider, generation);
+      resolveReady?.(this);
       return this;
     } catch (error) {
       if (generation === this._generation) this._fail(error);
+      rejectReady?.(error);
       throw error;
     }
+  }
+  _embedOptions() {
+    const raw = String(this.getAttribute('parent-pigfs') || '').trim().toLowerCase();
+    if (!raw) return {};
+    if (!['read', 'read-write'].includes(raw)) throw new TypeError('parent-pigfs must be "read" or "read-write"');
+    return { parentPigFs: raw };
   }
   async open(input) { return this.load(input); }
   async _start(provider, generation = ++this._generation) {
@@ -106,6 +154,26 @@ export class WurstEmbedElement extends HTMLElement {
         } catch (error) { port.postMessage({ type: 'wurster-source-result', id: m.id, ok: false, error: error?.message || String(error) }); }
         return;
       }
+      if (m?.type === 'wurster-embed-persist') {
+        try {
+          if (!provider.persist) throw new Error('This embed source cannot persist PigFS mutations');
+          const result = await provider.persist(new Uint8Array(m.data));
+          port.postMessage({ type: 'wurster-embed-persist-result', id: m.id, ok: true, result });
+        } catch (error) {
+          port.postMessage({ type: 'wurster-embed-persist-result', id: m.id, ok: false, error: error?.message || String(error) });
+        }
+        return;
+      }
+      if (m?.type === 'wurster-embed-parent-call') {
+        try {
+          if (!provider.invokeParent) throw new Error('Parent runtime access is unavailable');
+          const result = await provider.invokeParent(m.method, Array.isArray(m.args) ? m.args : []);
+          port.postMessage({ type: 'wurster-embed-parent-result', id: m.id, ok: true, result });
+        } catch (error) {
+          port.postMessage({ type: 'wurster-embed-parent-result', id: m.id, ok: false, error: error?.message || String(error) });
+        }
+        return;
+      }
       if (m?.type === 'wurster-embed-ready') {
         this._status.hidden = true;
         this.dispatchEvent(new CustomEvent('wurst-ready', { detail: m.detail || {}, bubbles: true }));
@@ -119,7 +187,9 @@ export class WurstEmbedElement extends HTMLElement {
     this._status.hidden = true;
     frame.contentWindow.postMessage({
       type: 'wurster-embed-init', size: provider.size, sourceKind: provider.kind,
-      wurstKey: this.getAttribute('wurstkey') || null
+      wurstKey: this.getAttribute('wurstkey') || null,
+      persistent: Boolean(provider.persist && provider.writable),
+      parent: provider.parent || null
     }, targetOrigin(HOST_URL), [channel.port2]);
   }
   _show(icon, text, error = false) {
@@ -130,7 +200,7 @@ export class WurstEmbedElement extends HTMLElement {
     this._show('🌭', error?.message || String(error), true);
     this.dispatchEvent(new CustomEvent('wurst-error', { detail: { error: error?.message || String(error) }, bubbles: true }));
   }
-  _teardownFrame() { this._port?.close?.(); this._port = null; this._frame?.remove(); this._frame = null; }
+  _teardownFrame() { this._port?.close?.(); this._port = null; this._frame?.remove(); this._frame = null; void this._provider?.close?.(); }
   disconnectedCallback() { this._generation += 1; this._teardownFrame(); }
 }
 

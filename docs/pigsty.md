@@ -1,6 +1,6 @@
 ---
 title: Pigsty
-group: Runtime & Format
+group: Runtime Pillars
 groupOrder: 2
 order: 4
 ---
@@ -16,7 +16,7 @@ Build where Pigsty exists. Run everywhere.
 
 A Wurst may use Pigsty to compile sources, regenerate derived assets or run project tools inside its own Wurst workspace. Pigsty is not host Node access and not a shortcut around Wurster's capability broker.
 
-## Status In 0.32.0
+## Status In 0.32.2
 
 Pigsty is **experimental in v0.32 and is not bundled in normal Desktop releases yet**. The implementation stays in-tree so its contracts and adapters can mature without blocking Windows, macOS or Web. The current code includes a development worker slice and the engine-neutral contracts for the fuller Node-compatible runtime:
 
@@ -24,10 +24,10 @@ Pigsty is **experimental in v0.32 and is not bundled in normal Desktop releases 
 - Wurster runtimes expose `wurst.pigsty.status()`.
 - Desktop and headless Wurster expose declared build names through `wurst.pigsty.status().builds`.
 - The sandbox worker runs small `Pigsty.define(...)` JavaScript tasks against a virtual Wurst workspace when explicitly enabled for development. It is not the normal Desktop production engine.
-- `wurst/pigsty-engine-contract-1` describes the intended internal runtime world: `/wurst` as WurstFS-backed workspace, `/tmp` as ephemeral scratch, no host filesystem, no host shell, no host processes and no host environment.
+- `wurst/pigsty-engine-contract-1` describes the intended internal runtime world: `/wurst` as PigFS-backed workspace, `/tmp` as ephemeral scratch, no host filesystem, no host shell, no host processes and no host environment.
 - `wurst/pigsty-fs-view-1` gives an engine adapter a concrete mount view with normalized files for `/wurst`, optional `/toolchain` and `/tmp`.
-- `wurst/pigsty-changeset-1` describes the transactional return path from an internal engine run back into WurstFS.
-- `wurst/pigsty-engine-result-1` wraps a verified engine run result, events, temporary-work digest and persistent WurstFS change-set.
+- `wurst/pigsty-changeset-1` describes the transactional return path from an internal engine run back into PigFS.
+- `wurst/pigsty-engine-result-1` wraps a verified engine run result, events, temporary-work digest and persistent PigFS change-set.
 - `runPigstyEngine(...)` now provides the engine-adapter handoff: Wurster creates the Pigsty filesystem view, calls a supplied adapter, converts the adapter output into a digest-checked engine result and applies only the persistent `/wurst` change-set.
 - `resolveEdgeWasixRuntime(...)` and `createResolvedEdgeWasixPigstyEngine(...)` are the runtime-bundle integration path for Wurster's Edge.js/WASIX engine. They validate a `wurster-edge-runtime` manifest, wire Edge, Wasmer, the Edge/WASIX package and a separate Wasmer cache, then run declared build entries through `edge --safe`.
 - `createEdgeWasixPigstyEngine(...)` remains the low-level adapter. It invokes an `edge` binary, rejects host-authority contracts and returns changes through the same engine-result path.
@@ -53,7 +53,7 @@ Pigsty v1 should be implemented as an isolated engine world. Edge.js/WASIX is th
 The intended runtime shape is:
 
 ```text
-WurstFS
+PigFS
    ⇅
 Pigsty filesystem projection
    ⇅
@@ -75,12 +75,12 @@ fs.writeFileSync(path.join(process.cwd(), 'dist/index.html'), render(source));
 
 But the filesystem it sees is Pigsty's filesystem:
 
-- `/wurst` is the WurstFS-backed workspace.
+- `/wurst` is the PigFS-backed workspace.
 - `/tmp` is ephemeral scratch for the current run.
 - `/toolchain` exposes immutable package directories from Wurst-carried toolchain content.
 - no host home directory, app directory, registry, shell or process table is mounted by default.
 
-The engine produces a change-set. Wurster verifies and commits that change-set to WurstFS transactionally. A failed run must not half-write persistent state.
+The engine produces a change-set. Wurster verifies and commits that change-set to PigFS transactionally. A failed run must not half-write persistent state.
 
 ## Manifest
 
@@ -180,7 +180,7 @@ If a build declares `outputs`, Pigsty enforces them. A build with `outputs: ["di
   "engineHint": "edge-wasix",
   "cwd": "/wurst",
   "mounts": [
-    { "path": "/wurst", "source": "wurstfs", "writable": true },
+    { "path": "/wurst", "source": "pigfs", "writable": true },
     { "path": "/toolchain", "source": "toolchain", "writable": false },
     { "path": "/tmp", "source": "ephemeral", "writable": true, "persistent": false }
   ],
@@ -199,7 +199,7 @@ If a build declares `outputs`, Pigsty enforces them. A build with `outputs: ["di
 
 `resolvePigstyPath(path, { cwd, mounts })` applies Pigsty path semantics. Relative paths resolve against `/wurst` by default, mounted paths such as `/toolchain/node_modules/...` are allowed when present, and unmounted paths such as `/etc/passwd` are rejected.
 
-`createPigstyChangeSet(beforeWorkspace, afterWorkspace)` produces `wurst/pigsty-changeset-1` with `add`, `modify` and `delete` operations. `applyPigstyChangeSet(workspace, changeSet)` applies it to a workspace object. WurstFS integration should wrap this in an atomic commit.
+`createPigstyChangeSet(beforeWorkspace, afterWorkspace)` produces `wurst/pigsty-changeset-1` with `add`, `modify` and `delete` operations. `applyPigstyChangeSet(workspace, changeSet)` applies it to a workspace object. PigFS integration should wrap this in an atomic commit.
 
 `createPigstyEngineResult({ contract, beforeWorkspace, afterWorkspace, tmpWorkspace, result, events })` wraps the persistent change-set with an execution result and a digest of ephemeral `/tmp`. `applyPigstyEngineResult(workspace, engineResult)` refuses to apply the result unless the current workspace digest still matches the source digest.
 
@@ -366,7 +366,7 @@ It does not automatically receive:
 - host filesystem paths;
 - host shell or process execution;
 - network access;
-- another Wurst's WurstFS realms;
+- another Wurst's PigFS realms;
 - another Wurst's Pigsty;
 - private signing keys, Meatphrases or WurstKeys.
 

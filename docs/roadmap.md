@@ -12,7 +12,7 @@ Wurster 0.11 began the deliberate alpha/beta stretch toward the first stable for
 The working release lane is:
 
 ```text
-0.20          WRST v7 / WurstFS v2 / Authority foundation
+0.20          WRST v7 / PigFS / Authority foundation
 0.30          PigLink/Piglet stabilization; Pigsty matures independently
 0.40+         conformance, recovery, platform hardening
 1.0           stable Wurst contract + conforming runtimes
@@ -33,12 +33,12 @@ Pre-1.0 Wursts that depend on a discarded contract are rebuilt against the curre
 Primary work includes:
 
 - keep the v0.3x Desktop/Web release lane buildable and documented without requiring unfinished Pigsty native bundles;
-- finish Piglet suspend/resume, tree-level resource budgets, Wurster-owned child trust presentation and brokered Parent↔Child PigLink on top of managed Desktop child surfaces, child-scoped Auth and persistent nested WurstFS;
+- finish Piglet suspend/resume, tree-level resource budgets, Wurster-owned child trust presentation and brokered Parent↔Child PigLink on top of universal `<wurst-embed>`, child-scoped Auth and persistent nested PigFS;
 - finish PigLink brokers, runtime handles, lifecycle/revocation and capability-composition prompts on top of the working Action/Event contract;
-- mature Pigsty independently: complete native runtime distribution, durable WurstFS commit, network capability mediation and native-runtime conformance before enabling it in normal Desktop releases;
+- mature Pigsty independently: complete native runtime distribution, durable PigFS commit, network capability mediation and native-runtime conformance before enabling it in normal Desktop releases;
 - define derived artifact provenance so source, generated output and toolchain state cannot silently drift;
 - specify Application Identity, locator, runtime handle and publisher lineage as separate concepts for state migration and automation;
-- finish the WurstFS v2 storage model: keep ordinary/personal storage compact and history-free by default, add trusted sharing UI, settle directory-policy inheritance, add safe shared-integrity checkpoints/garbage collection, merge/fork UX and remote read-only/overlay behavior;
+- finish the PigFS storage model: keep ordinary/personal storage compact and history-free by default, add trusted sharing UI, settle directory-policy inheritance, add safe shared-integrity checkpoints/garbage collection, merge/fork UX and remote read-only/overlay behavior;
 - complete Wurster Identity federation around public `.wurstid` exchange, local contacts and optional WRST.IO identity-claim certificates;
 - specify shared-realm rekey epochs and document that old offline copies cannot be made secret retroactively;
 - signed network capability policy, including HTTPS, explicit HTTP and local-network use;
@@ -48,9 +48,9 @@ Primary work includes:
 - byte-exact Meatphrase normalization, KDF parameters, domain separation, key-rotation and Rekey test vectors;
 - Windows/macOS release signing and installer hardening;
 - native Windows user-presence integration with a correctly owned Windows Hello/PIN dialog;
-- finish Wurster Web parity after 0.14/0.15 WurstKey + Authority work: personal/shared WurstFS realm crypto, trusted Desktop↔Web identity handoff, live DNS/local-trust presentation, Undercover source support and conformance;
+- finish Wurster Web parity after 0.14/0.15 WurstKey + Authority work: personal/shared PigFS realm crypto, trusted Desktop↔Web identity handoff, live DNS/local-trust presentation, Undercover source support and conformance;
 - additional conforming runtimes, with iOS/macOS work able to use the Apple developer distribution path when ready.
 
 ## Deliberately later
 
-Tor/VPN routing, TEE confidential execution, external hardware identity providers and high-level document-approval/attestation UX are valuable directions, but they are not required to make Wurst 1.0 a coherent portable application format. The WurstFS v2 identity/signature primitives intentionally land before 1.0 because later attestations can reuse them, but ordinary CRUD and personal storage remain history-free by design.
+Tor/VPN routing, TEE confidential execution, external hardware identity providers and high-level document-approval/attestation UX are valuable directions, but they are not required to make Wurst 1.0 a coherent portable application format. The PigFS identity/signature primitives intentionally land before 1.0 because later attestations can reuse them, but ordinary CRUD and personal storage remain history-free by design.

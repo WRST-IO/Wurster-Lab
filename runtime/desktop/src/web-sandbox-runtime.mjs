@@ -16,19 +16,19 @@ export function cspFor(manifest) {
   const allowedNetwork = networkOrigins(manifest);
   const capabilities = normalizeCapabilities(manifest.capabilities);
   const connect = allowedNetwork.length ? allowedNetwork.join(' ') : "'none'";
-  const scripts = capabilities['code.unsafeEval'] ? "'self' wurst://piglink 'unsafe-eval'" : "'self' wurst://piglink";
+  const scripts = capabilities['code.unsafeEval'] ? "'self' wurst://piglink wurst://runtime 'unsafe-eval'" : "'self' wurst://piglink wurst://runtime";
   return [
     "default-src 'self' data: blob:",
     `script-src ${scripts}`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' wurst://data data: blob:",
-    "font-src 'self' wurst://data data: blob:",
-    "media-src 'self' wurst://data data: blob:",
+    "img-src 'self' wurst://pigfs data: blob:",
+    "font-src 'self' wurst://pigfs data: blob:",
+    "media-src 'self' wurst://pigfs data: blob:",
     "worker-src 'self' blob:",
     `connect-src ${connect}`,
     "object-src 'none'",
     "base-uri 'none'",
-    "frame-src 'none'",
+    "frame-src wurst://runtime",
     "form-action 'none'"
   ].join('; ');
 }

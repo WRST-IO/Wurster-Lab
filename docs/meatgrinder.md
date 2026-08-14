@@ -103,7 +103,7 @@ Generate a user Meatphrase:
 meatgrinder meatphrase 12
 ```
 
-See [manifest.md](manifest.md) for optional special sauce such as frameless windows, capabilities, WurstFS realms, PigLink and application sealing.
+See [manifest.md](manifest.md) for optional special sauce such as frameless windows, capabilities, PigFS realms, PigLink and application sealing.
 
 
 ## Machine-friendly Wursts

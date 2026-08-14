@@ -156,7 +156,7 @@ const engine = createEdgeWasixPigstyEngine({
     assert.equal(env.PIGSTY_ENTRY, 'build-site.js');
     assert.match(env.PIGSTY_ARGS_JSON, /"entry":"build-site.js"/);
     assert.deepEqual(mounts.map((mount) => `${mount.path}:${mount.source}:${mount.writable}`), [
-      '/wurst:wurstfs:true',
+      '/wurst:pigfs:true',
       '/toolchain:toolchain:false',
       '/tmp:ephemeral:true'
     ]);
@@ -298,7 +298,7 @@ if (realProbe.available) {
   console.log(`↷ Skipping real Edge/WASIX smoke test: ${realProbe.reason}`);
 }
 
-console.log('✓ Pigsty Edge/WASIX adapter probes Edge, invokes edge --safe and commits declared build outputs through WurstFS change-sets');
+console.log('✓ Pigsty Edge/WASIX adapter probes Edge, invokes edge --safe and commits declared build outputs through PigFS change-sets');
 
 async function createFakeEdgeRuntimeBundle(target) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'wurster-edge-runtime-test-'));

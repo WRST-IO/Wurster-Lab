@@ -26,8 +26,8 @@ For developer-owned application encryption:
 
 The Wurst controls placement, not the trusted UI contents. Wurster owns the authentication renderer and result binding.
 
-Identity authentication can initialize identity-backed WurstFS realms on first use. An unclaimed personal realm binds to the authenticated Wurster Identity when that realm is explicitly opened.
+Identity authentication can initialize identity-backed PigFS realms on first use. An unclaimed personal realm binds to the authenticated Wurster Identity when that realm is explicitly opened.
 
-WurstKey authentication is independent from Wurster Identity and WurstFS data protection.
+WurstKey authentication is independent from Wurster Identity and PigFS data protection.
 
 Stored Meat Identities are a local runtime convenience. Portable recovery remains the identity's Meatphrase; platform-local user-presence mechanisms do not change Wurst cryptography.

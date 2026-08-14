@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { SIGNATURE_PATH, createPackageSignature, createPublisherKeyBundle, decodeWurst, descriptorsFromPackage, encodeWurst, openLocalWurstFsStore, openWurstFile, verifyPackageSignature } from '../packages/format/src/index.js';
-import { bindPigletWurstFsPersistence } from '../runtime/desktop/src/piglet-wurstfs-runtime.mjs';
+import { SIGNATURE_PATH, createPackageSignature, createPublisherKeyBundle, decodeWurst, descriptorsFromPackage, encodeWurst, openLocalPigFsStore, openWurstFile, verifyPackageSignature } from '../packages/format/src/index.js';
+import { bindPigletPigFsPersistence } from '../runtime/desktop/src/piglet-pigfs-runtime.mjs';
 import { createTrustedSurfaceRuntime } from '../runtime/desktop/src/trusted-surface-runtime.mjs';
 
 function writableChild() {
@@ -11,7 +11,7 @@ function writableChild() {
     manifest: {
       format: 'wurst/7', id: 'io.wrst.piglet-operational', name: 'Operational Piglet', version: '0.32.0', entry: 'index.html', type: 'widget',
       application: { protection: 'public' }, capabilities: {}, security: { signed: true },
-      data: { format: 'wurst/data-realms-1', writable: true, realms: [{ id: 'files' }] }
+      pigfs: { format: 'wurst/pigfs-policy-1', writable: true, realms: [{ id: 'files' }] }
     },
     files: [{ path: 'index.html', data: Buffer.from('<h1>Piglet</h1>'), scope: 'app', mime: 'text/html' }]
   }));
@@ -39,28 +39,28 @@ try {
   let flushes = 0;
   let reader = await openWurstFile(running);
   const immutableLength = reader.baseLength;
-  let store = bindPigletWurstFsPersistence(await openLocalWurstFsStore(running, reader), {
+  let store = bindPigletPigFsPersistence(await openLocalPigFsStore(running, reader), {
     async flush() { persisted = await fs.readFile(running); flushes += 1; }
   });
   await store.initialize({ realms: [{ id: 'files' }] });
-  const write = store.beginWrite('/data/files/state.json', { mime: 'application/json' });
+  const write = store.beginWrite('/files/state.json', { mime: 'application/json' });
   await store.writeChunk(write, Buffer.from('{"counter":1}'));
   await store.commitWrite(write);
   await store.closeFile();
   await reader.close();
 
   assert.ok(flushes >= 2, 'initialization and child writes must cross the persistence boundary');
-  assert.ok(persisted?.length > original.length, 'child WurstFS must append mutable state to the child Wurst bytes');
+  assert.ok(persisted?.length > original.length, 'child PigFS must append mutable state to the child Wurst bytes');
   assert.deepEqual(persisted.subarray(0, immutableLength), original.subarray(0, immutableLength), 'Piglet writes must not rewrite immutable application bytes');
 
   const reopened = path.join(temp, 'reopened.wurst');
   await fs.writeFile(reopened, persisted);
   reader = await openWurstFile(reopened);
   const persistedSignature = await import('../packages/format/src/index.js').then(({ decodeWurst, verifyPackageSignature }) => verifyPackageSignature(decodeWurst(persisted)));
-  assert.equal(persistedSignature.status, 'signed', 'mutable child WurstFS writes must preserve the child package signature');
+  assert.equal(persistedSignature.status, 'signed', 'mutable child PigFS writes must preserve the child package signature');
   assert.equal(persistedSignature.publisher.fingerprint, originalSignature.publisher.fingerprint, 'mutable child writes must preserve publisher identity');
-  const state = await reader.fsReadRange('/data/files/state.json');
-  assert.equal(Buffer.from(state.data).toString('utf8'), '{"counter":1}', 'Piglet state must survive close/reopen as normal WurstFS data');
+  const state = await reader.pigFsReadRange('/files/state.json');
+  assert.equal(Buffer.from(state.data).toString('utf8'), '{"counter":1}', 'Piglet state must survive close/reopen as normal PigFS data');
   await reader.close();
 } finally {
   await fs.rm(temp, { recursive: true, force: true });
@@ -121,4 +121,4 @@ assert.equal(sent.get('child')[0], 'wurst:auth:result');
 trusted.cleanupContext(child);
 assert.throws(() => trusted.authSurfaceForEvent({ sender: views[1].webContents }), /Invalid Wurster Auth surface/);
 
-console.log('✓ Piglet child WurstFS persists across reopen and trusted Auth stays bound to the child runtime surface');
+console.log('✓ Piglet child PigFS persists across reopen and trusted Auth stays bound to the child runtime surface');

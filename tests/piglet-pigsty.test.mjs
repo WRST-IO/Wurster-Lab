@@ -267,7 +267,7 @@ Pigsty.define(async (ctx) => {
   assert.equal(engineContract.engineHint, 'edge-wasix');
   assert.equal(engineContract.cwd, '/wurst');
   assert.equal(engineContract.mounts[0].path, '/wurst');
-  assert.equal(engineContract.mounts[0].source, 'wurstfs');
+  assert.equal(engineContract.mounts[0].source, 'pigfs');
   assert.equal(engineContract.mounts[0].writable, true);
   assert.equal(engineContract.mounts[1].path, '/toolchain');
   assert.equal(engineContract.mounts[1].source, 'toolchain');
@@ -284,7 +284,7 @@ Pigsty.define(async (ctx) => {
   assert.deepEqual(resolvePigstyPath('../content.md', { cwd: '/wurst/src' }), {
     absolutePath: '/wurst/content.md',
     mountPath: '/wurst',
-    source: 'wurstfs',
+    source: 'pigfs',
     path: 'content.md'
   });
   assert.deepEqual(resolvePigstyPath('/toolchain/node_modules/@11ty/eleventy/package.json'), {
@@ -304,7 +304,7 @@ Pigsty.define(async (ctx) => {
   });
   assert.equal(fsView.format, 'wurst/pigsty-fs-view-1');
   assert.deepEqual(fsView.mounts.map((mount) => `${mount.path}:${mount.source}:${mount.writable}`), [
-    '/wurst:wurstfs:true',
+    '/wurst:pigfs:true',
     '/toolchain:toolchain:false',
     '/tmp:ephemeral:true'
   ]);
@@ -369,7 +369,7 @@ Pigsty.define(async (ctx) => {
         assert.equal(metadata.contract.format, 'wurst/pigsty-engine-contract-1');
         assert.equal(view.cwd, '/wurst');
         assert.deepEqual(view.mounts.map((mount) => `${mount.path}:${mount.source}:${mount.writable}`), [
-          '/wurst:wurstfs:true',
+          '/wurst:pigfs:true',
           '/toolchain:toolchain:false',
           '/tmp:ephemeral:true'
         ]);
@@ -377,7 +377,7 @@ Pigsty.define(async (ctx) => {
         assert.deepEqual(resolvePigstyPath('content.md', { cwd: view.cwd, mounts: mountPaths }), {
           absolutePath: '/wurst/content.md',
           mountPath: '/wurst',
-          source: 'wurstfs',
+          source: 'pigfs',
           path: 'content.md'
         });
         assert.equal(resolvePigstyPath('/tmp/scratch.log', { cwd: view.cwd, mounts: mountPaths }).source, 'ephemeral');

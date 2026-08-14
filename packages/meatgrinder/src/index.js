@@ -115,45 +115,45 @@ function securityConfig(config) {
   return config.security && typeof config.security === 'object' ? config.security : {};
 }
 
-function realmDataConfig(config) {
-  return config.data && typeof config.data === 'object' ? config.data : null;
+function pigFsConfig(config) {
+  return config.pigfs && typeof config.pigfs === 'object' ? config.pigfs : null;
 }
 
-function normalizeRealmDataPolicy(raw) {
+function normalizePigFsPolicy(raw) {
   if (!raw) return null;
-  if (raw.format !== 'wurst/data-realms-1') throw new Error('data.format must be wurst/data-realms-1');
-  if (raw.writable === false) throw new Error('data.writable must be true; immutable resources belong in the signed application package');
+  if (raw.format !== 'wurst/pigfs-policy-1') throw new Error('pigfs.format must be wurst/pigfs-policy-1');
+  if (raw.writable === false) throw new Error('pigfs.writable must be true; immutable resources belong in the signed application package');
   const realms = Array.isArray(raw.realms) ? raw.realms.map((realm) => {
-    if (!realm || typeof realm !== 'object') throw new Error('WurstFS realm must be an object');
-    if (Object.hasOwn(realm, 'mode')) throw new Error('WurstFS realm mode was removed; omit governance for ordinary storage or use governance: personal/shared');
+    if (!realm || typeof realm !== 'object') throw new Error('PigFS realm must be an object');
+    if (Object.hasOwn(realm, 'mode')) throw new Error('PigFS realm mode was removed; omit governance for ordinary storage or use governance: personal/shared');
     const governance = realm.governance == null ? '' : String(realm.governance).trim().toLowerCase();
-    if (governance && !['personal', 'shared'].includes(governance)) throw new Error(`Unsupported WurstFS realm governance: ${governance}`);
+    if (governance && !['personal', 'shared'].includes(governance)) throw new Error(`Unsupported PigFS realm governance: ${governance}`);
     const audit = String(realm.audit ?? 'none').trim().toLowerCase();
-    if (!['none', 'signed'].includes(audit)) throw new Error(`Unsupported WurstFS realm audit mode: ${audit}`);
-    if (governance !== 'shared' && audit !== 'none') throw new Error('Only shared WurstFS realms can enable signed audit history');
+    if (!['none', 'signed'].includes(audit)) throw new Error(`Unsupported PigFS realm audit mode: ${audit}`);
+    if (governance !== 'shared' && audit !== 'none') throw new Error('Only shared PigFS realms can enable signed audit history');
 
     const base = {
       id: String(realm.id ?? ''),
       ...(realm.label == null ? {} : { label: String(realm.label).slice(0, 120) })
     };
     if (!governance) {
-      for (const field of ['protection', 'read', 'write']) if (Object.hasOwn(realm, field)) throw new Error(`Ordinary WurstFS realm ${base.id} must omit ${field}`);
+      for (const field of ['protection', 'read', 'write']) if (Object.hasOwn(realm, field)) throw new Error(`Ordinary PigFS realm ${base.id} must omit ${field}`);
       return base;
     }
     if (governance === 'personal') {
-      for (const field of ['protection', 'read', 'write']) if (Object.hasOwn(realm, field)) throw new Error(`Personal WurstFS realm ${base.id} must omit ${field}; it is sealed owner-only by definition`);
+      for (const field of ['protection', 'read', 'write']) if (Object.hasOwn(realm, field)) throw new Error(`Personal PigFS realm ${base.id} must omit ${field}; it is sealed owner-only by definition`);
       return { ...base, governance: 'personal' };
     }
     const protection = String(realm.protection ?? 'public').trim().toLowerCase();
     const read = String(realm.read ?? (protection === 'sealed' ? 'owner' : 'public')).trim().toLowerCase();
     const write = String(realm.write ?? 'owner').trim().toLowerCase();
-    if (!['public', 'sealed'].includes(protection)) throw new Error(`Unsupported shared WurstFS realm protection: ${protection}`);
-    if (!['public', 'owner'].includes(read)) throw new Error('Shared WurstFS realm read must be public or owner');
-    if (!['authenticated', 'owner'].includes(write)) throw new Error('Shared WurstFS realm write must be authenticated or owner');
+    if (!['public', 'sealed'].includes(protection)) throw new Error(`Unsupported shared PigFS realm protection: ${protection}`);
+    if (!['public', 'owner'].includes(read)) throw new Error('Shared PigFS realm read must be public or owner');
+    if (!['authenticated', 'owner'].includes(write)) throw new Error('Shared PigFS realm write must be authenticated or owner');
     if (protection === 'sealed' && (read !== 'owner' || write !== 'owner')) throw new Error('Sealed shared realms begin owner-only; sharing is an explicit Wurster operation');
     return { ...base, governance: 'shared', protection, read, write, audit };
   }) : [];
-  return { format: 'wurst/data-realms-1', writable: true, realms };
+  return { format: 'wurst/pigfs-policy-1', writable: true, realms };
 }
 
 const PIG_NAME_RE = /^[A-Za-z][A-Za-z0-9_.:-]{0,95}$/;
@@ -308,11 +308,11 @@ export async function buildWurst(projectDir, explicitOutput, options = {}) {
     files.push(...privateAppFiles);
   }
 
-  if (Object.hasOwn(config, 'vault')) throw new Error('vault was removed before Wurster 1.0; use data.realms');
-  const realmDataCfg = realmDataConfig(config);
+  if (Object.hasOwn(config, 'vault')) throw new Error('vault was removed before Wurster 1.0; use pigfs.realms');
+  const pigFsCfg = pigFsConfig(config);
   const dataDir = path.join(root, 'data');
-  if (hasConfig && await exists(dataDir)) throw new Error('Top-level data/ factory content is not part of WurstFS. Runtime data starts empty; immutable seed data belongs in src/ or sealed/.');
-  const realmDataPolicy = normalizeRealmDataPolicy(realmDataCfg);
+  if (hasConfig && await exists(dataDir)) throw new Error('Top-level data/ factory content is not part of PigFS. Runtime data starts empty; immutable seed data belongs in src/ or sealed/.');
+  const pigFsPolicy = normalizePigFsPolicy(pigFsCfg);
 
   const presentationCfg = config.presentation && typeof config.presentation === 'object' ? config.presentation : {};
   const presentation = {};
@@ -367,12 +367,12 @@ export async function buildWurst(projectDir, explicitOutput, options = {}) {
       ...(config.window ?? {})
     },
     capabilities: normalizeCapabilities(config.capabilities),
-    data: realmDataPolicy,
+    pigfs: pigFsPolicy,
     security: {
       signed: signingEnabled
     },
     build: {
-      meatGrinder: '0.32.0',
+      meatGrinder: '0.32.2',
       generatedManifest: Boolean(config.__generated),
       createdAt: new Date().toISOString()
     }
@@ -498,7 +498,7 @@ export async function buildWurst(projectDir, explicitOutput, options = {}) {
     signature: signatureStatus,
     generatedWurstKey,
     generatedManifest: Boolean(config.__generated),
-    wurstFs: summarizeWurstFsRoot(finalPkg.wurstFsRoot)
+    pigFs: summarizeWurstFsRoot(finalPkg.pigFsRoot)
   };
 }
 
@@ -535,7 +535,7 @@ export async function inspectWurst(filePath) {
       manifest: reader.manifest,
       risk: classifyRisk(reader.manifest),
       signature,
-      wurstFs: summarizeWurstFsRoot(reader.wurstFsRoot),
+      pigFs: summarizeWurstFsRoot(reader.pigFsRoot),
       files: reader.entries().map(({ path: p, length, sha256, mime, scope, encryption, integrity }) => ({
         path: p,
         length,

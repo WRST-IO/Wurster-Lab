@@ -20,6 +20,12 @@ Wurster Lab is pre-1.0 software. Implementation code can exist before a feature 
 | Linux Desktop | Prepared development lane | AppImage build path exists; public release enablement is separate. |
 | iOS / Android | Reserved | No conforming native runtime release yet. |
 
+## PigFS
+
+**Active filesystem foundation, still pre-stable.** PigFS replaces the earlier mutable-storage public model. Runtime paths are normal mounted paths such as `/workspace`; storage-internal realm keys are not part of the application path model. The low-level append-safe record, crypto and compaction machinery is retained, while the public filesystem gains stable object identity, transactions, snapshots, quotas, internal symlinks and watch semantics.
+
+Desktop and Web converge on the same `wurst.pigfs` vocabulary. The earlier storage API is not retained as a pre-1.0 compatibility layer.
+
 ## PigLink
 
 **Functional slice, active in v0.32.** MeatGrinder packages the declared PigLink source and schemas. Desktop, Web/headless-facing paths and the headless harness can invoke Actions, validate JSON contracts and capture Events. UI code can call the same Action contract through `wurst.piglink`.
@@ -28,9 +34,13 @@ Still before the first stable PigLink contract: brokered links between separate 
 
 ## Piglet
 
-**Functional composition runtime, active in v0.32 development.** Built-in child bytes remain independently signed and byte-identical. Desktop additionally discovers normal `.wurst`/`.wrst` files stored in readable WurstFS realms, can install exact dropped Wurst bytes into ordinary WurstFS, and runs children as managed `WebContentsView` surfaces with move/resize/focus/close handles. Child WurstFS writes persist transactionally back into the parent-held child file, and sealed/protected children use child-scoped Wurster Auth surfaces. Wurster Web keeps the built-in-child internal-session path.
+**Functional composition runtime, active in v0.32 development.** Piglet now uses the universal `<wurst-embed>` element rather than native Desktop child surfaces. The same HTML element embeds a Wurst on an ordinary page and inside another running Wurst; inside a Wurst that relationship is a Piglet.
 
-Still before the first stable Piglet contract: suspend/resume and tree-level resource budgets, direct brokered PigLink handles to child instances, Wurster-owned trust/revocation presentation for shell UIs, and equivalent runtime-installed managed surfaces on Web.
+Child packages remain independently signed and byte-identical. Sources are opened through byte ranges, runtime-installed children are normal PigFS files, and writable child state persists back into the parent-held child Wurst with conflict checking. Desktop no longer exposes Piglet bounds/focus/native-surface APIs.
+
+Piglets are isolated from the parent by default. A parent can explicitly grant read or read-write access to its own PigFS on a specific `<wurst-embed>`; the child receives it under `wurst.parent.pigfs`, never as Host filesystem authority. PigFS governance, lock state and encryption remain enforced.
+
+Still before the first stable Piglet contract: direct brokered Parent↔Child PigLink handles beyond this scoped Parent PigFS bridge, finer path-scoped delegation, suspend/resume, tree-level budgets, crash/recovery states and complete nested-runtime stress coverage.
 
 ## Pigsty
 

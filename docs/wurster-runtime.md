@@ -30,24 +30,24 @@ A Wurst still remains unlockable by entering its Meatphrase manually on another 
 
 ## Portable storage and snapshots
 
-A Wurst that declares writable user data receives `wurst.fs`, an application-owned filesystem rooted at `/data`. Wurster mediates all reads and writes; Wurst JavaScript never receives a host filesystem path.
+A Wurst that declares writable user data receives `wurst.pigfs`, an application-owned filesystem rooted at `/data`. Wurster mediates all reads and writes; Wurst JavaScript never receives a host filesystem path.
 
-`wurst.fs.capabilities()` tells the app whether the current source is readable, writable and persistent. This lets the same app tolerate a local writable Wurst and a future remote/read-only Wurst source without pretending the original remote object can be modified.
+`wurst.pigfs.capabilities()` tells the app whether the current source is readable, writable and persistent. This lets the same app tolerate a local writable Wurst and a future remote/read-only Wurst source without pretending the original remote object can be modified.
 
-WurstFS media is exposed through `wurst.fs.url()`, which returns an opaque runtime URL suitable for normal `<img>`, `<audio>` and `<video>` elements. Wurst code never depends on the physical URL scheme; Desktop, Web and future native runtimes map the logical WurstFS path to their own safe resource surface.
+PigFS media is exposed through `wurst.pigfs.url()`, which returns an opaque runtime URL suitable for normal `<img>`, `<audio>` and `<video>` elements. Wurst code never depends on the physical URL scheme; Desktop, Web and future native runtimes map the logical PigFS path to their own safe resource surface.
 
-Local raw Wursts can compact stale append-only history in the background. Applications may request this with `wurst.fs.compact()`, while Wurster also performs conservative hygiene when reclaimable data becomes substantial. The visible Wurst renderer is not reloaded during the file swap.
+Local raw Wursts can compact stale append-only history in the background. Applications may request this with `wurst.pigfs.compact()`, while Wurster also performs conservative hygiene when reclaimable data becomes substantial. The visible Wurst renderer is not reloaded during the file swap.
 
-`wurst.snapshot.export()` opens trusted Wurster save UI and streams the currently committed virtual WRST representation to a standalone `.wurst` file. The application chooses when to offer a snapshot, but Wurster chooses the destination with the user. Pending, uncommitted WurstFS transactions are not part of the snapshot.
+`wurst.snapshot.export()` opens trusted Wurster save UI and streams the currently committed virtual WRST representation to a standalone `.wurst` file. The application chooses when to offer a snapshot, but Wurster chooses the destination with the user. Pending, uncommitted PigFS transactions are not part of the snapshot.
 
 
 ## Piglet child surfaces
 
-Desktop Wurster treats a child `.wurst` as a package, not an iframe document. `wurst.piglet.url(ref)` exposes package bytes for transport/debugging; `wurst.piglet.open(ref, { bounds })` is the execution API and creates a Wurster-owned managed child renderer.
+Desktop and Web use the same `<wurst-embed src="…">` element for Wurst presentation. Inside a running Wurst, an embed becomes a Piglet relationship. Wurster implements the element with a sandboxed runtime host and byte-range source; applications never manage native child-view geometry.
 
-Parents can discover immutable built-ins and valid `.wurst` / `.wrst` files stored anywhere in readable WurstFS realms with `wurst.piglet.children()`. `wurst.piglet.install(name, bytes, { path })` is a convenience for drag-and-drop shells: it validates the child and stores the exact supplied bytes as an ordinary WurstFS file. The child's own package signature is never replaced by the parent publisher identity.
+Parents can discover immutable built-ins and valid `.wurst` / `.wrst` files stored anywhere in readable PigFS realms with `wurst.piglet.children()`. `wurst.piglet.install(name, bytes, { path })` is a convenience for drag-and-drop shells: it validates the child and stores the exact supplied bytes as an ordinary PigFS file. The child's own package signature is never replaced by the parent publisher identity.
 
-Managed children currently support open/move/resize/focus/close. Sealed child auth and nested child-WurstFS write-back are intentionally still fail-closed/follow-up work.
+Managed children currently support open/move/resize/focus/close. Sealed child auth and nested child-PigFS write-back are intentionally still fail-closed/follow-up work.
 
 ## Runtime capability availability
 
@@ -75,7 +75,7 @@ Desktop Wurster supports two explicit red-risk capabilities for tools that must 
 
 A Wurst with `files.open` may call `wurst.files.open(...)`. Wurster always owns the open dialog and returns only the single file the user selected. `files.save` similarly opens a Wurster-owned save dialog and writes only to the destination chosen by the user. The Wurst never receives a reusable host directory capability or unrestricted path access. Both capabilities are RED and therefore require a valid package signature on Desktop.
 
-`WursterLab.wurst` uses this narrow bridge to import operator files and emit a local production workspace while its operator material stays inside a personal sealed WurstFS realm.
+`WursterLab.wurst` uses this narrow bridge to import operator files and emit a local production workspace while its operator material stays inside a personal sealed PigFS realm.
 
 
 ## Developer Tools

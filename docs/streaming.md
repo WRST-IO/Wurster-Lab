@@ -8,7 +8,7 @@ order: 5
 
 Wursts are served in slices. 🔪
 
-WRST v7 separates a compact immutable base from an append-only WurstFS tail. A runtime can inspect the header, manifest and indexes first, then fetch only the resources, catalog pages and data chunks it actually needs.
+WRST v7 separates a compact immutable base from an append-only PigFS tail. A runtime can inspect the header, manifest and indexes first, then fetch only the resources, catalog pages and data chunks it actually needs.
 
 ## Immutable application ranges
 
@@ -24,19 +24,19 @@ Large immutable resources carry independent integrity chunks. Reading a range ve
 
 Desktop Wurster's private resource protocol understands HTTP-style Range requests, so Chromium can seek through large public media without loading the complete Wurst. That private scheme is a runtime implementation detail; Wurst application code keeps normal relative resource URLs.
 
-## WurstFS ranges
+## PigFS ranges
 
 Mutable `/data` files use paged metadata and 4 MiB DATA records.
 
 ```js
-reader.fsStat('/data/video.mp4')
+reader.pigFsStat('/workspace/video.mp4')
 reader.fsList('/data')
-reader.fsReadRange('/data/video.mp4', offset, length)
+reader.pigFsReadRange('/workspace/video.mp4', offset, length)
 ```
 
 `stat` and `list` do not open the file body. `fsReadRange` loads only intersecting map/data records.
 
-Sealed WurstFS encrypts each content slice independently. Catalog and map pages can also be sealed, so filenames and sizes are revealed only after user authentication while range access remains possible.
+Sealed PigFS encrypts each content slice independently. Catalog and map pages can also be sealed, so filenames and sizes are revealed only after user authentication while range access remains possible.
 
 ## Streaming writes
 
@@ -44,7 +44,7 @@ WRST v7 also writes scheibchenweise.
 
 The application begins a transaction, sends bounded chunks, and commits only after the final chunk arrives. Normal writes append records and never rebuild the immutable application base.
 
-An interrupted write leaves the previous complete WurstFS generation valid.
+An interrupted write leaves the previous complete PigFS generation valid.
 
 ## HTTP Range source
 
@@ -68,7 +68,7 @@ If a server stops honoring ranges or changes the pinned representation while the
 
 `openHttpWurst()` exists in the format layer in 0.31.0.
 
-Wurster Web already accepts an HTTP URL as a first-class Range-backed source and layers a writable browser-session WurstFS overlay over that immutable remote base. Desktop Wurster does not yet accept an HTTP URL as a first-class launch target. The portable API name is the same in both families: `wurst.snapshot.export()`. Desktop streams its committed virtual WRST bytes through Wurster-owned save UI; Web materializes the remote base plus current overlay as a new standalone snapshot.
+Wurster Web already accepts an HTTP URL as a first-class Range-backed source and layers a writable browser-session PigFS overlay over that immutable remote base. Desktop Wurster does not yet accept an HTTP URL as a first-class launch target. The portable API name is the same in both families: `wurst.snapshot.export()`. Desktop streams its committed virtual WRST bytes through Wurster-owned save UI; Web materializes the remote base plus current overlay as a new standalone snapshot.
 
 The intended model is:
 
@@ -86,4 +86,4 @@ A standalone snapshot necessarily has to acquire every byte it needs to become i
 
 Undercover PNG preserves the virtual WRST offset model for reads by mapping virtual ranges to intersecting `wuSt` PNG chunks.
 
-Incremental crash-safe WurstFS writes inside the current PNG carrier are not implemented in 0.31.0. Carrier Wursts remain read-only for mutation until the carrier framing gains an append-safe journal.
+Incremental crash-safe PigFS writes inside the current PNG carrier are not implemented in 0.31.0. Carrier Wursts remain read-only for mutation until the carrier framing gains an append-safe journal.

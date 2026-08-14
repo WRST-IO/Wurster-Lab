@@ -82,7 +82,7 @@ Store status values:
 - `missing`: no build record or at least one artifact is absent.
 - `invalid`: the record is malformed or an artifact hash no longer matches.
 
-This store is intentionally data-shaped. It can live in WurstFS later without changing the build-record semantics.
+This store is intentionally data-shaped. It can live in PigFS later without changing the build-record semantics.
 
 ## Publishing Build Output
 
@@ -102,27 +102,27 @@ The artifact bytes are copied from the build workspace into the publication arti
 
 `applyPigstyPublication(workspace, publication)` applies the publication to a workspace object. `assessPigstyArtifactStore(...)` then verifies published artifacts by `storedPath` while still reporting the authored output `path`.
 
-This gives Wurster the core transaction unit it needs: build output can be assembled and verified before a future WurstFS commit makes it current.
+This gives Wurster the core transaction unit it needs: build output can be assembled and verified before a future PigFS commit makes it current.
 
 ## Transactional Builds
 
 Pigsty builds should publish derived output transactionally. A failed build must not replace a known-good artifact set.
 
-The ordinary rule mirrors WurstFS compaction and migration:
+The ordinary rule mirrors PigFS compaction and migration:
 
 ```text
 write new result, verify it, then make it current
 ```
 
-The current helper layer implements the "write new result" and "verify it" parts in memory. Desktop Wurster still needs the final WurstFS commit wrapper before app UIs can make published artifacts durable inside an opened `.wurst` file.
+The current helper layer implements the "write new result" and "verify it" parts in memory. Desktop Wurster still needs the final PigFS commit wrapper before app UIs can make published artifacts durable inside an opened `.wurst` file.
 
 ## Engine Change-Sets
 
 Pigsty engines return persistent filesystem mutations as `wurst/pigsty-changeset-1`:
 
-- `add`: a new WurstFS-backed file appeared.
-- `modify`: an existing WurstFS-backed file changed.
-- `delete`: an existing WurstFS-backed file was removed.
+- `add`: a new PigFS-backed file appeared.
+- `modify`: an existing PigFS-backed file changed.
+- `delete`: an existing PigFS-backed file was removed.
 
 `wurst/pigsty-engine-result-1` wraps that change-set with the engine result, events and a digest of ephemeral `/tmp`. Applying an engine result requires the source workspace digest to still match, so Wurster can reject stale or reordered commits instead of merging engine output into the wrong Wurst state.
 

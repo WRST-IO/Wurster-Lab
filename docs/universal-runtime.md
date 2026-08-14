@@ -15,7 +15,7 @@ Windows, macOS, Linux, iOS, Android and future runtimes may use completely diffe
 
 ## Baseline and optional capabilities
 
-The conforming baseline is the part every Wurster must understand: the WRST container, normal application HTML/CSS/JavaScript, immutable resource integrity, WurstFS semantics, package signatures and the portable Wurster API baseline.
+The conforming baseline is the part every Wurster must understand: the WRST container, normal application HTML/CSS/JavaScript, immutable resource integrity, PigFS semantics, package signatures and the portable Wurster API baseline.
 
 Capabilities are different. A Wurst may declare an optional ability that a particular runtime cannot provide.
 
@@ -57,7 +57,7 @@ Conformance therefore means understanding the request and denying or marking una
 
 Pigsty may exist on Desktop before it exists on mobile or Web. That does not split the Wurst format.
 
-A Wurst can display and edit its data everywhere while enabling source builds only where Pigsty is available. Built output remains ordinary Wurst content or WurstFS state with provenance. The absence of Pigsty disables the build operation, not the Wurst.
+A Wurst can display and edit its data everywhere while enabling source builds only where Pigsty is available. Built output remains ordinary Wurst content or PigFS state with provenance. The absence of Pigsty disables the build operation, not the Wurst.
 
 ## Portable secrets
 

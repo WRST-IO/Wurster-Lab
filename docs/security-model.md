@@ -23,9 +23,9 @@ A WurstKey protects immutable application content selected by the developer.
 
 The WurstKey is not a user identity and is not reused as a mutable-data key.
 
-## WurstFS: mutable data
+## PigFS: mutable data
 
-Mutable data uses independent WurstFS realms.
+Mutable data uses independent PigFS realms.
 
 ### Ordinary
 
@@ -64,7 +64,7 @@ Trusted surfaces such as `<wurster-auth>` and `<wurst-identity>` are rendered by
 
 Wurst JavaScript does not receive arbitrary host paths or Node filesystem access. `files.open` and `files.save` are narrow user-selected bridges owned by Wurster dialogs.
 
-WurstFS paths are inside the Wurst itself and are not host filesystem permissions.
+PigFS paths are inside the Wurst itself and are not host filesystem permissions.
 
 ## Pigsty boundary
 
@@ -74,7 +74,7 @@ Pigsty permission is independent of package signature. A signature identifies a 
 
 ## Piglet boundary
 
-Piglet lets a parent Wurst keep and orchestrate child Wursts. It does not merge trust domains. MeatGrinder preserves built-in child bytes exactly, and runtime installation writes the supplied child bytes unchanged into WurstFS. A child keeps its own signature, publisher, realms, WurstKey state, Pigsty permission and PigLink declarations.
+Piglet lets a parent Wurst keep and orchestrate child Wursts. It does not merge trust domains. MeatGrinder preserves built-in child bytes exactly, and runtime installation writes the supplied child bytes unchanged into PigFS. A child keeps its own signature, publisher, realms, WurstKey state, Pigsty permission and PigLink declarations.
 
 Managed Desktop children run in separate renderer/runtime contexts. Invalid child signatures fail before execution. Sealed child surfaces currently fail closed until authentication is child-context aware.
 
@@ -88,11 +88,11 @@ PigLink connects behavior, not trust. A link does not transfer capabilities, but
 
 Mutable writes append new records before publishing a commit. If the process crashes before commit, the previous committed state remains authoritative.
 
-Append-safe is not permanent retention. Ordinary and personal WurstFS storage can be compacted to the current live snapshot, physically removing deleted/replaced data. Compaction writes a separate file, verifies it and only then may replace the old file.
+Append-safe is not permanent retention. Ordinary and personal PigFS storage can be compacted to the current live snapshot, physically removing deleted/replaced data. Compaction writes a separate file, verifies it and only then may replace the old file.
 
 ## Multi-user integrity boundary
 
-Readonly is not a promise that a hostile hex editor cannot change bytes. It means an unauthorized changed state cannot validate as an authorized WurstFS state.
+Readonly is not a promise that a hostile hex editor cannot change bytes. It means an unauthorized changed state cannot validate as an authorized PigFS state.
 
 Confidentiality is stronger: data another identity must not read is actually encrypted.
 
@@ -103,7 +103,7 @@ Confidentiality is stronger: data another identity must not read is actually enc
 - Wurster Identity signing: Ed25519
 - Wurster Identity key agreement: X25519
 - protected application content: chunked AES-256-GCM
-- sealed WurstFS realms: AES-256-GCM with per-realm random keys
+- sealed PigFS realms: AES-256-GCM with per-realm random keys
 - hashes/integrity: SHA-256
 - application WurstKey: 256-bit random key material
 

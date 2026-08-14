@@ -1,8 +1,8 @@
 ---
 title: PigLink
-group: Building Wursts
-groupOrder: 3
-order: 3
+group: Runtime Pillars
+groupOrder: 2
+order: 2
 ---
 # PigLink
 
@@ -16,7 +16,7 @@ Visible UI  <-  WURST  ->  PigLink
 
 PigLink replaces the older "Wurst Interface" wording. The concept is not a separate Wurst type and not a global event bus. It is the native communication contract for one running Wurst instance.
 
-## Status In 0.32.0
+## Status In 0.32.2
 
 The declared Action/Event contract is functional. MeatGrinder signs and packages PigLink code separately from the visible app, Desktop and the headless harness can invoke Actions with schema validation, and Events are validated at the runtime boundary. The Web runtime exposes the same declaration surface.
 

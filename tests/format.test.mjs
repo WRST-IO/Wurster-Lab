@@ -5,7 +5,7 @@ import path from 'node:path';
 import {
   FORMAT_VERSION,
   SIGNATURE_PATH,
-  WURST_FS_MAX_RECORD_PAYLOAD,
+  PIG_FS_MAX_RECORD_PAYLOAD,
   classifyRisk,
   createHttpWurstSource,
   createPackageSignature,
@@ -68,24 +68,38 @@ assert.throws(() => encodeWurst({
 assert.throws(() => encodeWurst({
   manifest: {
     ...makeManifest(),
-    data: { format: 'wurst/data-realms-1', writable: true, realms: [{ id: 'files', mode: 'crud' }] }
+    pigfs: { format: 'wurst/pigfs-policy-1', writable: true, realms: [{ id: 'files', mode: 'crud' }] }
   },
   files: [{ path: 'index.html', data: Buffer.from('nope'), scope: 'app' }]
 }), /mode was removed/);
 assert.doesNotThrow(() => encodeWurst({
   manifest: {
     ...makeManifest(),
-    data: { format: 'wurst/data-realms-1', writable: true, realms: [{ id: 'files' }, { id: 'private', governance: 'personal' }] }
+    pigfs: { format: 'wurst/pigfs-policy-1', writable: true, realms: [{ id: 'files' }, { id: 'private', governance: 'personal' }] }
   },
   files: [{ path: 'index.html', data: Buffer.from('ok'), scope: 'app' }]
 }));
 assert.throws(() => encodeWurst({
   manifest: {
     ...makeManifest(),
-    data: { format: 'wurst/data-realms-1', writable: true, realms: [{ id: 'private', governance: 'personal', protection: 'public' }] }
+    pigfs: { format: 'wurst/pigfs-policy-1', writable: true, realms: [{ id: 'private', governance: 'personal', protection: 'public' }] }
   },
   files: [{ path: 'index.html', data: Buffer.from('nope'), scope: 'app' }]
 }), /sealed owner-only/);
+assert.throws(() => encodeWurst({
+  manifest: {
+    ...makeManifest(),
+    pigfs: { format: 'wurst/pigfs-policy-1', writable: true, realms: [{ id: 'workspace', mount: '/workspace' }, { id: 'nested', mount: '/workspace/private' }] }
+  },
+  files: [{ path: 'index.html', data: Buffer.from('nope'), scope: 'app' }]
+}), /overlap/i);
+assert.throws(() => encodeWurst({
+  manifest: {
+    ...makeManifest(),
+    pigfs: { format: 'wurst/pigfs-policy-1', writable: true, realms: [{ id: 'workspace', mount: '/workspace', quotaBytes: 0 }] }
+  },
+  files: [{ path: 'index.html', data: Buffer.from('nope'), scope: 'app' }]
+}), /quota/i);
 assert.throws(() => encodeWurst({
   manifest: {
     ...makeManifest(),
@@ -111,7 +125,7 @@ try {
   const reader = await openWurstFile(randomAccessPath);
   assert.equal(reader.manifest.name, 'Test Wurst');
   assert.equal((await reader.readRange('index.html', 4, 5)).data.toString(), 'Wurst');
-  assert.equal(reader.wurstFsRoot, null);
+  assert.equal(reader.pigFsRoot, null);
   await reader.close();
 
   // Publisher signatures cover immutable package bytes and reject tampering.
@@ -174,7 +188,7 @@ try {
   assert.ok(extractWurstFromPng(undercover).equals(binary));
   assert.equal(decodeWurst(undercover).manifest.format, 'wurst/7');
 
-  // WurstKey protection stays independent from mutable WurstFS identity/data policy.
+  // WurstKey protection stays independent from mutable PigFS identity/data policy.
   const meatphrase = generateMeatphrase(12);
   assert.equal(meatphrase.tokens.length, 12);
   const wurstKey = generateWurstKey();
@@ -197,15 +211,15 @@ try {
   opened.destroy();
 
   assert.equal(classifyRisk(makeManifest()).level, 'green');
-  assert.equal(classifyRisk(makeManifest({ data: { format: 'wurst/data-realms-1', writable: true, realms: [{ id: 'files' }] } })).level, 'yellow');
+  assert.equal(classifyRisk(makeManifest({ pigfs: { format: 'wurst/pigfs-policy-1', writable: true, realms: [{ id: 'files' }] } })).level, 'yellow');
   assert.equal(classifyRisk(makeManifest({ capabilities: { 'files.open': true } })).level, 'red');
-  assert.equal(WURST_FS_MAX_RECORD_PAYLOAD, 4 * 1024 * 1024);
+  assert.equal(PIG_FS_MAX_RECORD_PAYLOAD, 4 * 1024 * 1024);
 
   console.log('✓ WRST v7 immutable base and random-access integrity');
   console.log('✓ Pre-1.0 removed mutable-data schemas are rejected instead of supported');
   console.log('✓ Publisher package signatures protect immutable code');
   console.log('✓ HTTP Range and Undercover PNG carriers remain valid');
-  console.log('✓ WurstKey application protection stays independent from WurstFS');
+  console.log('✓ WurstKey application protection stays independent from PigFS');
 } finally {
   await fs.rm(tempDir, { recursive: true, force: true });
 }

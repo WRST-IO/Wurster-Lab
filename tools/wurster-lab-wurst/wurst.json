@@ -1,7 +1,7 @@
 {
   "id": "io.wrst.wurster-lab",
   "name": "Wurster Lab",
-  "version": "0.20.0",
+  "version": "0.32.2",
   "type": "app",
   "entry": "index.html",
   "outputName": "WursterLab",
@@ -19,27 +19,30 @@
   "application": {
     "protection": "public"
   },
-  "data": {
-    "format": "wurst/data-realms-1",
+  "protection": {
+    "storedIdentity": true
+  },
+  "versionedOutput": false,
+  "pigfs": {
+    "format": "wurst/pigfs-policy-1",
     "writable": true,
     "realms": [
       {
         "id": "workspace",
-        "label": "Wurster Workspace"
+        "label": "Wurster Workspace",
+        "mount": "/workspace"
       },
       {
         "id": "lab",
-        "label": "Lab Notes"
+        "label": "Lab Notes",
+        "mount": "/lab"
       },
       {
         "id": "operator",
         "label": "WRST.IO Operator",
+        "mount": "/operator",
         "governance": "personal"
       }
     ]
-  },
-  "protection": {
-    "storedIdentity": true
-  },
-  "versionedOutput": false
+  }
 }

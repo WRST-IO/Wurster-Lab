@@ -27,12 +27,12 @@ import { buildWurst } from '@wurster/meatgrinder';
 import { UnlockSessionBroker } from '@wurster/session';
 import { generateTotpSecret, totpUri, verifyTotp } from './identity-core.mjs';
 import { publisherDisplayName, secureTrustPresentation, verificationTrustRoute } from './publisher-trust-presentation.mjs';
-import { dataFsPath } from './wurst-fs-paths.mjs';
+import { pigFsPath } from './pig-fs-paths.mjs';
 import { createDesktopPigLinkRuntime, loadPigLinkEntry } from './piglink-runtime.mjs';
-import { loadPigletResource, pigletChildren, createDesktopPigletRuntime } from './piglet-runtime.mjs';
+import { openPigletResourceSource, pigletChildren, createDesktopPigletRuntime } from './piglet-runtime.mjs';
 import { createPigletStorageAdapter } from './piglet-storage-runtime.mjs';
-import { createPigletSurfaceManager } from './piglet-surface-runtime.mjs';
-import { bindPigletWurstFsPersistence } from './piglet-wurstfs-runtime.mjs';
+import { createPigletEmbedRuntime } from './piglet-embed-runtime.mjs';
+import { bindPigletPigFsPersistence } from './piglet-pigfs-runtime.mjs';
 import { createTrustedSurfaceRuntime } from './trusted-surface-runtime.mjs';
 import { createDesktopPigstyRuntime } from './pigsty-runtime.mjs';
 import { cspFor, networkRequestAllowed, parseHttpRange, partitionFor, responseFor, safeRequestPath } from './web-sandbox-runtime.mjs';
@@ -45,7 +45,7 @@ import {
   createPublisherCertificateRequest,
   generateMeatphrase,
   mimeFor,
-  measureWurstFs2Storage,
+  measurePigFsStorage,
   normalizeCapabilities,
   normalizeMeatphrase,
   normalizeWurstKey,
@@ -55,9 +55,9 @@ import {
   publisherIdentityFromBundle,
   verifyPublisherDomainRecords,
   unlockPublisherPrivateKey,
-  openLocalWurstFsStore,
-  wurstFsRealmCapabilities,
-  wurstFsRealmGovernance,
+  openLocalPigFsStore,
+  pigFsRealmCapabilities,
+  pigFsRealmGovernance,
   verifyWursterIdentityRecord,
   writeCompactedWurstFile,
   openWurstFile,
@@ -76,8 +76,8 @@ const SEALED_BOOTSTRAP_HTML = path.join(HERE, 'sealed-bootstrap.html');
 const TRUSTED_AUTHORITIES_JSON = path.join(HERE, 'trusted-authorities.json');
 const TRUST_BUNDLE_JSON = path.join(HERE, 'trust-bundle.json');
 const WURSTER_ICON = path.join(app.getAppPath(), 'build', 'icons', 'wurster.png');
-const MAX_WURST_FS_SLICE_BYTES = 2 * 1024 * 1024;
-const MAX_WURST_FS_CHUNK_BYTES = 4 * 1024 * 1024;
+const MAX_PIG_FS_SLICE_BYTES = 2 * 1024 * 1024;
+const MAX_PIG_FS_CHUNK_BYTES = 4 * 1024 * 1024;
 const SUPPORTED_CAPABILITIES = new Set(['storage.local', 'network', 'window.alwaysOnTop', 'code.unsafeEval', 'files.open', 'files.save', 'piglet', 'pigsty']);
 const MEAT_LOCKER_FORMAT = 'wurster/meat-locker-5';
 const WURSTER_SETTINGS_FORMAT = 'wurster/settings-1';
@@ -85,6 +85,7 @@ const SETTINGS_HTML = path.join(HERE, 'settings.html');
 const LAUNCHER_PRELOAD = path.join(HERE, 'launcher-preload.cjs');
 const LAUNCHER_HTML = path.join(HERE, 'launcher.html');
 const WRST_AUTHORITY_URL = 'https://authority.wrst.io';
+const WEB_RUNTIME_SRC = app.isPackaged ? path.join(process.resourcesPath, 'web-runtime') : path.resolve(HERE, '../../web/src');
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -93,6 +94,7 @@ protocol.registerSchemesAsPrivileged([
       standard: true,
       secure: true,
       supportFetchAPI: true,
+      allowServiceWorkers: true,
       corsEnabled: false,
       stream: true
     }
@@ -335,21 +337,21 @@ function configureSession(wurstSession, context) {
   wurstSession.protocol.handle('wurst', async (request) => {
     try {
       const parsedUrl = new URL(request.url);
-      if (parsedUrl.hostname === 'data') {
-        if (!realmDataMode(context.manifest)) return new Response('WurstFS not declared', { status: 404 });
+      if (parsedUrl.hostname === 'pigfs') {
+        if (!realmDataMode(context.manifest)) return new Response('PigFS not declared', { status: 404 });
         const requested = decodeURIComponent(parsedUrl.pathname.replace(/^\/+/, ''));
-        const fsPath = dataFsPath(requested);
+        const fsPath = pigFsPath(requested);
         const options = realmReadOptions(context, fsPath);
         let entry;
-        try { entry = await context.reader.fsStat(fsPath, options); }
-        catch (error) { if (error?.code === 'WURST_FS_LOCKED') return new Response('Protected WurstFS realm is locked', { status: 423 }); throw error; }
-        if (!entry || entry.type !== 'file') return new Response('WurstFS resource not found', { status: 404 });
+        try { entry = await context.reader.pigFsStat(fsPath, options); }
+        catch (error) { if (error?.code === 'PIG_FS_LOCKED') return new Response('Protected PigFS realm is locked', { status: 423 }); throw error; }
+        if (!entry || entry.type !== 'file') return new Response('PigFS resource not found', { status: 404 });
         const total = entry.size;
         const requestedRange = parseHttpRange(request.headers.get('range'), total);
         const offset = requestedRange?.offset ?? 0;
         const length = requestedRange?.length ?? total;
-        const loaded = await context.reader.fsReadRange(fsPath, offset, length, options);
-        if (!loaded) return new Response('WurstFS resource not found', { status: 404 });
+        const loaded = await context.reader.pigFsReadRange(fsPath, offset, length, options);
+        if (!loaded) return new Response('PigFS resource not found', { status: 404 });
         const resourceEntry = {
           path: fsPath,
           length: total,
@@ -369,6 +371,21 @@ function configureSession(wurstSession, context) {
         }
         return responseFor(resourceEntry, context.manifest, loaded.data, requestedRange);
       }
+      if (parsedUrl.hostname === 'runtime') {
+        const requested = decodeURIComponent(parsedUrl.pathname.replace(/^\/+/, ''));
+        const allowed = new Map([
+          ['wurster-embed.mjs', ['wurster-embed.mjs', 'text/javascript; charset=utf-8']],
+          ['wurster-embed-host.html', ['wurster-embed-host.html', 'text/html; charset=utf-8']],
+          ['wurster-web.mjs', ['wurster-web.mjs', 'text/javascript; charset=utf-8']],
+          ['wurster.min.js', ['wurster-web.mjs', 'text/javascript; charset=utf-8']],
+          ['wurster-sw.js', ['wurster-sw.js', 'text/javascript; charset=utf-8']],
+          ['trust-data.mjs', ['trust-data.mjs', 'text/javascript; charset=utf-8']]
+        ]);
+        const asset = allowed.get(requested);
+        if (!asset) return new Response('Wurster runtime asset not found', { status: 404 });
+        const data = await fs.readFile(path.join(WEB_RUNTIME_SRC, asset[0]));
+        return new Response(data, { status: 200, headers: { 'Content-Type': asset[1], 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
+      }
       if (parsedUrl.hostname === 'piglink') {
         const requested = decodeURIComponent(parsedUrl.pathname.replace(/^\//, ''));
         const data = await loadPigLinkEntry(context, requested);
@@ -386,21 +403,26 @@ function configureSession(wurstSession, context) {
       if (parsedUrl.hostname === 'piglet') {
         const requestedId = decodeURIComponent(parsedUrl.pathname.replace(/^\//, '')).replace(/\.wurst$/i, '');
         try {
-          const { data } = await loadPigletResource(context, requestedId);
-          return new Response(data, {
-            status: 200,
-            headers: {
-              'Content-Type': 'application/vnd.wrst.wurst',
-              'Content-Security-Policy': cspFor(context.manifest),
-              'X-Content-Type-Options': 'nosniff',
-              'Cache-Control': 'no-store'
-            }
-          });
+          const { source } = openPigletResourceSource(context, requestedId);
+          const total = source.size;
+          const requestedRange = parseHttpRange(request.headers.get('range'), total);
+          const offset = requestedRange?.offset ?? 0;
+          const length = requestedRange?.length ?? total;
+          const headers = {
+            'Content-Type': 'application/vnd.wrst.wurst',
+            'Content-Security-Policy': cspFor(context.manifest),
+            'X-Content-Type-Options': 'nosniff',
+            'Cache-Control': 'no-store',
+            'Accept-Ranges': 'bytes',
+            'Content-Length': String(length)
+          };
+          if (requestedRange) headers['Content-Range'] = `bytes ${offset}-${offset + length - 1}/${total}`;
+          if (request.method === 'HEAD') return new Response(null, { status: requestedRange ? 206 : 200, headers });
+          const data = await source.read(offset, length);
+          return new Response(data, { status: requestedRange ? 206 : 200, headers });
         } catch (error) {
           const integrityFailure = /integrity failed/i.test(String(error?.message ?? ''));
-          return new Response(integrityFailure ? 'Piglet child integrity failed' : 'Piglet child not found', {
-            status: integrityFailure ? 500 : 404
-          });
+          return new Response(integrityFailure ? 'Piglet child integrity failed' : 'Piglet child not found', { status: integrityFailure ? 500 : 404 });
         }
       }
       const requestPath = safeRequestPath(request.url, context.manifest);
@@ -1219,16 +1241,11 @@ async function markIdentityUsed(identityId) {
 }
 
 function runtimeRenderer(context) {
-  if (context?.pigletSurface?.view?.webContents && !context.pigletSurface.view.webContents.isDestroyed()) return context.pigletSurface.view.webContents;
   if (context === currentContext && currentWindow && !currentWindow.isDestroyed()) return currentWindow.webContents;
   return null;
 }
 
-function runtimeViewport(context) {
-  if (context?.pigletSurface?.view) {
-    const bounds = context.pigletSurface.view.getBounds();
-    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
-  }
+function runtimeViewport(_context) {
   const bounds = currentWindow?.getContentBounds?.() ?? { width: 800, height: 600 };
   return { x: 0, y: 0, width: bounds.width, height: bounds.height };
 }
@@ -1446,20 +1463,20 @@ async function clearCurrentContext() {
 
   destroyAllAuthSurfaces();
   destroyAllIdentitySurfaces();
-  if (currentContext?.wurstFsHygieneTimer) clearTimeout(currentContext.wurstFsHygieneTimer);
+  if (currentContext?.pigFsHygieneTimer) clearTimeout(currentContext.pigFsHygieneTimer);
   if (currentContext?.applicationSessionTimer) clearTimeout(currentContext.applicationSessionTimer);
   if (currentContext?.filesystemIdentityTimer) clearTimeout(currentContext.filesystemIdentityTimer);
   if (currentContext?.runtimeBinding) unlockSessions.revokeBinding(currentContext.runtimeBinding);
   if (currentContext) currentContext.closing = true;
-  if (currentContext?.wurstFsStore?.closeFile) await currentContext.wurstFsStore.closeFile().catch(() => {});
-  else if (currentContext?.wurstFsStore?.close) await currentContext.wurstFsStore.close().catch(() => {});
+  if (currentContext?.pigFsStore?.closeFile) await currentContext.pigFsStore.closeFile().catch(() => {});
+  else if (currentContext?.pigFsStore?.close) await currentContext.pigFsStore.close().catch(() => {});
   if (currentContext?.applicationProtectionHandle) await protectionClient.destroy(currentContext.applicationProtectionHandle);
   if (currentContext?.reader) await currentContext.reader.close().catch(() => {});
   currentContext = null;
 }
 
 function metadataPackage(context) {
-  return { manifest: context.manifest, index: context.reader.index, wurstFsRoot: context.reader.wurstFsRoot };
+  return { manifest: context.manifest, index: context.reader.index, pigFsRoot: context.reader.pigFsRoot };
 }
 
 function bindRuntimeContext(webContents, context) {
@@ -1476,6 +1493,96 @@ function assertWurstSender(event) {
   return context;
 }
 
+async function invokeDelegatedParentPigFs(context, method, args = []) {
+  const name = String(method ?? '');
+  if (name === 'pigfs.capabilities') {
+    if (!realmDataMode(context.manifest)) return { read: false, write: false, persistent: false, root: '/' };
+    return {
+      read: true,
+      write: Boolean(context.manifest.pigfs?.writable && !context.reader.carrier && !context.readOnlyPackage),
+      persistent: true, snapshot: true, mediaUrls: false, compact: false, protection: 'realms',
+      format: 'wurst/pigfs-1', realms: true, root: '/'
+    };
+  }
+  if (name === 'pigfs.realms') return realmDataMode(context.manifest) ? realmRuntimeSummary(context) : [];
+  if (name === 'pigfs.stat') {
+    if (!realmDataMode(context.manifest)) return null;
+    const target = pigFsPath(args[0]);
+    if (target === 'data') return { path: '/', name: 'pigfs', type: 'directory', size: 0, mime: null, revision: context.reader.pigFsRoot?.generation ?? 0 };
+    if (!context.reader.pigFsRoot) return null;
+    const entry = await context.reader.pigFsStat(target, await fsReadOptions(context, target));
+    return entry ? (entry.path?.startsWith('/') ? entry : { ...entry, path: `/${entry.path}` }) : null;
+  }
+  if (name === 'pigfs.list') {
+    if (!realmDataMode(context.manifest) || !context.reader.pigFsRoot) return [];
+    const target = pigFsPath(args[0] || '/');
+    const entries = await context.reader.pigFsList(target, await fsReadOptions(context, target));
+    return entries.map((entry) => entry.path?.startsWith('/') ? entry : ({ ...entry, path: `/${entry.path}` }));
+  }
+  if (name === 'pigfs.read') {
+    if (!realmDataMode(context.manifest) || !context.reader.pigFsRoot) return null;
+    const target = pigFsPath(args[0]);
+    const options = args[1] || {};
+    const cryptoOptions = await fsReadOptions(context, target);
+    const stat = await context.reader.pigFsStat(target, cryptoOptions);
+    if (!stat || stat.type !== 'file') return null;
+    const offset = Number(options.offset ?? 0);
+    const requested = options.length == null ? MAX_PIG_FS_SLICE_BYTES : Number(options.length);
+    const length = Math.min(requested, MAX_PIG_FS_SLICE_BYTES);
+    if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(length) || length < 0) throw new Error('Invalid delegated PigFS read range');
+    const result = await context.reader.pigFsReadRange(target, offset, length, cryptoOptions);
+    return { path: stat.path?.startsWith('/') ? stat.path : `/${target}`, mime: stat.mime, size: stat.size, offset: result.offset, length: result.length, eof: result.eof, data: result.data };
+  }
+  if (!realmDataMode(context.manifest) || !context.manifest.pigfs?.writable || context.reader.carrier || context.readOnlyPackage) throw new Error('Parent PigFS is not writable');
+  await waitForWurstFsMaintenance(context);
+  const store = await ensureWurstFsInitializedForWrite(context);
+  const actor = activeFilesystemIdentity(context);
+  if (name === 'pigfs.write') {
+    const target = pigFsPath(args[0]);
+    const value = args[1]; const options = args[2] || {};
+    const bytes = Buffer.isBuffer(value) ? value : value instanceof Uint8Array ? Buffer.from(value.buffer, value.byteOffset, value.byteLength) : value instanceof ArrayBuffer ? Buffer.from(value) : Buffer.from(typeof value === 'string' ? value : value ?? []);
+    const id = store.beginWrite(target, { actor, mime: typeof options.mime === 'string' ? options.mime : mimeFor(target) });
+    try {
+      for (let offset = 0; offset < bytes.length || (bytes.length === 0 && offset === 0); offset += MAX_PIG_FS_CHUNK_BYTES) {
+        await store.writeChunk(id, bytes.subarray(offset, Math.min(bytes.length, offset + MAX_PIG_FS_CHUNK_BYTES)));
+        if (bytes.length === 0) break;
+      }
+      const result = await store.commitWrite(id);
+      await refreshWurstFsContext(context); scheduleWurstFsHygiene(context);
+      const entry = result.entry; return entry.path?.startsWith('/') ? entry : { ...entry, path: `/${entry.path}` };
+    } catch (error) { store.abortWrite(id); throw error; }
+  }
+  if (name === 'pigfs.beginWrite') {
+    const target = pigFsPath(args[0]); const options = args[1] || {};
+    const id = store.beginWrite(target, { actor, mime: typeof options.mime === 'string' ? options.mime : mimeFor(target) });
+    return { id, path: `/${target}`, chunkSize: MAX_PIG_FS_CHUNK_BYTES };
+  }
+  if (name === 'pigfs.writeChunk') {
+    const value = args[1];
+    const bytes = Buffer.isBuffer(value) ? value : value instanceof Uint8Array ? Buffer.from(value.buffer, value.byteOffset, value.byteLength) : value instanceof ArrayBuffer ? Buffer.from(value) : Buffer.from(value ?? []);
+    if (bytes.length > MAX_PIG_FS_CHUNK_BYTES) throw new Error('PigFS chunks may not exceed 4 MiB');
+    return store.writeChunk(String(args[0] ?? ''), bytes);
+  }
+  if (name === 'pigfs.commitWrite') {
+    const result = await store.commitWrite(String(args[0] ?? '')); await refreshWurstFsContext(context); scheduleWurstFsHygiene(context);
+    const entry = result.entry; return entry.path?.startsWith('/') ? entry : { ...entry, path: `/${entry.path}` };
+  }
+  if (name === 'pigfs.abortWrite') return store.abortWrite(String(args[0] ?? ''));
+  if (name === 'pigfs.remove') {
+    const removed = await store.remove(pigFsPath(args[0]), { actor, recursive: Boolean(args[1]?.recursive) });
+    if (removed) { await refreshWurstFsContext(context); scheduleWurstFsHygiene(context, 700); } return removed;
+  }
+  if (name === 'pigfs.mkdir') {
+    const entry = await store.mkdir(pigFsPath(args[0]), { actor, recursive: args[1]?.recursive !== false });
+    await refreshWurstFsContext(context); scheduleWurstFsHygiene(context); return entry.path?.startsWith('/') ? entry : { ...entry, path: `/${entry.path}` };
+  }
+  if (name === 'pigfs.rename') {
+    const entry = await store.rename(pigFsPath(args[0]), pigFsPath(args[1]), { actor });
+    if (!entry) return null; await refreshWurstFsContext(context); scheduleWurstFsHygiene(context); return entry.path?.startsWith('/') ? entry : { ...entry, path: `/${entry.path}` };
+  }
+  throw new Error(`Unsupported delegated Parent PigFS method: ${name}`);
+}
+
 const pigletStorage = createPigletStorageAdapter({
   realmDataMode,
   realmRuntimeSummary,
@@ -1484,40 +1591,26 @@ const pigletStorage = createPigletStorageAdapter({
   activeActor: activeFilesystemIdentity,
   refreshContext: refreshWurstFsContext,
   scheduleHygiene: scheduleWurstFsHygiene,
-  normalizeDataPath: dataFsPath,
+  normalizeDataPath: pigFsPath,
   waitForMaintenance: waitForWurstFsMaintenance
 });
-const pigletSurfaces = createPigletSurfaceManager({
-  getHostWindow: () => currentWindow,
-  createView: (webPreferences) => new WebContentsView({ webPreferences }),
-  sessionForChild: (manifest, instanceKey) => session.fromPartition(partitionFor(manifest, instanceKey), { cache: false }),
-  configureSession,
-  authorizePackage,
-  bindContext: bindRuntimeContext,
-  unbindContext: unbindRuntimeContext,
-  preload: WURST_PRELOAD,
-  storage: pigletStorage,
-  loadSealedBootstrap: () => fs.readFile(SEALED_BOOTSTRAP_HTML, 'utf8'),
-  destroyProtectionHandle: (handle) => protectionClient.destroy(handle),
-  cleanupContextUi: destroyContextTrustedSurfaces,
-  layoutContextUi: (context) => trustedSurfaceRuntime.layoutContext(context)
-});
+const pigletEmbeds = createPigletEmbedRuntime({ storage: pigletStorage, invokeParent: invokeDelegatedParentPigFs });
 const pigletRuntime = createDesktopPigletRuntime({
   ipcMain,
   assertWurstSender,
   assertCapability: assertRuntimeCapability,
   storage: pigletStorage,
-  surfaces: pigletSurfaces
+  embeds: pigletEmbeds
 });
 const pigLinkRuntime = createDesktopPigLinkRuntime({
   ipcMain,
   assertWurstSender,
-  getWebContents: (context) => context?.pigletSurface?.view?.webContents ?? (context === currentContext ? currentWindow?.webContents : null)
+  getWebContents: (context) => context === currentContext ? currentWindow?.webContents : null
 });
 const pigstyRuntime = createDesktopPigstyRuntime({ app, ipcMain, assertWurstSender });
 
 function realmDataMode(manifest) {
-  return manifest?.data?.format === 'wurst/data-realms-1';
+  return manifest?.pigfs?.format === 'wurst/pigfs-policy-1';
 }
 
 function filesystemMode(context) {
@@ -1530,8 +1623,8 @@ function activeFilesystemIdentity(context) {
   if (grant) return context.wurstIdentityMaterial;
   context.wurstIdentityMaterial = null;
   if (context.identitySession?.kind === 'wurster-identity') context.identitySession = null;
-  if (context.wurstFsStore?.realmKeys) {
-    for (const realmId of [...context.wurstFsStore.realmKeys.keys()]) context.wurstFsStore.lockRealm(realmId);
+  if (context.pigFsStore?.realmKeys) {
+    for (const realmId of [...context.pigFsStore.realmKeys.keys()]) context.pigFsStore.lockRealm(realmId);
   }
   return null;
 }
@@ -1545,8 +1638,8 @@ function scheduleFilesystemIdentityExpiry(context, grant) {
     unlockSessions.revoke(protectionSessionBinding(context), 'filesystem-identity');
     context.wurstIdentityMaterial = null;
     if (context.identitySession?.kind === 'wurster-identity') context.identitySession = null;
-    if (context.wurstFsStore?.realmKeys) {
-      for (const realmId of [...context.wurstFsStore.realmKeys.keys()]) context.wurstFsStore.lockRealm(realmId);
+    if (context.pigFsStore?.realmKeys) {
+      for (const realmId of [...context.pigFsStore.realmKeys.keys()]) context.pigFsStore.lockRealm(realmId);
     }
   }, Math.min(delay, 0x7fffffff));
 }
@@ -1574,17 +1667,17 @@ function grantFilesystemIdentitySession(context, material, identity = null, requ
 }
 
 async function ensureWurstFsStore(context) {
-  if (!realmDataMode(context.manifest)) throw new Error('This Wurst does not use WurstFS realms');
-  if (context.readOnlyPackage) throw new Error('Nested Piglet WurstFS is read-only until transactional child write-back is available');
-  if (context.wurstFsStore) return context.wurstFsStore;
-  if (context.reader.carrier) throw new Error('WurstFS realm writes are not available for carrier Wursts');
+  if (!realmDataMode(context.manifest)) throw new Error('This Wurst does not use PigFS realms');
+  if (context.readOnlyPackage) throw new Error('Nested Piglet PigFS is read-only until transactional child write-back is available');
+  if (context.pigFsStore) return context.pigFsStore;
+  if (context.reader.carrier) throw new Error('PigFS realm writes are not available for carrier Wursts');
   if (!context.filePath && context.ensurePigletBacking) await context.ensurePigletBacking();
-  if (!context.filePath) throw new Error('Writable WurstFS needs a local runtime backing file');
-  context.wurstFsStore = bindPigletWurstFsPersistence(
-    await openLocalWurstFsStore(context.filePath, context.reader),
+  if (!context.filePath) throw new Error('Writable PigFS needs a local runtime backing file');
+  context.pigFsStore = bindPigletPigFsPersistence(
+    await openLocalPigFsStore(context.filePath, context.reader),
     context.pigletPersistence
   );
-  return context.wurstFsStore;
+  return context.pigFsStore;
 }
 
 async function ensureWurstFsInitializedForWrite(context) {
@@ -1592,7 +1685,7 @@ async function ensureWurstFsInitializedForWrite(context) {
   if (store.root) return store;
   const actor = activeFilesystemIdentity(context);
   if (!actor && realmTemplatesNeedIdentity(context)) {
-    const error = new Error('Authenticate a Wurster Identity before initializing identity-backed WurstFS realms');
+    const error = new Error('Authenticate a Wurster Identity before initializing identity-backed PigFS realms');
     error.code = 'WURST_AUTH_REQUIRED';
     throw error;
   }
@@ -1608,14 +1701,14 @@ async function ensureWurstFsInitializedForWrite(context) {
 async function ensureRealmUnlockedForIdentity(context, realmId, material = activeFilesystemIdentity(context)) {
   const store = await ensureWurstFsStore(context);
   const realm = store.realm(realmId);
-  if (!realm) throw new Error(`Unknown WurstFS realm ${realmId}`);
+  if (!realm) throw new Error(`Unknown PigFS realm ${realmId}`);
   if (realm.protection === 'public') return { realm: realm.id, unlocked: true, public: true };
   if (!material) {
-    const error = new Error(`WurstFS realm ${realm.id} requires a Wurster Identity`);
+    const error = new Error(`PigFS realm ${realm.id} requires a Wurster Identity`);
     error.code = 'WURST_AUTH_REQUIRED';
     throw error;
   }
-  if (wurstFsRealmGovernance(realm) === 'personal' && !realm.claimed) {
+  if (pigFsRealmGovernance(realm) === 'personal' && !realm.claimed) {
     await store.claimPersonalRealm(realm.id, { actor: material });
     await refreshWurstFsContext(context);
     return { realm: realm.id, unlocked: true, claimed: true, identity: material.publicRecord.identityId };
@@ -1624,13 +1717,13 @@ async function ensureRealmUnlockedForIdentity(context, realmId, material = activ
 }
 
 function realmReadOptions(context, fsPath) {
-  if (!realmDataMode(context.manifest) || context.reader.wurstFsRoot?.format !== 'wurst/fs-2') return {};
+  if (!realmDataMode(context.manifest) || context.reader.pigFsRoot?.format !== 'wurst/pigfs-1') return {};
   const normalized = String(fsPath ?? '').replaceAll('\\', '/').replace(/^\/+/, '');
   const parts = normalized.split('/').filter(Boolean);
-  if (parts[0] !== 'data' || parts.length < 2) return { realmKeys: context.wurstFsStore?.realmKeys ?? new Map() };
+  if (parts[0] !== 'data' || parts.length < 2) return { realmKeys: context.pigFsStore?.realmKeys ?? new Map() };
   const realmId = parts[1].toLowerCase();
-  const realmKey = context.wurstFsStore?.realmKeys?.get(realmId) ?? null;
-  return { realmKey, realmKeys: context.wurstFsStore?.realmKeys ?? new Map() };
+  const realmKey = context.pigFsStore?.realmKeys?.get(realmId) ?? null;
+  return { realmKey, realmKeys: context.pigFsStore?.realmKeys ?? new Map() };
 }
 
 function packageHasProtectedApp(context) {
@@ -1638,11 +1731,11 @@ function packageHasProtectedApp(context) {
 }
 
 async function waitForWurstFsMaintenance(context) {
-  if (context.wurstFsMaintenance) await context.wurstFsMaintenance;
+  if (context.pigFsMaintenance) await context.pigFsMaintenance;
 }
 
 async function currentWurstFsUsage(context) {
-  const root = context.reader.wurstFsRoot;
+  const root = context.reader.pigFsRoot;
   if (!root) {
     return {
       physicalBytes: Math.max(0, context.reader.source.size - context.reader.baseLength),
@@ -1654,10 +1747,10 @@ async function currentWurstFsUsage(context) {
       historyMode: 'none'
     };
   }
-  return measureWurstFs2Storage(context.reader.source, root, {
+  return measurePigFsStorage(context.reader.source, root, {
     baseOffset: context.reader.baseLength,
-    commitOffset: context.reader.wurstFsCommitOffset,
-    realmKeys: context.wurstFsStore?.realmKeys ?? new Map()
+    commitOffset: context.reader.pigFsCommitOffset,
+    realmKeys: context.pigFsStore?.realmKeys ?? new Map()
   });
 }
 
@@ -1665,18 +1758,18 @@ async function compactCurrentWurstFs(context, { reason = 'manual' } = {}) {
   if (context.readOnlyPackage) return { compacted: false, reason: 'read-only-piglet-snapshot', ...await currentWurstFsUsage(context) };
   if (context.reader.carrier) return { compacted: false, reason: 'carrier-read-only' };
   if (!realmDataMode(context.manifest)) return { compacted: false, reason: 'no-data' };
-  if (context.reader.wurstFsRoot?.historyMode === 'integrity') return { compacted: false, reason: 'integrity-history-retained' };
-  if (!context.manifest.data?.writable) return { compacted: false, reason: 'read-only' };
-  if (context.wurstFsMaintenance) return context.wurstFsMaintenance;
-  if (context.wurstFsStore?.sessions?.size) return { compacted: false, reason: 'write-in-progress' };
+  if (context.reader.pigFsRoot?.historyMode === 'integrity') return { compacted: false, reason: 'integrity-history-retained' };
+  if (!context.manifest.pigfs?.writable) return { compacted: false, reason: 'read-only' };
+  if (context.pigFsMaintenance) return context.pigFsMaintenance;
+  if (context.pigFsStore?.sessions?.size) return { compacted: false, reason: 'write-in-progress' };
 
   const task = (async () => {
     const originalReader = context.reader;
-    const originalCommit = originalReader.wurstFsCommitOffset ?? null;
+    const originalCommit = originalReader.pigFsCommitOffset ?? null;
     const store = await ensureWurstFsStore(context);
     for (const realm of Object.values(store.root?.realms ?? {})) {
       if (realm.protection !== 'sealed' || store.realmKeys.has(realm.id)) continue;
-      if (wurstFsRealmGovernance(realm) === 'personal' && realm.claimed === false && !(realm.catalogPages?.length)) continue;
+      if (pigFsRealmGovernance(realm) === 'personal' && realm.claimed === false && !(realm.catalogPages?.length)) continue;
       const material = activeFilesystemIdentity(context);
       if (!material) {
         const error = new Error(`Unlock sealed realm ${realm.id} before compaction`);
@@ -1698,14 +1791,14 @@ async function compactCurrentWurstFs(context, { reason = 'manual' } = {}) {
       // No writer may have published another generation while the compact copy
       // was being prepared. Reads remain available throughout the long copy.
       await originalReader.refreshWurstFs();
-      if ((originalReader.wurstFsCommitOffset ?? null) !== originalCommit || context.wurstFsStore?.sessions?.size) {
+      if ((originalReader.pigFsCommitOffset ?? null) !== originalCommit || context.pigFsStore?.sessions?.size) {
         await fs.rm(tempPath, { force: true }).catch(() => {});
         return { compacted: false, reason: 'changed-during-compaction' };
       }
 
-      if (context.wurstFsStore?.closeFile) await context.wurstFsStore.closeFile();
-      else if (context.wurstFsStore?.close) await context.wurstFsStore.close();
-      context.wurstFsStore = null;
+      if (context.pigFsStore?.closeFile) await context.pigFsStore.closeFile();
+      else if (context.pigFsStore?.close) await context.pigFsStore.close();
+      context.pigFsStore = null;
       await originalReader.close();
 
       try {
@@ -1732,7 +1825,7 @@ async function compactCurrentWurstFs(context, { reason = 'manual' } = {}) {
         oldSize: result.oldSize,
         newSize: result.newSize,
         reclaimedBytes: result.reclaimedBytes,
-        generation: replacement.wurstFsRoot?.generation ?? 0
+        generation: replacement.pigFsRoot?.generation ?? 0
       };
     } catch (error) {
       await fs.rm(tempPath, { force: true }).catch(() => {});
@@ -1744,22 +1837,22 @@ async function compactCurrentWurstFs(context, { reason = 'manual' } = {}) {
       }
       throw error;
     } finally {
-      context.wurstFsMaintenance = null;
+      context.pigFsMaintenance = null;
     }
   })();
-  context.wurstFsMaintenance = task;
+  context.pigFsMaintenance = task;
   return task;
 }
 
 function scheduleWurstFsHygiene(context, delay = 1800) {
-  if (!context || !realmDataMode(context.manifest) || context.reader.carrier || !context.manifest.data?.writable) return;
-  if (context.reader.wurstFsRoot?.format === 'wurst/fs-2' && context.reader.wurstFsRoot.historyMode === 'integrity') return;
-  if (context.wurstFsHygieneTimer) clearTimeout(context.wurstFsHygieneTimer);
-  context.wurstFsHygieneTimer = setTimeout(async () => {
-    context.wurstFsHygieneTimer = null;
+  if (!context || !realmDataMode(context.manifest) || context.reader.carrier || !context.manifest.pigfs?.writable) return;
+  if (context.reader.pigFsRoot?.format === 'wurst/pigfs-1' && context.reader.pigFsRoot.historyMode === 'integrity') return;
+  if (context.pigFsHygieneTimer) clearTimeout(context.pigFsHygieneTimer);
+  context.pigFsHygieneTimer = setTimeout(async () => {
+    context.pigFsHygieneTimer = null;
     try {
-      if (context !== currentContext || context.wurstFsMaintenance || context.wurstFsStore?.sessions?.size) return;
-      if (Object.values(context.reader.wurstFsRoot?.realms ?? {}).some((realm) => realm.protection === 'sealed' && !context.wurstFsStore?.realmKeys?.has(realm.id))) return;
+      if (context !== currentContext || context.pigFsMaintenance || context.pigFsStore?.sessions?.size) return;
+      if (Object.values(context.reader.pigFsRoot?.realms ?? {}).some((realm) => realm.protection === 'sealed' && !context.pigFsStore?.realmKeys?.has(realm.id))) return;
       const usage = await currentWurstFsUsage(context);
       const enoughWaste = usage.reclaimableBytes >= 32 * 1024 * 1024;
       const wasteRatio = usage.physicalBytes > 0 ? usage.reclaimableBytes / usage.physicalBytes : 0;
@@ -1840,14 +1933,12 @@ ipcMain.handle('wurst:identity:session', async (event) => {
 
 ipcMain.handle('wurst:window:close', async (event) => {
   const context = assertWurstSender(event);
-  if (context.pigletSurface) return pigletRuntime.closeChildContext(context);
   currentWindow?.close();
   return true;
 });
 
 ipcMain.handle('wurst:window:minimize', async (event) => {
   const context = assertWurstSender(event);
-  if (context.pigletSurface) return false;
   currentWindow?.minimize();
   return true;
 });
@@ -1997,40 +2088,40 @@ ipcMain.handle('wurst:capabilities:list', async (event) => {
   return runtimeCapabilityStates(context.manifest);
 });
 
-async function fsReadOptions(context, fsPath = '/data') {
-  if (!realmDataMode(context.manifest)) throw new Error('This Wurst has no /data filesystem');
-  return realmReadOptions(context, dataFsPath(fsPath));
+async function fsReadOptions(context, fsPath = '/') {
+  if (!realmDataMode(context.manifest)) throw new Error('This Wurst declares no PigFS filesystem');
+  return realmReadOptions(context, pigFsPath(fsPath));
 }
 
 function realmTemplateGovernance(template = {}) {
   const governance = String(template?.governance ?? '').trim().toLowerCase();
   if (!governance) return 'ordinary';
-  if (!['personal', 'shared'].includes(governance)) throw new Error(`Unsupported WurstFS realm governance: ${governance}`);
+  if (!['personal', 'shared'].includes(governance)) throw new Error(`Unsupported PigFS realm governance: ${governance}`);
   return governance;
 }
 
 function realmTemplatesNeedIdentity(context) {
   // Personal realms can ship empty/unclaimed. Only shared genesis needs an
   // authenticated owner up front.
-  return (context.manifest.data?.realms ?? []).some((template) => realmTemplateGovernance(template) === 'shared');
+  return (context.manifest.pigfs?.realms ?? []).some((template) => realmTemplateGovernance(template) === 'shared');
 }
 
 function realmTemplatesForRuntime(context, actor) {
   const actorId = actor?.publicRecord?.identityId ?? null;
-  const templates = Array.isArray(context.manifest.data?.realms) ? context.manifest.data.realms : [];
-  if (!templates.length) throw new Error('This Wurst declares no initial WurstFS realm templates');
+  const templates = Array.isArray(context.manifest.pigfs?.realms) ? context.manifest.pigfs.realms : [];
+  if (!templates.length) throw new Error('This Wurst declares no initial PigFS realm templates');
   return templates.map((template) => {
     const governance = realmTemplateGovernance(template);
     if (governance === 'shared' && !actorId) {
-      const error = new Error(`Shared WurstFS realm ${template.id} requires an authenticated Wurster Identity`);
+      const error = new Error(`Shared PigFS realm ${template.id} requires an authenticated Wurster Identity`);
       error.code = 'WURST_AUTH_REQUIRED';
       throw error;
     }
     if (governance === 'ordinary') {
-      return { id: template.id, label: template.label ?? template.id };
+      return { id: template.id, label: template.label ?? template.id, mount: template.mount ?? `/${template.id}`, ...(template.quotaBytes == null ? {} : { quotaBytes: template.quotaBytes }) };
     }
     if (governance === 'personal') {
-      return { id: template.id, label: template.label ?? template.id, governance: 'personal' };
+      return { id: template.id, label: template.label ?? template.id, mount: template.mount ?? `/${template.id}`, governance: 'personal', ...(template.quotaBytes == null ? {} : { quotaBytes: template.quotaBytes }) };
     }
     const protection = String(template.protection ?? 'public');
     const read = String(template.read ?? (protection === 'sealed' ? 'owner' : 'public'));
@@ -2038,9 +2129,11 @@ function realmTemplatesForRuntime(context, actor) {
     return {
       id: template.id,
       label: template.label ?? template.id,
+      mount: template.mount ?? `/${template.id}`,
       governance: 'shared',
       audit: String(template.audit ?? 'none'),
       protection,
+      ...(template.quotaBytes == null ? {} : { quotaBytes: template.quotaBytes }),
       access: {
         read: read === 'public' ? { mode: 'public' } : { mode: 'members', identities: [actorId] },
         write: write === 'authenticated'
@@ -2053,13 +2146,14 @@ function realmTemplatesForRuntime(context, actor) {
 }
 
 function realmRuntimeSummary(context) {
-  const root = context.reader.wurstFsRoot?.format === 'wurst/fs-2' ? context.reader.wurstFsRoot : null;
+  const root = context.reader.pigFsRoot?.format === 'wurst/pigfs-1' ? context.reader.pigFsRoot : null;
   const identity = activeFilesystemIdentity(context);
   const identityId = identity?.publicRecord?.identityId ?? null;
   if (!root) {
-    return (context.manifest.data?.realms ?? []).map((template) => ({
+    return (context.manifest.pigfs?.realms ?? []).map((template) => ({
       id: template.id,
       label: template.label ?? template.id,
+      mount: template.mount ?? `/${template.id}`,
       governance: realmTemplateGovernance(template),
       audit: realmTemplateGovernance(template) === 'shared' ? String(template.audit ?? 'none') : 'none',
       protection: realmTemplateGovernance(template) === 'personal' ? 'sealed' : (template.protection ?? 'public'),
@@ -2070,16 +2164,17 @@ function realmRuntimeSummary(context) {
     }));
   }
   return Object.values(root.realms ?? {}).sort((a, b) => a.id.localeCompare(b.id)).map((realm) => {
-    const capabilities = wurstFsRealmCapabilities(realm, identityId, { signedIdentity: Boolean(identityId) });
+    const capabilities = pigFsRealmCapabilities(realm, identityId, { signedIdentity: Boolean(identityId) });
     return {
       id: realm.id,
       label: realm.label ?? realm.id,
-      governance: wurstFsRealmGovernance(realm),
-      claimed: wurstFsRealmGovernance(realm) === 'personal' ? Boolean(realm.claimed) : true,
+      mount: realm.mount ?? context.manifest.pigfs?.realms?.find((item) => item.id === realm.id)?.mount ?? `/${realm.id}`,
+      governance: pigFsRealmGovernance(realm),
+      claimed: pigFsRealmGovernance(realm) === 'personal' ? Boolean(realm.claimed) : true,
       audit: realm.audit ?? 'none',
       protection: realm.protection,
       initialized: true,
-      locked: realm.protection === 'sealed' && !context.wurstFsStore?.realmKeys?.has(realm.id),
+      locked: realm.protection === 'sealed' && !context.pigFsStore?.realmKeys?.has(realm.id),
       capabilities,
       readers: realm.access?.read?.mode === 'members' ? [...realm.access.read.identities] : null,
       writers: realm.access?.write?.mode === 'members' ? [...realm.access.write.identities] : realm.access?.write?.mode ?? 'members',
@@ -2088,7 +2183,7 @@ function realmRuntimeSummary(context) {
   });
 }
 
-ipcMain.handle('wurst:fs:capabilities', async (event) => {
+ipcMain.handle('wurst:pigfs:capabilities', async (event) => {
   const context = assertWurstSender(event);
   if (!realmDataMode(context.manifest)) {
     return {
@@ -2102,38 +2197,38 @@ ipcMain.handle('wurst:fs:capabilities', async (event) => {
       format: null,
       realms: false,
       signedMutations: false,
-      root: '/data'
+      root: '/'
     };
   }
   return {
     read: true,
-    write: Boolean(context.manifest.data?.writable && !context.reader.carrier && !context.readOnlyPackage),
+    write: Boolean(context.manifest.pigfs?.writable && !context.reader.carrier && !context.readOnlyPackage),
     persistent: true,
     snapshot: true,
     mediaUrls: true,
-    compact: !context.readOnlyPackage && !context.reader.carrier && ((context.reader.wurstFsRoot?.historyMode ?? null) === 'none' || (!context.reader.wurstFsRoot && !(context.manifest.data?.realms ?? []).some((realm) => realmTemplateGovernance(realm) === 'shared'))),
+    compact: !context.readOnlyPackage && !context.reader.carrier && ((context.reader.pigFsRoot?.historyMode ?? null) === 'none' || (!context.reader.pigFsRoot && !(context.manifest.pigfs?.realms ?? []).some((realm) => realmTemplateGovernance(realm) === 'shared'))),
     protection: 'realms',
-    format: 'wurst/fs-2',
+    format: 'wurst/pigfs-1',
     realms: true,
-    signedMutations: (context.reader.wurstFsRoot?.historyMode ?? null) === 'integrity',
+    signedMutations: (context.reader.pigFsRoot?.historyMode ?? null) === 'integrity',
     defaultStorage: 'ordinary',
-    root: '/data'
+    root: '/'
   };
 });
 
-ipcMain.handle('wurst:fs:realms', async (event) => {
+ipcMain.handle('wurst:pigfs:realms', async (event) => {
   const context = assertWurstSender(event);
   if (!realmDataMode(context.manifest)) return [];
   return realmRuntimeSummary(context);
 });
 
-ipcMain.handle('wurst:fs:initialize', async (event) => {
+ipcMain.handle('wurst:pigfs:initialize', async (event) => {
   const context = assertWurstSender(event);
-  if (!realmDataMode(context.manifest)) throw new Error('This Wurst does not declare WurstFS realms');
-  if (context.reader.wurstFsRoot) return { initialized: false, generation: context.reader.wurstFsRoot.generation, realms: realmRuntimeSummary(context) };
+  if (!realmDataMode(context.manifest)) throw new Error('This Wurst does not declare PigFS realms');
+  if (context.reader.pigFsRoot) return { initialized: false, generation: context.reader.pigFsRoot.generation, realms: realmRuntimeSummary(context) };
   const actor = activeFilesystemIdentity(context);
   if (!actor && realmTemplatesNeedIdentity(context)) {
-    const error = new Error('Authenticate a Wurster Identity before initializing shared WurstFS realms');
+    const error = new Error('Authenticate a Wurster Identity before initializing shared PigFS realms');
     error.code = 'WURST_AUTH_REQUIRED';
     throw error;
   }
@@ -2144,12 +2239,12 @@ ipcMain.handle('wurst:fs:initialize', async (event) => {
     realms: realmTemplatesForRuntime(context, actor)
   });
   await refreshWurstFsContext(context);
-  return { initialized: true, generation: context.reader.wurstFsRoot?.generation ?? 1, realms: realmRuntimeSummary(context) };
+  return { initialized: true, generation: context.reader.pigFsRoot?.generation ?? 1, realms: realmRuntimeSummary(context) };
 });
 
-ipcMain.handle('wurst:fs:unlock-realm', async (event, rawRealmId) => {
+ipcMain.handle('wurst:pigfs:unlock-realm', async (event, rawRealmId) => {
   const context = assertWurstSender(event);
-  if (!realmDataMode(context.manifest)) throw new Error('This Wurst does not use WurstFS realms');
+  if (!realmDataMode(context.manifest)) throw new Error('This Wurst does not use PigFS realms');
   const material = activeFilesystemIdentity(context);
   if (!material) {
     const error = new Error('Authenticate a Wurster Identity before unlocking a realm');
@@ -2160,7 +2255,7 @@ ipcMain.handle('wurst:fs:unlock-realm', async (event, rawRealmId) => {
   return { ...result, realms: realmRuntimeSummary(context) };
 });
 
-ipcMain.handle('wurst:fs:lock-realm', async (event, rawRealmId) => {
+ipcMain.handle('wurst:pigfs:lock-realm', async (event, rawRealmId) => {
   const context = assertWurstSender(event);
   if (!realmDataMode(context.manifest)) return { locked: false, realms: [] };
   const store = await ensureWurstFsStore(context);
@@ -2168,54 +2263,54 @@ ipcMain.handle('wurst:fs:lock-realm', async (event, rawRealmId) => {
   return { locked: Boolean(locked), realms: realmRuntimeSummary(context) };
 });
 
-ipcMain.handle('wurst:fs:history', async (event) => {
+ipcMain.handle('wurst:pigfs:history', async (event) => {
   const context = assertWurstSender(event);
-  if (!realmDataMode(context.manifest) || !context.reader.wurstFsRoot) return null;
-  return context.reader.fsHistory();
+  if (!realmDataMode(context.manifest) || !context.reader.pigFsRoot) return null;
+  return context.reader.pigFsHistory();
 });
 
-ipcMain.handle('wurst:fs:usage', async (event) => {
+ipcMain.handle('wurst:pigfs:usage', async (event) => {
   const context = assertWurstSender(event);
   return currentWurstFsUsage(context);
 });
 
-ipcMain.handle('wurst:fs:compact', async (event) => {
+ipcMain.handle('wurst:pigfs:compact', async (event) => {
   const context = assertWurstSender(event);
   return compactCurrentWurstFs(context, { reason: 'wurst-request' });
 });
 
-ipcMain.handle('wurst:fs:stat', async (event, rawPath) => {
+ipcMain.handle('wurst:pigfs:stat', async (event, rawPath) => {
   const context = assertWurstSender(event);
   if (!realmDataMode(context.manifest)) return null;
-  const target = dataFsPath(rawPath);
-  if (target === 'data') return { path: '/data', name: 'data', type: 'directory', size: 0, mime: null, revision: context.reader.wurstFsRoot?.generation ?? 0 };
-  if (!context.reader.wurstFsRoot) return null;
-  const entry = await context.reader.fsStat(target, await fsReadOptions(context, target));
+  const target = pigFsPath(rawPath);
+  if (target === 'data') return { path: '/', name: 'data', type: 'directory', size: 0, mime: null, revision: context.reader.pigFsRoot?.generation ?? 0 };
+  if (!context.reader.pigFsRoot) return null;
+  const entry = await context.reader.pigFsStat(target, await fsReadOptions(context, target));
   if (!entry) return null;
   return entry.path?.startsWith('/') ? entry : { ...entry, path: `/${entry.path}` };
 });
 
-ipcMain.handle('wurst:fs:list', async (event, rawPath = '/data') => {
+ipcMain.handle('wurst:pigfs:list', async (event, rawPath = '/') => {
   const context = assertWurstSender(event);
-  if (!realmDataMode(context.manifest) || !context.reader.wurstFsRoot) return [];
-  const target = dataFsPath(rawPath || '/data');
-  const entries = await context.reader.fsList(target, await fsReadOptions(context, target));
+  if (!realmDataMode(context.manifest) || !context.reader.pigFsRoot) return [];
+  const target = pigFsPath(rawPath || '/');
+  const entries = await context.reader.pigFsList(target, await fsReadOptions(context, target));
   return entries.map((entry) => entry.path?.startsWith('/') ? entry : ({ ...entry, path: `/${entry.path}` }));
 });
 
-ipcMain.handle('wurst:fs:read', async (event, rawPath, options = {}) => {
+ipcMain.handle('wurst:pigfs:read', async (event, rawPath, options = {}) => {
   const context = assertWurstSender(event);
-  if (!realmDataMode(context.manifest) || !context.reader.wurstFsRoot) return null;
-  const target = dataFsPath(rawPath);
+  if (!realmDataMode(context.manifest) || !context.reader.pigFsRoot) return null;
+  const target = pigFsPath(rawPath);
   const cryptoOptions = await fsReadOptions(context, target);
-  const stat = await context.reader.fsStat(target, cryptoOptions);
+  const stat = await context.reader.pigFsStat(target, cryptoOptions);
   if (!stat || stat.type !== 'file') return null;
   const offset = Number(options?.offset ?? 0);
-  const requested = options?.length == null ? MAX_WURST_FS_SLICE_BYTES : Number(options.length);
-  const length = Math.min(requested, MAX_WURST_FS_SLICE_BYTES);
-  if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('Invalid WurstFS read offset');
-  if (!Number.isSafeInteger(length) || length < 0) throw new Error('Invalid WurstFS read length');
-  const result = await context.reader.fsReadRange(target, offset, length, cryptoOptions);
+  const requested = options?.length == null ? MAX_PIG_FS_SLICE_BYTES : Number(options.length);
+  const length = Math.min(requested, MAX_PIG_FS_SLICE_BYTES);
+  if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('Invalid PigFS read offset');
+  if (!Number.isSafeInteger(length) || length < 0) throw new Error('Invalid PigFS read length');
+  const result = await context.reader.pigFsReadRange(target, offset, length, cryptoOptions);
   return {
     path: stat.path?.startsWith('/') ? stat.path : `/${target}`,
     mime: stat.mime,
@@ -2227,22 +2322,22 @@ ipcMain.handle('wurst:fs:read', async (event, rawPath, options = {}) => {
   };
 });
 
-ipcMain.handle('wurst:fs:begin-write', async (event, rawPath, options = {}) => {
+ipcMain.handle('wurst:pigfs:begin-write', async (event, rawPath, options = {}) => {
   const context = assertWurstSender(event);
   await waitForWurstFsMaintenance(context);
-  if (!realmDataMode(context.manifest) || !context.manifest.data?.writable || context.reader.carrier || context.readOnlyPackage) throw new Error('This Wurst data filesystem is not writable');
-  const target = dataFsPath(rawPath);
-  if (target === 'data') throw new Error('Cannot write the WurstFS root');
+  if (!realmDataMode(context.manifest) || !context.manifest.pigfs?.writable || context.reader.carrier || context.readOnlyPackage) throw new Error('This Wurst PigFS is not writable');
+  const target = pigFsPath(rawPath);
+  if (target === 'data') throw new Error('Cannot write the PigFS root');
   const mime = typeof options?.mime === 'string' && options.mime.length <= 160 && !/[\r\n]/.test(options.mime)
     ? options.mime
     : mimeFor(target);
   const store = await ensureWurstFsInitializedForWrite(context);
   const actor = activeFilesystemIdentity(context);
   const writeId = store.beginWrite(target, { actor, mime });
-  return { id: writeId, path: `/${target}`, chunkSize: MAX_WURST_FS_CHUNK_BYTES, signedBy: actor?.publicRecord?.identityId ?? null };
+  return { id: writeId, path: `/${target}`, chunkSize: MAX_PIG_FS_CHUNK_BYTES, signedBy: actor?.publicRecord?.identityId ?? null };
 });
 
-ipcMain.handle('wurst:fs:write-chunk', async (event, rawId, payload) => {
+ipcMain.handle('wurst:pigfs:write-chunk', async (event, rawId, payload) => {
   const context = assertWurstSender(event);
   const store = await ensureWurstFsStore(context);
   const bytes = Buffer.isBuffer(payload)
@@ -2252,11 +2347,11 @@ ipcMain.handle('wurst:fs:write-chunk', async (event, rawId, payload) => {
       : payload instanceof ArrayBuffer
         ? Buffer.from(payload)
         : Buffer.from(payload ?? []);
-  if (bytes.length > MAX_WURST_FS_CHUNK_BYTES) throw new Error('WurstFS chunks may not exceed 4 MiB');
+  if (bytes.length > MAX_PIG_FS_CHUNK_BYTES) throw new Error('PigFS chunks may not exceed 4 MiB');
   return store.writeChunk(rawId, bytes);
 });
 
-ipcMain.handle('wurst:fs:commit-write', async (event, rawId) => {
+ipcMain.handle('wurst:pigfs:commit-write', async (event, rawId) => {
   const context = assertWurstSender(event);
   const store = await ensureWurstFsStore(context);
   const result = await store.commitWrite(rawId);
@@ -2266,38 +2361,38 @@ ipcMain.handle('wurst:fs:commit-write', async (event, rawId) => {
   return entry.path?.startsWith('/') ? entry : { ...entry, path: `/${entry.path}` };
 });
 
-ipcMain.handle('wurst:fs:abort-write', async (event, rawId) => {
+ipcMain.handle('wurst:pigfs:abort-write', async (event, rawId) => {
   const context = assertWurstSender(event);
   return (await ensureWurstFsStore(context)).abortWrite(rawId);
 });
 
-ipcMain.handle('wurst:fs:remove', async (event, rawPath, options = {}) => {
+ipcMain.handle('wurst:pigfs:remove', async (event, rawPath, options = {}) => {
   const context = assertWurstSender(event);
   await waitForWurstFsMaintenance(context);
-  if (!realmDataMode(context.manifest) || !context.manifest.data?.writable || context.reader.carrier || context.readOnlyPackage) throw new Error('This Wurst data filesystem is not writable');
+  if (!realmDataMode(context.manifest) || !context.manifest.pigfs?.writable || context.reader.carrier || context.readOnlyPackage) throw new Error('This Wurst PigFS is not writable');
   const store = await ensureWurstFsInitializedForWrite(context);
-  const removed = await store.remove(dataFsPath(rawPath), { actor: activeFilesystemIdentity(context), recursive: Boolean(options?.recursive) });
+  const removed = await store.remove(pigFsPath(rawPath), { actor: activeFilesystemIdentity(context), recursive: Boolean(options?.recursive) });
   if (removed) { await refreshWurstFsContext(context); scheduleWurstFsHygiene(context, 700); }
   return removed;
 });
 
-ipcMain.handle('wurst:fs:mkdir', async (event, rawPath, options = {}) => {
+ipcMain.handle('wurst:pigfs:mkdir', async (event, rawPath, options = {}) => {
   const context = assertWurstSender(event);
   await waitForWurstFsMaintenance(context);
-  if (!realmDataMode(context.manifest) || !context.manifest.data?.writable || context.reader.carrier || context.readOnlyPackage) throw new Error('This Wurst data filesystem is not writable');
+  if (!realmDataMode(context.manifest) || !context.manifest.pigfs?.writable || context.reader.carrier || context.readOnlyPackage) throw new Error('This Wurst PigFS is not writable');
   const store = await ensureWurstFsInitializedForWrite(context);
-  const entry = await store.mkdir(dataFsPath(rawPath), { actor: activeFilesystemIdentity(context), recursive: options?.recursive !== false });
+  const entry = await store.mkdir(pigFsPath(rawPath), { actor: activeFilesystemIdentity(context), recursive: options?.recursive !== false });
   await refreshWurstFsContext(context);
   scheduleWurstFsHygiene(context);
   return entry.path?.startsWith('/') ? entry : { ...entry, path: `/${entry.path}` };
 });
 
-ipcMain.handle('wurst:fs:rename', async (event, rawFrom, rawTo) => {
+ipcMain.handle('wurst:pigfs:rename', async (event, rawFrom, rawTo) => {
   const context = assertWurstSender(event);
   await waitForWurstFsMaintenance(context);
-  if (!realmDataMode(context.manifest) || !context.manifest.data?.writable || context.reader.carrier || context.readOnlyPackage) throw new Error('This Wurst data filesystem is not writable');
+  if (!realmDataMode(context.manifest) || !context.manifest.pigfs?.writable || context.reader.carrier || context.readOnlyPackage) throw new Error('This Wurst PigFS is not writable');
   const store = await ensureWurstFsInitializedForWrite(context);
-  const entry = await store.rename(dataFsPath(rawFrom), dataFsPath(rawTo), { actor: activeFilesystemIdentity(context) });
+  const entry = await store.rename(pigFsPath(rawFrom), pigFsPath(rawTo), { actor: activeFilesystemIdentity(context) });
   if (!entry) return null;
   await refreshWurstFsContext(context);
   scheduleWurstFsHygiene(context);
@@ -3080,9 +3175,9 @@ async function loadPackage(filePath) {
       runtimeBinding: `wurst:${manifest.id}:${crypto.randomUUID()}`,
       applicationProtectionHandle: null,
       applicationSessionTimer: null,
-      wurstFsStore: null,
-      wurstFsMaintenance: null,
-      wurstFsHygieneTimer: null,
+      pigFsStore: null,
+      pigFsMaintenance: null,
+      pigFsHygieneTimer: null,
       sealedAppMap: null,
       identitySession: null,
       wurstIdentityMaterial: null,
@@ -3134,7 +3229,6 @@ async function loadPackage(filePath) {
       if (!url.startsWith('wurst://app/')) event.preventDefault();
     });
     newWindow.once('ready-to-show', () => newWindow.show());
-    newWindow.on('resize', () => pigletRuntime.layoutFillSurfaces());
     newWindow.on('closed', () => {
       unbindRuntimeContext(newWindow.webContents);
       if (currentWindow !== newWindow) return;

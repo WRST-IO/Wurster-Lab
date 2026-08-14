@@ -1,6 +1,6 @@
 ---
 title: Wurst Identity Seal
-group: Trust & Identity
+group: Security & Trust
 groupOrder: 4
 order: 4
 ---

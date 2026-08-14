@@ -1,18 +1,28 @@
 # Changelog
 
+## 0.32.2 - PigFS Foundation and Universal Piglet Embeds
+
+- Promoted PigFS as the portable filesystem pillar: normal mounted paths, stable object identity, transactions, snapshots, quotas, internal symlinks, watch semantics and retained append-safe/crypto/compaction machinery. The pre-1.0 WurstFS public vocabulary is removed instead of kept as a compatibility layer.
+- Unified Wurst embedding on `<wurst-embed>` across Web and Desktop. Piglet application UI no longer uses native `WebContentsView` child surfaces or bounds/focus geometry APIs; WebContentsView remains reserved for trusted Wurster-owned security UI.
+- Kept nested Wurst identity independent, range-loaded child startup and conflict-checked writable child persistence. Packaged Desktop builds now carry the shared Web embed runtime explicitly.
+- Added explicit Parent PigFS delegation for system-style Piglets. `<wurst-embed parent-pigfs="read">` and `parent-pigfs="read-write"` expose `wurst.parent.pigfs` only to that child. No grant exists by default, Host filesystem authority is never implied, and PigFS lock/governance/encryption checks remain authoritative.
+- Fixed Desktop PigFS realm initialization so declared `mount` and `quotaBytes` survive ordinary, personal and shared realm genesis instead of falling back to realm ids.
+- Kept Pigsty native Edge/WASIX integration optional and non-blocking for normal Windows, macOS and Web v0.32.2 releases while the external runtime bundles continue development.
+- Bumped the Wurster monorepo workspaces and release metadata consistently to 0.32.2.
+
 ## 0.32.0 r011 - Piglet Runtime Debuggability and Sliced Startup
 
-- Changed Desktop Piglet execution to open child packages from random-access range sources instead of eagerly reading the complete nested `.wurst` into memory. Built-in children read verified ranges from the parent package and WurstFS children read through `fsReadRange`; a local writable backing file is created lazily only when child writes or protected-app unlock require it.
+- Changed Desktop Piglet execution to open child packages from random-access range sources instead of eagerly reading the complete nested `.wurst` into memory. Built-in children read verified ranges from the parent package and PigFS children read through `fsReadRange`; a local writable backing file is created lazily only when child writes or protected-app unlock require it.
 - Repaired Wurst Developer Tools by attaching Electron's native detached inspector to the actually focused Wurst renderer. Focused managed Piglet surfaces therefore open their own DOM/console instead of an empty custom DevTools window.
 - Made `<wurst-identity>` trusted surfaces honor DOM viewport and overflow clipping while remaining Wurster-owned. The renderer reports the visible clip rectangle and Wurster clips/offsets its trusted surface instead of floating across `overflow:hidden` containers. Expanded authentication controls intentionally remain trusted overlays.
 - Added regressions for lazy Piglet backing, DevTools attachment and trusted identity clipping contracts.
 
 ## 0.32.0 r010 - Piglets Become Real Tools
 
-- Made managed Desktop Piglets fully writable when their child manifest declares writable WurstFS. Child commits fsync their private runtime backing and then persist the complete updated child Wurst back into the parent-held WurstFS file.
+- Made managed Desktop Piglets fully writable when their child manifest declares writable PigFS. Child commits fsync their private runtime backing and then persist the complete updated child Wurst back into the parent-held PigFS file.
 - Added conflict-checked child write-back. A running Piglet refuses to overwrite a parent-held child file that changed independently and reports `WURST_PIGLET_CONFLICT` instead of using last-writer-wins.
-- Writable built-in Piglets now materialize an exact runtime copy in the parent ordinary WurstFS, preserving the immutable built-in bytes covered by the parent signature while allowing the child instance to grow its own mutable WurstFS tail.
-- Preserved child package identity across mutable writes: regression coverage verifies immutable child bytes and publisher fingerprint remain unchanged after nested WurstFS commits and close/reopen.
+- Writable built-in Piglets now materialize an exact runtime copy in the parent ordinary PigFS, preserving the immutable built-in bytes covered by the parent signature while allowing the child instance to grow its own mutable PigFS tail.
+- Preserved child package identity across mutable writes: regression coverage verifies immutable child bytes and publisher fingerprint remain unchanged after nested PigFS commits and close/reopen.
 - Made Wurster Auth and Identity trusted controls runtime-instance-bound. Parent and child Wursts can own the same Auth anchor ids without collision, child results route only to the child renderer, and trusted controls are laid out inside the child surface.
 - Enabled sealed/protected child surfaces to use the same WurstKey and Wurster Identity flow as top-level Wursts without exposing secrets through the parent renderer.
 - Split trusted Auth/Identity surface ownership out of Desktop `main.mjs`; the central Electron bootstrap drops to roughly 3.3k lines while Piglet persistence/backing concerns remain in focused modules.
@@ -20,11 +30,11 @@
 ## 0.32.0 r009 - Piglets Leave The Crate
 
 - Expanded Piglet from immutable child-byte discovery into a managed Desktop composition runtime. `wurst.piglet.open()` now creates Wurster-owned child renderer surfaces with lifecycle handles for bounds, focus and close instead of treating `.wurst` bytes as iframe documents.
-- Added runtime WurstFS Piglet discovery. Valid `.wurst` / `.wrst` files stored in readable WurstFS realms are discovered alongside built-in children without a separate Piglet database or manifest mutation.
-- Added `wurst.piglet.install()` for drag-and-drop/application import flows. The runtime validates the child then persists the exact supplied package bytes as an ordinary WurstFS file; no repackaging or parent re-signing occurs.
+- Added runtime PigFS Piglet discovery. Valid `.wurst` / `.wrst` files stored in readable PigFS realms are discovered alongside built-in children without a separate Piglet database or manifest mutation.
+- Added `wurst.piglet.install()` for drag-and-drop/application import flows. The runtime validates the child then persists the exact supplied package bytes as an ordinary PigFS file; no repackaging or parent re-signing occurs.
 - Added independent child inspection metadata and regression coverage proving an independently signed child keeps its own publisher fingerprint after MeatGrinder embedding and after the parent receives a different package signature.
 - Added per-renderer runtime-context binding so child IPC resolves to the child Wurst instead of the Desktop singleton `currentContext`. Managed children receive separate protocol sessions, manifests, capability contexts and runtime bindings.
-- Added explicit fail-closed handling for protected/sealed child surfaces until child-scoped Wurster Auth is implemented. Nested child WurstFS is readable but currently read-only; transactional write-back into the parent-held child file remains follow-up work.
+- Added explicit fail-closed handling for protected/sealed child surfaces until child-scoped Wurster Auth is implemented. Nested child PigFS is readable but currently read-only; transactional write-back into the parent-held child file remains follow-up work.
 - Documented Piglet as a runtime relationship around ordinary Wurst files, including drag-and-drop installation, discovery, trust separation and WurstOS-style managed child surfaces.
 
 ## 0.32.0 r008 - Clean Stall Release Lane
@@ -45,10 +55,10 @@
 - The headless PigLink harness now exposes the same controlled `wurst.pigsty.status()` and `wurst.pigsty.run(...)` surface, so machine callers can drive Pigsty-capable Wursts through PigLink without a visible UI.
 - Pigsty policies can now declare named builds under `pigsty.builds`. Desktop and headless runtimes expose `wurst.pigsty.build(name, request)` so Wursts can run packaged build scripts from their own app workspace instead of passing ad hoc script strings.
 - Removed the host-Node workspace-projection spike from the Pigsty direction. Pigsty no longer treats `mode: "node"` as a valid manifest/runtime path; engine selection is a Wurster implementation detail, not Wurst vocabulary.
-- Added `wurst/pigsty-engine-contract-1` to describe the intended internal runtime world: `/wurst` as WurstFS-backed workspace, `/tmp` as ephemeral scratch, no host filesystem, no host shell, no host processes and no host environment.
+- Added `wurst/pigsty-engine-contract-1` to describe the intended internal runtime world: `/wurst` as PigFS-backed workspace, `/tmp` as ephemeral scratch, no host filesystem, no host shell, no host processes and no host environment.
 - Added `wurst/pigsty-fs-view-1` plus Pigsty path resolution helpers so future engine adapters receive a concrete mount view for `/wurst`, optional `/toolchain` and `/tmp` without seeing host paths.
-- Added `wurst/pigsty-changeset-1` and `wurst/pigsty-engine-result-1` helpers so future engine adapters can return `add`, `modify` and `delete` operations that Wurster can verify and commit to WurstFS transactionally.
-- Added `runPigstyEngine(...)`, the first executable engine-adapter boundary. It hands a normalized Pigsty filesystem view to a runtime-supplied adapter, converts adapter output into a digest-checked engine result and applies only the persistent WurstFS change-set. Regression coverage uses a mock Edge/WASIX-shaped adapter while the production adapter remains follow-up work.
+- Added `wurst/pigsty-changeset-1` and `wurst/pigsty-engine-result-1` helpers so future engine adapters can return `add`, `modify` and `delete` operations that Wurster can verify and commit to PigFS transactionally.
+- Added `runPigstyEngine(...)`, the first executable engine-adapter boundary. It hands a normalized Pigsty filesystem view to a runtime-supplied adapter, converts adapter output into a digest-checked engine result and applies only the persistent PigFS change-set. Regression coverage uses a mock Edge/WASIX-shaped adapter while the production adapter remains follow-up work.
 - Added `createEdgeWasixPigstyEngine(...)`, `probeEdgeWasixPigstyEngine(...)` and `runPigstyEngineBuild(...)`. Pigsty can now invoke a concrete Edge.js/WASIX adapter through `edge --safe`, enforce declared build outputs against returned change-sets, reject native `.node` addons for v1 portability and report missing Edge binaries cleanly.
 - Added a pinned Wurster Edge runtime acquisition layer for desktop packaging. `runtime/edge-runtime.lock.json` names the tagged `WRST-IO/wurster-edge-runtime` release assets, while `tools/wurster-edge-runtime.mjs` downloads them, verifies `SHA256SUMS` plus every bundle-manifest file hash and stages only the requested platform below the gitignored desktop runtime directory.
 - Electron desktop packages now carry staged Pigsty runtimes through `extraResources`, so installed Wurster discovers `resources/runtimes/wurster-edge-runtime-<target>` without end-user environment variables. Windows x64, macOS arm64/x64 and a prepared Linux x64 build lane share the same staging contract; universal macOS carries both native runtime bundles.
@@ -56,7 +66,7 @@
 - Pigsty now recognizes `pigsty-toolchain/` as the canonical Wurst-carried toolchain root. MeatGrinder can package `pigsty.toolchain.source` into that root, Edge builds auto-project it into immutable `/toolchain`, and `/toolchain/node_modules` is linked into the staged `/wurst/node_modules` position for ordinary Node resolution without runtime npm downloads.
 - Desktop and headless Pigsty status now probes Edge/WASIX availability instead of reporting it optimistically. Edge is selectable and testable, but unavailable binaries are surfaced as unavailable rather than silently falling back.
 - Desktop and headless PigLink builds can now request `engine: "edge-wasix"`, or use `WURSTER_PIGSTY_ENGINE=edge-wasix` as the default. Requested Edge builds fail loudly when the Edge binary is unavailable; they do not silently fall back to the development worker.
-- The Edge/WASIX adapter links `/toolchain/node_modules` into the staged `/wurst/node_modules` position for ordinary Node package resolution, then skips that link when collecting persistent WurstFS changes so toolchain packages do not become authored output.
+- The Edge/WASIX adapter links `/toolchain/node_modules` into the staged `/wurst/node_modules` position for ordinary Node package resolution, then skips that link when collecting persistent PigFS changes so toolchain packages do not become authored output.
 - Declared Pigsty build outputs are enforced. A named build that declares `outputs: ["dist"]` fails if it writes artifacts outside that output tree.
 - MeatGrinder now uses the shared Pigsty policy normalizer from `@wurster/pigsty`, keeping manifest validation and runtime execution on one contract.
 - Pigsty run results now include deterministic build provenance: source workspace digest, output workspace digest, toolchain summary, creation time and per-written-artifact SHA-256 metadata.
@@ -100,28 +110,28 @@
 - Hotfix r005: removed Cloudflare Email Sending and the separate `wrangler.email.jsonc`. The Authority now has one current Worker config using SQLite Durable Object `exports`, rate-limit bindings, and two relay secrets (`WRST_MAIL_RELAY_URL`, `WRST_MAIL_RELAY_SECRET`).
 - Hotfix r005: added a self-contained PHP mail relay with replay protection and selectable PHP `mail()` or direct SMTP transport (STARTTLS/SMTPS, LOGIN/PLAIN/no auth). The production workspace ZIP includes the relay endpoint and editable configuration template automatically.
 - Hotfix r005: Wurster Lab explicit output revisions now become the embedded release revision too, so cache-safe handoff names cannot disagree with `release.json`.
-- Hotfix r004: fixed WurstFS catalog lookup ordering so valid files such as `tools_export_wurster_lab.py` cannot become stat/read ghosts behind a stale `first`/`last` page hint. This was the root cause of Wurster Lab `Verwursten` failing with `null.data`. Catalog bounds are now deterministic hints, never authoritative lookup truth.
-- Hotfix r004: Wurster Lab now streams complete workspace files in bounded WurstFS reads when producing the private operator ZIP, instead of assuming one renderer read contains the whole file.
+- Hotfix r004: fixed PigFS catalog lookup ordering so valid files such as `tools_export_wurster_lab.py` cannot become stat/read ghosts behind a stale `first`/`last` page hint. This was the root cause of Wurster Lab `Verwursten` failing with `null.data`. Catalog bounds are now deterministic hints, never authoritative lookup truth.
+- Hotfix r004: Wurster Lab now streams complete workspace files in bounded PigFS reads when producing the private operator ZIP, instead of assuming one renderer read contains the whole file.
 - Hotfix r004: Operator is now a real gated admin zone. Selecting the Operator tab presents only Wurster-owned Identity authentication until the personal realm is unlocked; production controls appear afterwards and can be explicitly re-locked. Normal Lab UI text selection is disabled while editable note fields remain selectable.
-- Hotfix r003: restored the current desktop WurstFS `/data` path mapper removed during the no-legacy cleanup. `wurst.fs.write()` / streaming `begin-write` now resolves `/data/...` and realm-relative paths again, with a regression covering the exact Operator-material import path.
+- Hotfix r003: restored the current desktop PigFS `/data` path mapper removed during the no-legacy cleanup. `wurst.pigfs.write()` / streaming `begin-write` now resolves `/data/...` and realm-relative paths again, with a regression covering the exact Operator-material import path.
 - Hotfix r002: removed a stale desktop import of the deleted `normalizeFsPath` helper that caused packaged Wurster to fail during ESM startup, and added a runtime module-contract regression that verifies named workspace imports against their actual public exports.
 - Adopted the pre-1.0 **no compatibility bridges** rule. Experimental mutable-data and authority paths that are no longer part of the current design were removed instead of kept as migration code.
-- Removed WurstFS v1 / single-Vault runtime code and the renderer `wurst.vault` API. Mutable application data now has one current model: `data: { format: "wurst/data-realms-1" }` backed by `wurst/fs-2`.
+- Removed PigFS v1 / single-Vault runtime code and the renderer `wurst.vault` API. Mutable application data now has one current model: `data: { format: "wurst/data-realms-1" }` backed by `wurst/fs-2`.
 - Removed the public manifest `mode` concept completely. Ordinary storage is the unnamed default; only `governance: "personal"` or `governance: "shared"` opt into special semantics. Removed `mode` declarations are rejected rather than interpreted.
 - Removed the old direct local Authority key/certification CLI model and publisher-certificate v1/v2 acceptance. The current trust chain is Root → Issuer → `wurst/publisher-certificate-3`.
 - Removed the standalone Operator Vault prototype. `WursterLab.wurst` is now the reference operator container, with ordinary `/data/workspace` + `/data/lab` realms and one personal sealed `/data/operator` realm.
 - Identity auth targeted at a realm can initialize the current realm filesystem on first use, so a fresh personal Wurst can authenticate, initialize and claim its realm in one trusted flow.
-- Updated the example set to the current model only. The old v2 certificate demo became a package-signed sample; personal examples use personal WurstFS realms directly.
+- Updated the example set to the current model only. The old v2 certificate demo became a package-signed sample; personal examples use personal PigFS realms directly.
 - MeatGrinder inspection now summarizes live multi-realm `wurst/fs-2` roots directly instead of assuming the removed single-catalog layout.
 - Added an explicit WRST.IO email-only Authority regression: a verified email claim requires no domain and receives a valid offline certificate on its own.
 - Rewrote the mutable-data/security documentation around ordinary, personal and shared realms. Ordinary/personal data remain history-free and physically compactable; shared signed integrity and optional audit are explicitly separate capabilities.
 - Kept large-write concurrency semantics: unrelated small writes may commit while a long streaming import is still running; same-object races remain explicit conflicts.
-- WRST remains v7 and current mutable WurstFS remains `wurst/fs-2`. Pre-1.0 artifacts using discarded schemas are rebuild-only, not compatibility targets.
+- WRST remains v7 and current mutable PigFS remains `wurst/fs-2`. Pre-1.0 artifacts using discarded schemas are rebuild-only, not compatibility targets.
 
 ## 0.19.0 - Wurster Lab
 
-- Replaced the misleading `mode: "crud"` WurstFS v2 schema with orthogonal **realm governance**. Ordinary mutable storage is now the unnamed default; `governance: "personal"` and `governance: "shared"` opt into special ownership semantics only where needed.
-- New WurstFS roots no longer write a `crud` mode. Pre-1.0 `mode: "crud" | "personal" | "shared"` manifests/roots remain readable as migration input.
+- Replaced the misleading `mode: "crud"` PigFS schema with orthogonal **realm governance**. Ordinary mutable storage is now the unnamed default; `governance: "personal"` and `governance: "shared"` opt into special ownership semantics only where needed.
+- New PigFS roots no longer write a `crud` mode. Pre-1.0 `mode: "crud" | "personal" | "shared"` manifests/roots remain readable as migration input.
 - Added **unclaimed personal realms**. A Wurst can ship ordinary public data beside an empty sealed personal compartment; the first authenticated Wurster Identity that explicitly unlocks it becomes its sole owner. No placeholder key or prior use of the Wurst is required.
 - Personal claiming remains history-free when no shared realm exists and can coexist with ordinary mutable realms in the same Wurst. Empty unclaimed personal realms can be compacted without a key; claimed personal realms still require their owner to unlock them before compaction.
 - Desktop realm APIs now report `governance` and personal `claimed` state instead of presenting ordinary CRUD as a special filesystem mode. Only shared genesis requires an identity up front.
@@ -130,38 +140,38 @@
 - The Lab verifies that imported `root.json`, `issuer.json`, `trust-bundle.json` and `issuer.wurstissuer` form one coherent production WRST.IO chain before presenting the operator kit as valid. Root and Issuer Meatphrases remain outside the Wurst.
 - The Lab can locally **Verwursten** its carried public workspace into a private operator build ZIP, overlaying the verified WRST.IO public trust material plus the encrypted Issuer backup. This ZIP is a local build/deploy artifact; the `.wurst` remains the handoff container.
 - Added `tools/wurster-lab-wurst.mjs` to build a fresh Lab Wurst and to update a returned Lab Wurst under a new incremental filename while preserving the opaque claimed operator realm. This is the intended Chat workspace handoff path going forward.
-- WRST remains v7 and WurstFS remains `wurst/fs-2`; this is a pre-1.0 semantic cleanup and workflow application, not another container-version bump.
+- WRST remains v7 and PigFS remains `wurst/fs-2`; this is a pre-1.0 semantic cleanup and workflow application, not another container-version bump.
 
 ## 0.18.0 - Lean Meat
 
-- Reframed **WurstFS v2 as a capability ladder instead of a mandatory signed-history system**. The default `crud` realm is ordinary mutable data with no Wurster Identity, signatures or revision history.
+- Reframed **PigFS as a capability ladder instead of a mandatory signed-history system**. The default `crud` realm is ordinary mutable data with no Wurster Identity, signatures or revision history.
 - Added first-class `personal` realms: owner-only sealed storage with encrypted filenames/content, explicitly non-shareable and history-free. This covers diaries, private galleries, operator material and other "only my data" cases without dragging in multi-user policy.
 - Kept `shared` realms as the optional federated power mode with Wurster Identity read/write/admin policy. Shared integrity remains signed; `audit: signed` is now an additional explicit opt-in for richer operation summaries instead of the default behavior.
-- Added safe WurstFS v2 compaction for history-free CRUD/personal snapshots. Obsolete DATA/MAP/CATALOG records are rewritten away, so deleting or replacing multi-gigabyte data can physically shrink the Wurst again. Sealed personal compaction requires the owner realm to be unlocked.
+- Added safe PigFS compaction for history-free CRUD/personal snapshots. Obsolete DATA/MAP/CATALOG records are rewritten away, so deleting or replacing multi-gigabyte data can physically shrink the Wurst again. Sealed personal compaction requires the owner realm to be unlocked.
 - Desktop Wurster now measures reclaimable v2 storage and schedules background hygiene for history-free realms instead of treating append-safe records as permanent bloat.
 - Added concurrent streaming write sessions with serialized physical appends and short optimistic commits. Unrelated small writes can overtake a long import; simultaneous updates of the same object produce an explicit conflict.
-- CRUD-only WurstFS can initialize without a Wurster Identity and can auto-initialize on first write. Personal/shared templates request identity only when their semantics actually need it.
+- CRUD-only PigFS can initialize without a Wurster Identity and can auto-initialize on first write. Personal/shared templates request identity only when their semantics actually need it.
 - Personal realms reject grant/revoke/rekey sharing operations by design. Shared realm administration remains a Wurster-owned trusted-UI concern rather than a renderer superpower.
 - Added storage regression tests proving physical shrink after large CRUD and encrypted-personal deletes, non-shareable personal storage, history-free defaults, write overtaking and same-object conflict detection.
 - Shared-integrity compaction remains intentionally separate until the before-1.0 checkpoint/garbage-collection design can reclaim obsolete payloads without lying about authenticated ancestry.
-- WRST remains v7; this release changes mutable WurstFS semantics and runtime behavior, not the immutable container framing.
+- WRST remains v7; this release changes mutable PigFS semantics and runtime behavior, not the immutable container framing.
 
 ## 0.17.0 - Federated Meat
 
-- Added **WurstFS v2 (`wurst/fs-2`) realms** inside the existing WRST v7 mutable tail. A Wurst can now carry multiple independent public or sealed data realms instead of one global User Vault protection mode.
+- Added **PigFS (`wurst/fs-2`) realms** inside the existing WRST v7 mutable tail. A Wurst can now carry multiple independent public or sealed data realms instead of one global User Vault protection mode.
 - Added portable `wurst/identity-1` Wurster Identities derived deterministically from a Meatphrase with separate Ed25519 signing and X25519 encryption keypairs.
 - Added safe public identity exchange as `.wurstid` JSON and `wurstid-v1-...` copy/paste strings. Wurster Settings can export/copy the public record without exposing the Meatphrase or private keys.
-- Added signed WurstFS mutation history. Write/admin authorization is evaluated against the parent commit policy, so a cryptographically genuine signature from an unauthorized identity is still rejected as filesystem forgery.
+- Added signed PigFS mutation history. Write/admin authorization is evaluated against the parent commit policy, so a cryptographically genuine signature from an unauthorized identity is still rejected as filesystem forgery.
 - Added public/member/authenticated/open realm policies plus explicit realm administrators and public identity registry records.
 - Added X25519 + HKDF-SHA256 + AES-256-GCM realm-key wrapping for sealed readers. Sealed catalogs, filenames, metadata and DATA chunks remain opaque to identities without a matching key-wrap.
 - Added explicit sealed-realm rekeying for read revocation. The current live snapshot is re-encrypted under a fresh realm key and wrapped only for remaining readers; old offline copies remain old copies by design.
 - Added offline history comparison with `same`, `ahead`, `behind` and `fork` relationships instead of pretending two independently modified USB copies have one implicit canonical winner.
 - Added same-realm rename, public mutation summaries that redact sealed paths, and reader-side full-chain history verification.
 - Added signed manifest realm templates via `data: { format: "wurst/data-realms-1" }`. Sealed genesis templates are owner-only so application JavaScript cannot silently pre-share a new private realm with a third-party key.
-- Desktop Wurster now exposes realm discovery, initialization, identity-session unlock, lock and history through `wurst.fs`; file writes are signed in the host process when realm policy requires an identity. Private keys never enter the Wurst renderer.
+- Desktop Wurster now exposes realm discovery, initialization, identity-session unlock, lock and history through `wurst.pigfs`; file writes are signed in the host process when realm policy requires an identity. Private keys never enter the Wurst renderer.
 - Deliberately kept grant/revoke/rekey administration out of the raw renderer API. The format primitives exist, but end-user sharing must be mediated by Wurster-owned trusted UI before 1.0.
 - Legacy `wurst/fs-1` single-Vault Wursts remain supported. A Wurst declares either legacy `vault` or new realm `data`, never both.
-- WurstFS v2 compaction is intentionally disabled until a signed checkpoint/history-compaction design exists; Wurster refuses to silently discard provenance.
+- PigFS compaction is intentionally disabled until a signed checkpoint/history-compaction design exists; Wurster refuses to silently discard provenance.
 - WRST remains v7. This release expands the mutable filesystem/security model without changing immutable container framing.
 
 ## 0.16.0 - Verified Claims
@@ -226,8 +236,8 @@
 
 ## 0.12.1 - Clean Cuts on the Web
 
-- Removed the accidental literal `wurst://data/...` compatibility rewrite from Wurster Web. Wurst application resources keep ordinary relative web URL semantics; mutable data URLs come only from `wurst.fs.url()` and are runtime-owned/opaque.
-- Reworked the web WurstFS overlay around bounded chunk storage. Browsers use IndexedDB as an internal session backing store when available, so `beginWrite()` / `writeChunk()` no longer retain the entire file as renderer byte arrays.
+- Removed the accidental literal `wurst://pigfs/...` compatibility rewrite from Wurster Web. Wurst application resources keep ordinary relative web URL semantics; mutable data URLs come only from `wurst.pigfs.url()` and are runtime-owned/opaque.
+- Reworked the web PigFS overlay around bounded chunk storage. Browsers use IndexedDB as an internal session backing store when available, so `beginWrite()` / `writeChunk()` no longer retain the entire file as renderer byte arrays.
 - Range reads now cross browser overlay chunks without materializing the complete file, and renaming an immutable-base file is metadata-only instead of copying the whole source into memory.
 - Added streamed snapshot record generation, HTTP-style suffix ranges and HEAD support to the Web service-worker resource path.
 - Added `@wurster/session`, a runtime-neutral authorization-session broker with runtime binding, scopes, expiry and no renderer-visible bearer token.
@@ -239,14 +249,14 @@
 ## 0.12.0 - Wurst Everywhere
 
 - Reorganized runtime work below `runtime/`: shared desktop source, Windows/macOS output homes, browser runtime, and reserved iOS/Android runtime directories.
-- Added Wurster Web alpha with WRST v7 local/HTTP-range readers, public app execution, plain WurstFS CRUD overlay, ranged WurstFS media and standalone snapshot export.
+- Added Wurster Web alpha with WRST v7 local/HTTP-range readers, public app execution, plain PigFS CRUD overlay, ranged PigFS media and standalone snapshot export.
 - Added service-worker-backed virtual Wurst resources so browser Wursts keep normal relative HTML/CSS/JS resource behavior.
 - Added web `<wurster-auth>` handoff controls and registered the desktop `wurster://` custom protocol without placing Meatphrases or private keys in handoff URLs.
 - Added `.env.signing.example` / `.env.signing.local` release-signing workflow for macOS Developer ID/notarization and Windows Authenticode builds.
 - Desktop build artifacts now land under `runtime/windows/dist/` and `runtime/mac/dist/`.
 - Added 11ty-ready runtime layout, web runtime and Wurster release-signing documentation.
-- Added web-runtime conformance tests for WRST v7/WurstFS read, browser overlay writes and standalone snapshot export.
-- WRST remains v7. The web runtime is explicitly alpha-incomplete for sealed application/WurstFS execution until its portable browser crypto/auth adapter is finished.
+- Added web-runtime conformance tests for WRST v7/PigFS read, browser overlay writes and standalone snapshot export.
+- WRST remains v7. The web runtime is explicitly alpha-incomplete for sealed application/PigFS execution until its portable browser crypto/auth adapter is finished.
 
 ## 0.11.1 - Sign the Sausage
 

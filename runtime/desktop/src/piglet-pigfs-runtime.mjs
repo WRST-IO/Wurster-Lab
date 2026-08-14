@@ -1,4 +1,4 @@
-export function bindPigletWurstFsPersistence(store, persistence) {
+export function bindPigletPigFsPersistence(store, persistence) {
   if (!persistence?.flush) return store;
   const baseSync = store.sync.bind(store);
   store.sync = async () => {

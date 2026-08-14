@@ -17,10 +17,44 @@ addEventListener('message', async (event) => {
     await session?.close?.();
     const source = new MessagePortWurstSource(port, Number(event.data.size), { kind: event.data.sourceKind || 'embed' });
     const base = new URL('./', import.meta.url);
+    let requestSeq = 1;
+    const pendingPersist = new Map();
+    const pendingParent = new Map();
+    const onBridgeResult = (message) => {
+      const m = message.data;
+      if (m?.type === 'wurster-embed-persist-result') {
+        const pending = pendingPersist.get(m.id);
+        if (!pending) return;
+        pendingPersist.delete(m.id);
+        m.ok ? pending.resolve(m.result) : pending.reject(new Error(m.error || 'Embedded Wurst persistence failed'));
+        return;
+      }
+      if (m?.type === 'wurster-embed-parent-result') {
+        const pending = pendingParent.get(m.id);
+        if (!pending) return;
+        pendingParent.delete(m.id);
+        m.ok ? pending.resolve(m.result) : pending.reject(new Error(m.error || 'Parent Wurst operation failed'));
+      }
+    };
+    port.addEventListener('message', onBridgeResult);
     session = await WursterWeb.open(source, {
       wurstKey: event.data.wurstKey || null,
       serviceWorkerUrl: new URL('./wurster-sw.js', import.meta.url).toString(),
-      serviceWorkerScope: base.pathname
+      serviceWorkerScope: base.pathname,
+      persistSnapshot: event.data.persistent ? async (blob) => {
+        const data = await blob.arrayBuffer();
+        const id = `persist-${requestSeq++}`;
+        const result = new Promise((resolve, reject) => pendingPersist.set(id, { resolve, reject }));
+        port.postMessage({ type: 'wurster-embed-persist', id, data }, [data]);
+        return result;
+      } : null,
+      parent: event.data.parent || null,
+      parentInvoke: event.data.parent ? async (method, args = []) => {
+        const id = `parent-${requestSeq++}`;
+        const result = new Promise((resolve, reject) => pendingParent.set(id, { resolve, reject }));
+        port.postMessage({ type: 'wurster-embed-parent-call', id, method, args });
+        return result;
+      } : null
     });
     boot.hidden = true;
     await session.mount(stage);

@@ -34,9 +34,9 @@ async function open(source){
       field('Format',session.reader.manifest.format),
       field('Source',session.reader.source.kind==='http'?'HTTP Range':'Local File / Blob'),
       field('Package',signature.valid?'Signed · valid':signature.status==='unsigned'?'Unsigned':'Signature problem'),
-      field('WurstFS',fs.write?'Session read/write':'Read only'),
+      field('PigFS',fs.write?'Session read/write':'Read only'),
       field('Overlay',fs.backing==='indexeddb'?'Chunk-backed IndexedDB':'Memory fallback'),
-      '<p class="tiny">Application resources use ordinary relative web URLs. Runtime-managed /data resources are obtained through <code>wurst.fs.url()</code>; the Wurst never depends on a physical URL scheme.</p>'
+      '<p class="tiny">Application resources use ordinary relative web URLs. Runtime-managed /data resources are obtained through <code>wurst.pigfs.url()</code>; the Wurst never depends on a physical URL scheme.</p>'
     ].join('');
   }catch(error){status.innerHTML=`<div class="error"><strong>Could not open Wurst</strong><br>${esc(error.message)}</div>`;}
 }

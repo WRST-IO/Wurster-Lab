@@ -19,4 +19,4 @@ The Meatphrase itself is never a publisher package-signing key and never a devel
 
 A local Meat Locker may keep an encrypted convenience copy protected by platform-specific user presence. That local mechanism does not change the portable identity: the same Meatphrase reconstructs the same Wurster Identity on another conforming runtime.
 
-Personal sealed WurstFS realms wrap their random realm key for the identity's X25519 public key. Shared sealed realms can wrap the same realm key for several authorized identities.
+Personal sealed PigFS realms wrap their random realm key for the identity's X25519 public key. Shared sealed realms can wrap the same realm key for several authorized identities.

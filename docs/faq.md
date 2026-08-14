@@ -20,11 +20,11 @@ No. Never as part of the file. Local Wurster implementations may use platform se
 
 ## What is the difference between WurstKey and Meatphrase?
 
-WurstKey protects developer-owned immutable application content. A Wurster Identity derived from a Meatphrase can protect personal/shared mutable WurstFS realms.
+WurstKey protects developer-owned immutable application content. A Wurster Identity derived from a Meatphrase can protect personal/shared mutable PigFS realms.
 
 ## Can user data be unencrypted?
 
-Yes. Ordinary WurstFS realms are mutable public app data: no identity, no encryption, no signatures and no retained audit history. Personal and sealed shared realms are encrypted.
+Yes. Ordinary PigFS realms are mutable public app data: no identity, no encryption, no signatures and no retained audit history. Personal and sealed shared realms are encrypted.
 
 ## Why not just one index.html?
 
@@ -32,7 +32,7 @@ A single HTML file is great. Wurst starts where it stops being enough: when stat
 
 ## Is Wurster an operating system?
 
-No. Wurster should provide a few strong primitives: WRST, WurstFS, the renderer sandbox, the capability broker, Pigsty, Piglet and PigLink. Higher-level systems such as WurstOS can be Wursts.
+No. Wurster should provide a few strong primitives: WRST, PigFS, the renderer sandbox, the capability broker, Pigsty, Piglet and PigLink. Higher-level systems such as WurstOS can be Wursts.
 
 ## Can a Wurst contain gigabytes of media?
 

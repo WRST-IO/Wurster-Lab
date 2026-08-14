@@ -18,7 +18,7 @@ wurster-embed-host.html
 
 The core runtime uses a service worker to give each Wurst a virtual application resource surface while the visible Wurst runs in a sandboxed iframe. Normal relative HTML/CSS/JavaScript URLs therefore keep working inside a Wurst.
 
-## 0.32.0 runtime surface
+## 0.32.2 runtime surface
 
 Wurster Web can:
 
@@ -31,10 +31,10 @@ Wurster Web can:
 - unlock **partial** WurstKey application protection in-browser;
 - unlock **fully sealed** WurstKey applications, including their encrypted private application map;
 - keep the WurstKey outside application JavaScript and application DOM;
-- read plain WurstFS metadata and file ranges;
-- maintain a writable browser-session WurstFS overlay backed by chunk records rather than whole-file renderer buffers;
-- provide `wurst.fs.*` CRUD, bounded range reads and chunked write sessions;
-- serve WurstFS media through range-capable virtual URLs;
+- read plain PigFS metadata and file ranges;
+- maintain a writable browser-session PigFS overlay backed by chunk records rather than whole-file renderer buffers;
+- provide `wurst.pigfs.*` CRUD, bounded range reads and chunked write sessions;
+- serve PigFS media through range-capable virtual URLs;
 - export the current overlay as a standalone WRST v7 snapshot;
 - embed a Wurst through the `<wurst-embed>` Custom Element without requiring the embedding site to install a Wurster service worker on its own origin.
 
@@ -172,12 +172,12 @@ A Wurst is still a web application internally. Static application resources use 
 For mutable `/data` resources the Wurst asks the runtime:
 
 ```js
-video.src = wurst.fs.url('/data/videos/flight.mp4');
+video.src = wurst.pigfs.url('/videos/flight.mp4');
 ```
 
 The returned URL is runtime-owned and opaque.
 
-## WurstFS on the web
+## PigFS on the web
 
 The web runtime does not pretend it can silently overwrite a remote server object or an arbitrary local file. Instead it exposes a writable session overlay:
 
@@ -197,12 +197,12 @@ The viewer is intentionally built on `<wurst-embed>` rather than a separate priv
 
 ## Remaining browser parity work
 
-0.32.0 completes WurstKey application execution, but not every Desktop trust/auth feature is browser-equivalent yet.
+0.32.2 completes WurstKey application execution, but not every Desktop trust/auth feature is browser-equivalent yet.
 
 Still before 1.0:
 
-- WurstFS v2 realm parity: history-free ordinary/personal realms, compaction behavior, Wurster Identity signing, X25519 shared-reader key-wraps, sealed realm catalogs/data and shared integrity/fork semantics;
-- personal/shared WurstFS realm crypto, trusted identity handoff and protected snapshot writes;
+- PigFS realm parity: history-free ordinary/personal realms, compaction behavior, Wurster Identity signing, X25519 shared-reader key-wraps, sealed realm catalogs/data and shared integrity/fork semantics;
+- personal/shared PigFS realm crypto, trusted identity handoff and protected snapshot writes;
 - the cryptographic return leg for Desktop Wurster identity/auth handoff;
 - browser presentation of the full publisher DNS/Authority trust chain and `<wurst-identity>` parity;
 - Undercover PNG source adaptation in Wurster Web;

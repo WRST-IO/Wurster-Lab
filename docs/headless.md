@@ -12,7 +12,7 @@ This is useful for automated tests, build verification, command-line automation 
 
 ## Developer harness
 
-Wurster Lab 0.32.0 includes a browserless development harness:
+Wurster Lab 0.32.2 includes a browserless development harness:
 
 ```bash
 wurster-headless describe app.wurst
@@ -57,9 +57,9 @@ wurster-headless test calculator.wurst
 
 can verify the Action contract without Chromium.
 
-## Security status in 0.32.0
+## Security status in 0.32.2
 
-The 0.32.0 command-line harness is for Wursts you are developing or otherwise trust. It uses a disposable Node worker and a restricted JavaScript context so that AI/build tooling can exercise Wurst Actions today, but it is **not** the final production sandbox for hostile third-party code.
+The 0.32.2 command-line harness is for Wursts you are developing or otherwise trust. It uses a disposable Node worker and a restricted JavaScript context so that AI/build tooling can exercise Wurst Actions today, but it is **not** the final production sandbox for hostile third-party code.
 
 ## Pigsty Through PigLink
 

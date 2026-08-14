@@ -1,6 +1,6 @@
 ---
 title: Federated Publisher Identity
-group: Trust & Identity
+group: Security & Trust
 groupOrder: 4
 order: 3
 ---
@@ -41,7 +41,7 @@ Claims are not trusted merely because the publisher key contains them. They are 
 
 ## Wurster-managed publisher identities
 
-The desktop runtime can keep publisher identities in the same local secure identity manager used for Wurster convenience state. User Meat Identities and MeatGrinder publisher identities are deliberately separate categories: a user Meatphrase unlocks user-owned WurstFS content, while a publisher identity signs immutable application builds.
+The desktop runtime can keep publisher identities in the same local secure identity manager used for Wurster convenience state. User Meat Identities and MeatGrinder publisher identities are deliberately separate categories: a user Meatphrase unlocks user-owned PigFS content, while a publisher identity signs immutable application builds.
 
 The MeatGrinder UI defaults to unsigned. Developers may create or select a stored publisher signer and optionally verify its domain directly from the UI. Signing asks the runtime for local device presence where supported. A stored signer can later be exported as its normal `.wurstkey`, so the Wurster-managed copy does not create a proprietary signing format.
 
@@ -90,12 +90,12 @@ A verified domain, verified email or locally trusted key does not receive extra 
 whitehouse.gov ✓
 ```
 
-still does not imply access to network, files, camera, microphone, WurstFS or any other capability.
+still does not imply access to network, files, camera, microphone, PigFS or any other capability.
 
 Package integrity, publisher identity and runtime permissions are separate questions.
 
 ## Future user attestations
 
-A later Wurster version may let the trusted runtime sign a committed WurstFS state on behalf of a local identity. A Wurst could request such a signing ceremony through a Wurster-owned control, but would never receive the private signing key itself.
+A later Wurster version may let the trusted runtime sign a committed PigFS state on behalf of a local identity. A Wurst could request such a signing ceremony through a Wurster-owned control, but would never receive the private signing key itself.
 
 That is intentionally post-1.0 work. The V1 publisher model establishes the key and identity foundation it can later reuse.

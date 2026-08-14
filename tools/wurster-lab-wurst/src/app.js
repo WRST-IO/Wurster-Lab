@@ -4,7 +4,7 @@ const $$ = (q) => [...document.querySelectorAll(q)];
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
 const OPERATOR_FILES = ['root.json', 'issuer.json', 'trust-bundle.json', 'issuer.wurstissuer'];
-const OPERATOR_SETTINGS_PATH = '/data/operator/operator-settings.json';
+const OPERATOR_SETTINGS_PATH = '/operator/operator-settings.json';
 let operatorUnlocked = false;
 let currentRealms = [];
 
@@ -18,27 +18,27 @@ function humanBytes(value) {
 }
 
 async function stat(path) {
-  try { return await window.wurst.fs.stat(path); } catch { return null; }
+  try { return await window.wurst.pigfs.stat(path); } catch { return null; }
 }
 
 async function readBytes(path) {
   const info = await stat(path);
   if (!info || info.type !== 'file') throw new Error(`Workspace file disappeared while reading: ${path}`);
   const size = Number(info.size || 0);
-  if (!Number.isSafeInteger(size) || size < 0) throw new Error(`Invalid WurstFS size for ${path}`);
+  if (!Number.isSafeInteger(size) || size < 0) throw new Error(`Invalid PigFS size for ${path}`);
   if (size === 0) return new Uint8Array(0);
   const chunkSize = 2 * 1024 * 1024;
   const chunks = [];
   let total = 0;
   for (let offset = 0; offset < size;) {
-    const result = await window.wurst.fs.read(path, { offset, length: Math.min(chunkSize, size - offset) });
+    const result = await window.wurst.pigfs.read(path, { offset, length: Math.min(chunkSize, size - offset) });
     const data = result?.data instanceof Uint8Array ? result.data : result?.data ? new Uint8Array(result.data) : null;
-    if (!data || data.byteLength === 0) throw new Error(`WurstFS returned no bytes for ${path} at offset ${offset}`);
+    if (!data || data.byteLength === 0) throw new Error(`PigFS returned no bytes for ${path} at offset ${offset}`);
     chunks.push(data);
     total += data.byteLength;
     offset += data.byteLength;
   }
-  if (total !== size) throw new Error(`Short WurstFS read for ${path}: expected ${size} bytes, got ${total}`);
+  if (total !== size) throw new Error(`Short PigFS read for ${path}: expected ${size} bytes, got ${total}`);
   const out = new Uint8Array(total);
   let cursor = 0;
   for (const chunk of chunks) { out.set(chunk, cursor); cursor += chunk.byteLength; }
@@ -64,9 +64,9 @@ function latestChangelog(text, version) {
 
 async function refreshRelease() {
   let release = {};
-  try { release = JSON.parse(await readText('/data/lab/release.json')); } catch {}
+  try { release = JSON.parse(await readText('/lab/release.json')); } catch {}
   let pkg = {};
-  try { pkg = JSON.parse(await readText('/data/workspace/package.json')); } catch {}
+  try { pkg = JSON.parse(await readText('/workspace/package.json')); } catch {}
   const version = release.version || pkg.version || 'unknown';
   const revision = release.revision || 1;
   $('#workspaceVersion').textContent = `Wurster Lab ${version}`;
@@ -77,7 +77,7 @@ async function refreshRelease() {
   $('#healthText').textContent = `Meat integrity: ${release.tests || 'release workspace loaded'}.`;
   $('#changeTitle').textContent = `What changed in ${version}`;
   try {
-    $('#changelog').textContent = latestChangelog(await readText('/data/workspace/CHANGELOG.md'), version);
+    $('#changelog').textContent = latestChangelog(await readText('/workspace/CHANGELOG.md'), version);
   } catch (error) {
     $('#changelog').textContent = `Could not read CHANGELOG.md\n\n${error.message}`;
   }
@@ -85,7 +85,7 @@ async function refreshRelease() {
 
 async function refreshNotes() {
   try {
-    const text = await readText('/data/lab/notes.md');
+    const text = await readText('/lab/notes.md');
     $('#notes').value = text;
     $('#notesState').textContent = text.trim() ? 'inked' : 'empty';
     $('#noteSaveState').textContent = 'loaded';
@@ -98,7 +98,7 @@ async function refreshNotes() {
 function operatorRealm() { return currentRealms.find((realm) => realm.id === 'operator'); }
 
 async function refreshRealms() {
-  currentRealms = await window.wurst.fs.realms();
+  currentRealms = await window.wurst.pigfs.realms();
   const op = operatorRealm();
   if (!op) {
     operatorUnlocked = false;
@@ -139,14 +139,14 @@ async function refreshOperatorFiles() {
   if (!operatorUnlocked) return;
   let present = 0;
   for (const name of OPERATOR_FILES) {
-    const s = await stat(`/data/operator/${name}`);
+    const s = await stat(`/operator/${name}`);
     const el = $(`[data-state="${name}"]`);
     if (s?.type === 'file') { present += 1; el.textContent = `${humanBytes(s.size)} · stored`; el.classList.add('good'); }
     else { el.textContent = 'missing'; el.classList.remove('good'); }
   }
   if (present === 4) {
     try {
-      const [rootText, issuerText, trustBundleText, issuerPrivateText] = await Promise.all(OPERATOR_FILES.map((name) => readText(`/data/operator/${name}`)));
+      const [rootText, issuerText, trustBundleText, issuerPrivateText] = await Promise.all(OPERATOR_FILES.map((name) => readText(`/operator/${name}`)));
       const material = validateOperatorMaterial({ rootText, issuerText, trustBundleText, issuerPrivateText });
       await verifyOperatorMaterialCryptographically(material);
       const verified = { rootFingerprint: material.root.fingerprint, issuerFingerprint: material.issuer.statement.issuer.fingerprint, issuerName: material.issuer.statement.issuer.name ?? material.issuer.statement.issuer.issuerId ?? 'WRST.IO issuer' };
@@ -198,7 +198,7 @@ async function currentOperatorSettingsFromForm() {
 }
 
 async function operatorMaterial() {
-  const [rootText, issuerText, trustBundleText, issuerPrivateText] = await Promise.all(OPERATOR_FILES.map((name) => readText(`/data/operator/${name}`)));
+  const [rootText, issuerText, trustBundleText, issuerPrivateText] = await Promise.all(OPERATOR_FILES.map((name) => readText(`/operator/${name}`)));
   const material = validateOperatorMaterial({ rootText, issuerText, trustBundleText, issuerPrivateText });
   await verifyOperatorMaterialCryptographically(material);
   return material;
@@ -207,7 +207,7 @@ async function operatorMaterial() {
 async function collectWorkspaceZipEntries() {
   const out = new Map();
   async function walk(fsPath, relBase = '') {
-    for (const entry of await window.wurst.fs.list(fsPath)) {
+    for (const entry of await window.wurst.pigfs.list(fsPath)) {
       const name = entry.name || entry.path.split('/').at(-1);
       const rel = relBase ? `${relBase}/${name}` : name;
       if (entry.type === 'directory') await walk(entry.path, rel);
@@ -217,7 +217,7 @@ async function collectWorkspaceZipEntries() {
       }
     }
   }
-  await walk('/data/workspace');
+  await walk('/workspace');
   return out;
 }
 
@@ -227,7 +227,7 @@ async function exportProductionWorkspace() {
   const settings = await readOperatorSettings({ required: true });
   const files = await collectWorkspaceZipEntries();
   for (const [name, value] of operatorReplacementMap(material, settings)) files.set(name, value);
-  const release = JSON.parse(await readText('/data/lab/release.json'));
+  const release = JSON.parse(await readText('/lab/release.json'));
   const bytes = writeZip([], files);
   const suggestedName = `wurster_lab_v${release.version || 'operator'}_r${String(release.revision || 1).padStart(3, '0')}_WRST-OPERATOR.zip`;
   const saved = await window.wurst.files.save({
@@ -240,12 +240,12 @@ async function exportProductionWorkspace() {
 }
 
 async function initialize() {
-  try { await window.wurst.fs.initialize(); } catch (error) {
+  try { await window.wurst.pigfs.initialize(); } catch (error) {
     if (!/already|initialized/i.test(error.message)) throw error;
   }
   await refreshRealms();
   await Promise.all([refreshRelease(), refreshNotes()]);
-  $('#footerState').textContent = 'WurstFS v2 · ordinary + personal realms';
+  $('#footerState').textContent = 'PigFS · ordinary + personal realms';
 }
 
 window.wurst.auth.onResult(async (result) => {
@@ -256,7 +256,7 @@ window.wurst.auth.onResult(async (result) => {
     return;
   }
   try {
-    const unlocked = await window.wurst.fs.unlockRealm('operator');
+    const unlocked = await window.wurst.pigfs.unlockRealm('operator');
     operatorUnlocked = Boolean(unlocked?.unlocked);
     await refreshRealms();
     $('#materialResult').textContent = unlocked?.claimed ? '🐷 Personal operator realm claimed for this identity.' : '🐷 Operator realm unlocked.';
@@ -269,7 +269,7 @@ window.wurst.auth.onResult(async (result) => {
 
 $('#lockOperator').addEventListener('click', async () => {
   try {
-    await window.wurst.fs.lockRealm('operator');
+    await window.wurst.pigfs.lockRealm('operator');
     operatorUnlocked = false;
     await refreshRealms();
   } catch (error) {
@@ -287,7 +287,7 @@ for (const button of $$('[data-import]')) {
       const chosen = await window.wurst.files.open({ title: `Import ${name}`, label: name, extensions: [extension], maxBytes: 2 * 1024 * 1024 });
       if (!chosen.opened) return;
       if (name.endsWith('.json')) JSON.parse(decoder.decode(chosen.data));
-      await window.wurst.fs.write(`/data/operator/${name}`, chosen.data, { mime: name.endsWith('.json') ? 'application/json' : 'application/octet-stream' });
+      await window.wurst.pigfs.write(`/operator/${name}`, chosen.data, { mime: name.endsWith('.json') ? 'application/json' : 'application/octet-stream' });
       $('#materialResult').textContent = `✓ ${name} sealed into the personal operator realm.`;
       $('#materialResult').className = 'material-result good';
       await refreshOperatorFiles();
@@ -309,10 +309,10 @@ $('#importOperatorWorkspace').addEventListener('click', async () => {
     const values = [extracted.rootText, extracted.issuerText, extracted.trustBundleText, extracted.issuerPrivateText];
     for (let i = 0; i < OPERATOR_FILES.length; i += 1) {
       const name = OPERATOR_FILES[i];
-      await window.wurst.fs.write(`/data/operator/${name}`, encoder.encode(values[i]), { mime: name.endsWith('.json') ? 'application/json' : 'application/octet-stream' });
+      await window.wurst.pigfs.write(`/operator/${name}`, encoder.encode(values[i]), { mime: name.endsWith('.json') ? 'application/json' : 'application/octet-stream' });
     }
     if (extracted.settings) {
-      await window.wurst.fs.write(OPERATOR_SETTINGS_PATH, JSON.stringify(extracted.settings, null, 2) + '\n', { mime: 'application/json' });
+      await window.wurst.pigfs.write(OPERATOR_SETTINGS_PATH, JSON.stringify(extracted.settings, null, 2) + '\n', { mime: 'application/json' });
     }
     $('#materialResult').textContent = extracted.settings
       ? '✓ Previous operator workspace imported, including sealed Mail Relay settings.'
@@ -329,7 +329,7 @@ $('#saveOperatorSettings').addEventListener('click', async () => {
   try {
     if (!operatorUnlocked) throw new Error('Unlock the personal operator realm first.');
     const settings = await currentOperatorSettingsFromForm();
-    await window.wurst.fs.write(OPERATOR_SETTINGS_PATH, JSON.stringify(settings, null, 2) + '\n', { mime: 'application/json' });
+    await window.wurst.pigfs.write(OPERATOR_SETTINGS_PATH, JSON.stringify(settings, null, 2) + '\n', { mime: 'application/json' });
     $('#relaySettingsState').textContent = '✓ Mail Relay URL + secret sealed in your personal operator realm.';
     $('#relaySettingsState').className = 'material-result good';
   } catch (error) {
@@ -348,7 +348,7 @@ $('#toggleRelaySecret').addEventListener('click', () => {
 $('#saveNotes').addEventListener('click', async () => {
   try {
     $('#noteSaveState').textContent = 'saving…';
-    await window.wurst.fs.write('/data/lab/notes.md', $('#notes').value, { mime: 'text/markdown' });
+    await window.wurst.pigfs.write('/lab/notes.md', $('#notes').value, { mime: 'text/markdown' });
     $('#noteSaveState').textContent = 'saved · current data';
     $('#notesState').textContent = $('#notes').value.trim() ? 'inked' : 'empty';
   } catch (error) { $('#noteSaveState').textContent = error.message; }
@@ -374,7 +374,7 @@ $('#exportOperatorWorkspace').addEventListener('click', async () => {
 $('#compactLab').addEventListener('click', async () => {
   try {
     $('#compactResult').textContent = 'Putting specimen on a very small treadmill…';
-    const result = await window.wurst.fs.compact();
+    const result = await window.wurst.pigfs.compact();
     $('#compactResult').textContent = result?.compacted
       ? `✓ Trimmed ${humanBytes(result.reclaimedBytes || 0)}. The Wurst is feeling aerodynamic.`
       : `Nothing trimmed: ${result?.reason || 'already lean'}.`;

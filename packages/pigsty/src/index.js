@@ -294,7 +294,7 @@ export function createPigstyEngineContract({
   const mounts = [
     {
       path: '/wurst',
-      source: 'wurstfs',
+      source: 'pigfs',
       writable: true,
       persistent: true,
       digest: digestWorkspaceEntries(files)
@@ -380,7 +380,7 @@ export function resolvePigstyPath(rawPath, {
   return {
     absolutePath: absolute,
     mountPath: mount,
-    source: mount === '/wurst' ? 'wurstfs' : mount === '/tmp' ? 'ephemeral' : mount === '/toolchain' ? 'toolchain' : 'unknown',
+    source: mount === '/wurst' ? 'pigfs' : mount === '/tmp' ? 'ephemeral' : mount === '/toolchain' ? 'toolchain' : 'unknown',
     path: relative
   };
 }

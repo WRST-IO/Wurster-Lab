@@ -1,0 +1,12 @@
+{
+  "name": "@wurster/pigfs",
+  "version": "0.32.2",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "dependencies": {
+    "@wurster/format": "0.32.2"
+  }
+}

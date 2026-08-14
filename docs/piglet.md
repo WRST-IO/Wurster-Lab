@@ -1,262 +1,104 @@
 ---
 title: Piglet
-group: Runtime & Format
+group: Runtime Pillars
 groupOrder: 2
-order: 5
+order: 3
 ---
 # Piglet
 
-Piglet is Wurster's composition runtime: one Wurst can keep, discover and run another Wurst without changing the child's package identity.
+Piglet is composition: a Wurst running inside another Wurst while remaining its own Wurst.
 
-A Piglet is **not a second package format**. It is still an ordinary `.wurst` / `.wrst` file. Piglet is the runtime relationship around that file.
+A Piglet is not a package format and not an Electron view. The universal UI contract is the same element Wurster Web already uses everywhere:
+
+```html
+<wurst-embed src="./media/example.wurst"></wurst-embed>
+```
+
+Outside a Wurst this embeds a Wurst. Inside a running Wurst it creates a Piglet relationship. The element behaves like normal HTML: CSS sizing, Grid/Flexbox, scrolling, clipping, transforms and border radii belong to the parent document. Wurster may use an internal sandboxed iframe, but that is runtime implementation detail.
+
+## Source rules
+
+Inside a Wurst, `src` can refer to ordinary immutable package content or PigFS:
+
+```html
+<wurst-embed src="./media/tool.wurst"></wurst-embed>
+<wurst-embed src="/workspace/apps/tool.wurst"></wurst-embed>
+```
+
+Built-in MeatGrinder children remain discoverable with `wurst.piglet.children()` and can be embedded through their runtime URL when needed. Runtime-installed children are normal `.wurst` / `.wrst` files in PigFS.
+
+## Identity never merges
+
+Nesting never republishes the child as the parent.
 
 ```text
-WhiteHouse.wurst
-  owns bytes for JoeBiden.wurst
-
-WhiteHouse publisher signature  -> authenticates WhiteHouse package bytes
-JoeBiden publisher signature    -> still authenticates JoeBiden.wurst
+WhiteHouse.wurst     signed by WhiteHouse.gov
+└── JoeBiden.wurst   signed by JoeBiden.com
 ```
 
-Nesting never re-signs the child as the parent. A child signed by one publisher remains signed by that publisher whether it shipped inside the parent on day one or was imported into writable WurstFS months later.
+MeatGrinder preserves the exact child bytes. The parent signature covers those exact bytes as parent content; the child signature continues to authenticate the child's own immutable package. Mutable child PigFS state may grow later without changing the child's immutable publisher identity.
 
-## Status In 0.32
+## Runtime installation
 
-Desktop Piglet now has a managed runtime slice:
-
-Piglet package access follows the same random-access principle as top-level Wursts. Opening a child does not require buffering the entire child package first: built-in children expose verified ranges from their immutable parent resource and WurstFS children expose ranges from their stored file. Wurster only materializes a private local backing file when a child actually needs writable WurstFS or protected application unlock. This keeps large read-mostly Piglets fast to inspect and start.
-
-Container applications such as WurstOS must call `wurst.piglet.open(ref, { bounds })` to create a managed renderer. `wurst.piglet.url(ref)` is intentionally only a package-byte transport/debug URL and is not an iframe document. A UI that still displays a "waiting for managed child renderer" placeholder is application-side code that has not switched from the old URL/display pattern to `open()`.
-
-- fixed MeatGrinder children remain byte-identical immutable Wurst resources;
-- runtime-installed children are stored as ordinary WurstFS `.wurst` / `.wrst` files;
-- `wurst.piglet.children()` discovers both built-in children and valid Wurst files in readable WurstFS realms;
-- every discovered candidate is inspected independently and reports its child application identity plus package-signature status;
-- `wurst.piglet.install(...)` verifies Wurst structure/signature and writes the exact supplied bytes into WurstFS without repackaging;
-- `wurst.piglet.open(...)` creates a Wurster-owned `WebContentsView` child renderer instead of pretending package bytes are an iframe document;
-- child surfaces have handles and can be moved, resized, focused and closed by the parent;
-- every running child receives its own manifest, renderer session, protocol handler, capability context and runtime binding.
-
-Wurster Web still supports the earlier built-in-child internal-session path. Runtime-installed Web Piglets and managed nested browser surfaces remain follow-up work.
-
-Protected/sealed Desktop children now use the same Wurster-owned Auth controls as top-level Wursts, but bound to the child runtime context and child surface rectangle. WurstKey and Wurster Identity secrets never transit through the parent renderer.
-
-## Two Ways A Wurst Can Contain Another Wurst
-
-### Built-in child
-
-A project can ship a child at MeatGrinder time:
-
-```json
-{
-  "capabilities": {
-    "piglet": true
-  },
-  "piglet": {
-    "children": [
-      {
-        "id": "flappywurst",
-        "source": "apps/FlappyWurst.wurst",
-        "label": "Flappy Wurst"
-      }
-    ]
-  }
-}
-```
-
-MeatGrinder copies the exact bytes to immutable `piglet` scope and records their SHA-256 in the parent manifest. It does **not** decode and rebuild the child.
-
-The parent signature therefore says:
-
-> these exact child bytes were part of the parent package I published.
-
-The child signature separately says:
-
-> this child package was published by its own publisher.
-
-Both statements remain true at the same time.
-
-### Runtime-installed child
-
-A running Wurst may also keep another Wurst as normal mutable data. There is no special Piglet database and no hidden host folder.
-
-For example:
-
-```text
-/data/workspace/apps/FlappyWurst.wurst
-/data/workspace/apps/Notes.wurst
-/data/media/trailer.mp4
-/data/media/poster.jpg
-```
-
-`FlappyWurst.wurst` and `Notes.wurst` are ordinary WurstFS files just like the MP4 and JPEG beside them. Piglet discovery notices valid `.wurst` / `.wrst` files and exposes them as runnable children.
-
-The parent package signature does not claim authorship of runtime-installed files. Wurster verifies each stored child independently.
-
-## Drag And Drop
-
-Piglet intentionally does not invent a privileged drag-and-drop channel. The parent Wurst owns its UI and receives the browser `File` just like any other dropped file.
-
-```js
-surface.addEventListener('drop', async (event) => {
-  event.preventDefault();
-
-  for (const file of event.dataTransfer.files) {
-    if (!/\.(wurst|wrst)$/i.test(file.name)) continue;
-
-    const installed = await wurst.piglet.install(
-      file.name,
-      await file.arrayBuffer()
-    );
-
-    console.log('installed', installed.ref, installed.signature);
-  }
-});
-```
-
-The default installer writes into `piglets/` below the first writable ordinary WurstFS realm. A Wurst may instead choose an explicit WurstFS destination:
+A dropped Wurst is stored as an ordinary PigFS file:
 
 ```js
 await wurst.piglet.install('MyApp.wurst', bytes, {
-  path: '/data/workspace/apps/MyApp.wurst'
+  path: '/workspace/apps/MyApp.wurst'
 });
 ```
 
-That destination remains a normal WurstFS file and can also be read, renamed or removed through ordinary `wurst.fs` APIs.
+Discovery is filesystem-based. A filename ending in `.wurst` is only returned as a runnable Piglet after it parses as a valid Wurst.
 
-## Discovery
+## Lazy startup and persistence
 
-```js
-const children = await wurst.piglet.children();
+Piglet sources are byte-range sources. Opening an embed does not require buffering the complete child first. Wurster reads metadata and requested resources in slices.
+
+When a child has writable PigFS, its mutations persist back to the parent-held `.wurst` file. Runtime-installed children update that file directly. Writable built-in children materialize a mutable runtime copy in an ordinary parent PigFS realm so the immutable bytes covered by the parent signature remain unchanged.
+
+Write-back is conflict checked. If the parent-held file changes independently while the child is running, Wurster raises `WURST_PIGLET_CONFLICT` rather than silently choosing a winner.
+
+## Parent-granted runtime access
+
+Piglets are isolated by default. A child cannot see its parent Wurst merely because it is embedded. The parent may explicitly delegate selected runtime services on the `<wurst-embed>` element. The first delegation surface is Parent PigFS:
+
+```html
+<wurst-embed
+  src="/workspace/apps/FileExplorer.wurst"
+  parent-pigfs="read-write">
+</wurst-embed>
 ```
 
-Descriptors use a runtime reference instead of pretending the parent owns the child's identity:
+The child keeps its own `wurst.pigfs`. Delegated parent storage is separate and explicit:
 
 ```js
-{
-  ref: 'builtin:flappywurst',
-  source: 'builtin',
-  mutable: false,
-  application: {
-    id: 'io.example.flappywurst',
-    name: 'Flappy Wurst',
-    version: '1.2.0'
-  },
-  signature: {
-    status: 'signed',
-    publisher: { /* independent child publisher */ }
-  }
-}
+await wurst.parent.pigfs.list('/');
+await wurst.parent.pigfs.write('/workspace-note.txt', 'OINK');
 ```
 
-or:
+`parent-pigfs="read"` exposes read operations only. `parent-pigfs="read-write"` additionally allows mutation. Without the attribute `wurst.parent` is `null`. A grant never means Host filesystem access and never bypasses PigFS governance or encryption: a locked parent Realm remains locked, and a child does not inherit keys for unrelated Wursts. The parent can delegate only the runtime authority it already possesses.
 
-```js
-{
-  ref: 'wurstfs:/data/workspace/apps/MyApp.wurst',
-  source: 'wurstfs',
-  path: '/data/workspace/apps/MyApp.wurst',
-  mutable: true,
-  application: { /* child manifest identity */ },
-  signature: { /* child package verification */ }
-}
-```
-
-A filename ending in `.wurst` is not automatically trusted as a Piglet. Discovery attempts to parse it as a Wurst. Malformed files are simply still ordinary files and are not returned as runnable children.
-
-## Managed Desktop Surfaces
-
-`wurst.piglet.url()` still exists, but it returns the **package bytes**. A `.wurst` file is not an HTML document and that URL must not be placed into an iframe.
-
-To execute a child on Desktop, use:
-
-```js
-const child = await wurst.piglet.open('builtin:flappywurst', {
-  bounds: { x: 80, y: 90, width: 640, height: 420 }
-});
-```
-
-The returned handle belongs to the parent runtime session:
-
-```js
-await wurst.piglet.setBounds(child.handle, {
-  x: 120,
-  y: 100,
-  width: 720,
-  height: 480
-});
-
-await wurst.piglet.focus(child.handle);
-await wurst.piglet.close(child.handle);
-```
-
-If `bounds` is omitted, the child surface fills the Wurster content area and follows host-window resizes.
-
-This makes fake-desktop shells such as `WurstOS.wurst` possible without making an inner Wurst an iframe or launching another Electron application.
+This is intentionally a parent-service capability boundary rather than a merged filesystem. A WurstOS-style FileExplorer can therefore operate on WurstOS PigFS while still keeping its own package identity and private PigFS state. Future parent services can extend the same explicit grant model without turning Piglet into ambient authority.
 
 ## Runtime API
 
-Current Desktop surface:
+Piglet's JavaScript API manages files and discovery, not screen geometry:
 
 ```js
 await wurst.piglet.children();
 await wurst.piglet.inspect(ref);
-await wurst.piglet.url(ref);          // raw Wurst bytes, not an app document
 await wurst.piglet.install(name, bytes, options);
-await wurst.piglet.remove(ref);       // WurstFS children only
-await wurst.piglet.open(ref, options);
-await wurst.piglet.surfaces();
-await wurst.piglet.setBounds(handle, bounds);
-await wurst.piglet.focus(handle);
-await wurst.piglet.close(handle);
+await wurst.piglet.remove(ref);
 ```
 
-The `piglet` capability is required for install/remove/open lifecycle operations.
+Application presentation is `<wurst-embed>`. There is no public `setBounds`, native surface or Desktop-only open API.
 
-## Trust Domains Stay Separate
+## Trust UI
 
-A child keeps its own:
+Application content is web-native. Trusted runtime UI is different.
 
-- immutable application bytes;
-- package signature and publisher identity;
-- WurstFS realms;
-- WurstKey requirements;
-- capabilities;
-- Pigsty state;
-- PigLink declaration.
+`<wurster-auth>` and verified Wurster Identity presentation may use runtime-owned trusted surfaces because the application must not be able to forge them. Piglet application UI itself never requires `WebContentsView`.
 
-The parent gains orchestration authority over the child surface. It does not gain the child's secrets or become its publisher.
+## Remaining work
 
-```text
-Parenthood grants orchestration, not authorship.
-```
-
-## Child Runtime Isolation
-
-Every managed Desktop child gets a separate renderer context and protocol session. A child request resolves against the child reader, not the parent reader.
-
-The parent therefore cannot make this happen accidentally:
-
-```text
-wurst://app/index.html
-    -> parent index.html sometimes
-    -> child index.html other times
-```
-
-Each runtime instance has a Wurster-owned context binding. IPC calls are mapped back to the correct Wurst instance rather than a global `currentContext` assumption.
-
-Managed Desktop children now use writable nested WurstFS when their own manifest declares writable data. Wurster runs the child against a private backing file, fsyncs the child commit, then conflict-checks and writes the resulting complete child-Wurst bytes back into the parent WurstFS. Closing and reopening the Piglet therefore preserves its own WurstFS state.
-
-A runtime-installed Piglet writes back to the exact `.wurst` / `.wrst` file the parent stores. A writable built-in Piglet cannot mutate its immutable copy inside the parent package without invalidating the parent signature, so Wurster materializes an exact runtime copy under the parent's ordinary WurstFS before the first writable run. The built-in package bytes remain immutable and signed by the parent; the materialized child still retains the child's independent immutable application bytes and publisher signature.
-
-Write-back is optimistic and conflict checked. If the parent-held child file changed independently while that child instance was running, Wurster raises `WURST_PIGLET_CONFLICT` instead of silently overwriting either version.
-
-## Remaining Piglet Work
-
-Before a stable Piglet contract, the larger remaining pieces are:
-
-- explicit start/suspend/resume semantics beyond open/focus/close;
-- tree-level CPU, memory, renderer, Pigsty and nesting-depth budgets;
-- direct brokered PigLink handles between parent and running child;
-- equivalent runtime-installed/managed-surface behavior in Wurster Web;
-- trust/revocation presentation suitable for shell UIs without allowing the parent to spoof Wurster-owned identity indicators.
+The largest remaining Piglet pieces are direct Parent↔Child PigLink handles beyond the scoped Parent PigFS bridge, suspend/resume semantics, tree-level resource budgets, crash/recovery states, finer path-scoped delegation and complete nested-Piglet stress testing.

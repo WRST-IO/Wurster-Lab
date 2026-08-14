@@ -191,7 +191,37 @@ ipcRenderer.on('wurst:auth:result', (_event, payload = {}) => {
   } catch {}
 });
 
+
+function normalizeEmbedSource(raw) {
+  const value = String(raw ?? '').trim();
+  if (!value) throw new TypeError('<wurst-embed> requires a src');
+  if (value.startsWith('builtin:') || value.startsWith('pigfs:') || value.startsWith('wurst://')) return value;
+  if (value.startsWith('/')) return `pigfs:${value}`;
+  return new URL(value, document.baseURI).href;
+}
+
+function installWurstEmbedElement() {
+  if (customElements.get('wurst-embed')) return;
+  const script = document.createElement('script');
+  script.type = 'module';
+  script.src = 'wurst://runtime/wurster-embed.mjs';
+  script.dataset.wursterEmbedRuntime = '1';
+  document.head.appendChild(script);
+}
+
+contextBridge.exposeInMainWorld('wurstEmbedRuntime', Object.freeze({
+  open: (src, options = {}) => invoke('wurst:piglet:embed-open', normalizeEmbedSource(src), options),
+  read: (handle, offset, length) => invoke('wurst:piglet:embed-read', String(handle ?? ''), Number(offset), Number(length)),
+  persist: (handle, data) => {
+    const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+    return invoke('wurst:piglet:embed-persist', String(handle ?? ''), bytes);
+  },
+  invoke: (handle, method, args = []) => invoke('wurst:piglet:embed-invoke', String(handle ?? ''), String(method ?? ''), Array.isArray(args) ? args : []),
+  close: (handle) => invoke('wurst:piglet:embed-close', String(handle ?? ''))
+}));
+
 window.addEventListener('DOMContentLoaded', installAuthAnchors, { once: true });
+window.addEventListener('DOMContentLoaded', installWurstEmbedElement, { once: true });
 window.addEventListener('DOMContentLoaded', () => { void loadPigLink(); }, { once: true });
 
 contextBridge.exposeInMainWorld('PigLink', Object.freeze({ define: definePigLink }));
@@ -285,12 +315,7 @@ contextBridge.exposeInMainWorld('wurst', Object.freeze({
       else throw new TypeError('wurst.piglet.install expects Uint8Array or ArrayBuffer Wurst bytes');
       return invoke('wurst:piglet:install', String(name ?? 'Piglet.wurst'), bytes, options);
     },
-    remove: (ref) => invoke('wurst:piglet:remove', String(ref ?? '')),
-    open: (ref, options = {}) => invoke('wurst:piglet:open', String(ref ?? ''), options),
-    surfaces: () => invoke('wurst:piglet:surfaces'),
-    setBounds: (handle, bounds) => invoke('wurst:piglet:bounds', String(handle ?? ''), bounds),
-    focus: (handle) => invoke('wurst:piglet:focus', String(handle ?? '')),
-    close: (handle) => invoke('wurst:piglet:close', String(handle ?? ''))
+    remove: (ref) => invoke('wurst:piglet:remove', String(ref ?? ''))
   }),
   pigsty: Object.freeze({
     status: () => invoke('wurst:pigsty:status'),
@@ -318,23 +343,23 @@ contextBridge.exposeInMainWorld('wurst', Object.freeze({
       return invoke('wurst:files:save', options, bytes);
     }
   }),
-  fs: Object.freeze({
-    capabilities: () => invoke('wurst:fs:capabilities'),
-    realms: () => invoke('wurst:fs:realms'),
-    initialize: () => invoke('wurst:fs:initialize'),
-    unlockRealm: (realmId) => invoke('wurst:fs:unlock-realm', String(realmId ?? '')),
-    lockRealm: (realmId) => invoke('wurst:fs:lock-realm', String(realmId ?? '')),
-    history: () => invoke('wurst:fs:history'),
-    usage: () => invoke('wurst:fs:usage'),
-    compact: () => invoke('wurst:fs:compact'),
+  pigfs: Object.freeze({
+    capabilities: () => invoke('wurst:pigfs:capabilities'),
+    realms: () => invoke('wurst:pigfs:realms'),
+    initialize: () => invoke('wurst:pigfs:initialize'),
+    unlockRealm: (realmId) => invoke('wurst:pigfs:unlock-realm', String(realmId ?? '')),
+    lockRealm: (realmId) => invoke('wurst:pigfs:lock-realm', String(realmId ?? '')),
+    history: () => invoke('wurst:pigfs:history'),
+    usage: () => invoke('wurst:pigfs:usage'),
+    compact: () => invoke('wurst:pigfs:compact'),
     url: (path) => {
       const value = String(path ?? '').replaceAll('\\', '/').replace(/^\/+/, '').replace(/^data\//, '');
-      if (!value || value.split('/').some((part) => !part || part === '.' || part === '..')) throw new TypeError('Invalid WurstFS media path');
-      return `wurst://data/${value.split('/').map(encodeURIComponent).join('/')}`;
+      if (!value || value.split('/').some((part) => !part || part === '.' || part === '..')) throw new TypeError('Invalid PigFS media path');
+      return `wurst://pigfs/${value.split('/').map(encodeURIComponent).join('/')}`;
     },
-    stat: (path) => invoke('wurst:fs:stat', path),
-    list: (path = '/data') => invoke('wurst:fs:list', path),
-    read: (path, options = {}) => invoke('wurst:fs:read', path, {
+    stat: (path) => invoke('wurst:pigfs:stat', path),
+    list: (path = '/') => invoke('wurst:pigfs:list', path),
+    read: (path, options = {}) => invoke('wurst:pigfs:read', path, {
       offset: Number(options.offset ?? 0),
       length: options.length == null ? undefined : Number(options.length)
     }),
@@ -343,34 +368,34 @@ contextBridge.exposeInMainWorld('wurst', Object.freeze({
       if (data instanceof Uint8Array) bytes = data;
       else if (data instanceof ArrayBuffer) bytes = new Uint8Array(data);
       else if (typeof data === 'string') bytes = new TextEncoder().encode(data);
-      else throw new TypeError('wurst.fs.write expects Uint8Array, ArrayBuffer or string');
-      const tx = await invoke('wurst:fs:begin-write', path, { mime: options.mime });
+      else throw new TypeError('wurst.pigfs.write expects Uint8Array, ArrayBuffer or string');
+      const tx = await invoke('wurst:pigfs:begin-write', path, { mime: options.mime });
       try {
         const chunkSize = Number(tx.chunkSize) || (4 * 1024 * 1024);
         for (let offset = 0; offset < bytes.byteLength || (bytes.byteLength === 0 && offset === 0); offset += chunkSize) {
           const chunk = bytes.subarray(offset, Math.min(bytes.byteLength, offset + chunkSize));
-          await invoke('wurst:fs:write-chunk', tx.id, chunk);
+          await invoke('wurst:pigfs:write-chunk', tx.id, chunk);
           if (bytes.byteLength === 0) break;
         }
-        return await invoke('wurst:fs:commit-write', tx.id);
+        return await invoke('wurst:pigfs:commit-write', tx.id);
       } catch (error) {
-        await invoke('wurst:fs:abort-write', tx.id).catch(() => {});
+        await invoke('wurst:pigfs:abort-write', tx.id).catch(() => {});
         throw error;
       }
     },
-    beginWrite: (path, options = {}) => invoke('wurst:fs:begin-write', path, { mime: options.mime }),
+    beginWrite: (path, options = {}) => invoke('wurst:pigfs:begin-write', path, { mime: options.mime }),
     writeChunk: (id, data) => {
       let bytes;
       if (data instanceof Uint8Array) bytes = data;
       else if (data instanceof ArrayBuffer) bytes = new Uint8Array(data);
       else if (typeof data === 'string') bytes = new TextEncoder().encode(data);
-      else throw new TypeError('wurst.fs.writeChunk expects Uint8Array, ArrayBuffer or string');
-      return invoke('wurst:fs:write-chunk', id, bytes);
+      else throw new TypeError('wurst.pigfs.writeChunk expects Uint8Array, ArrayBuffer or string');
+      return invoke('wurst:pigfs:write-chunk', id, bytes);
     },
-    commitWrite: (id) => invoke('wurst:fs:commit-write', id),
-    abortWrite: (id) => invoke('wurst:fs:abort-write', id),
-    remove: (path, options = {}) => invoke('wurst:fs:remove', path, { recursive: Boolean(options.recursive) }),
-    mkdir: (path, options = {}) => invoke('wurst:fs:mkdir', path, { recursive: options.recursive !== false }),
-    rename: (from, to) => invoke('wurst:fs:rename', from, to)
+    commitWrite: (id) => invoke('wurst:pigfs:commit-write', id),
+    abortWrite: (id) => invoke('wurst:pigfs:abort-write', id),
+    remove: (path, options = {}) => invoke('wurst:pigfs:remove', path, { recursive: Boolean(options.recursive) }),
+    mkdir: (path, options = {}) => invoke('wurst:pigfs:mkdir', path, { recursive: options.recursive !== false }),
+    rename: (from, to) => invoke('wurst:pigfs:rename', from, to)
   })
 }));

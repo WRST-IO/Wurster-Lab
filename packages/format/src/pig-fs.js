@@ -1,14 +1,14 @@
 import crypto from 'node:crypto';
 import {
-  WURST_FS_DEFAULT_CHUNK_SIZE,
-  WURST_FS_MAP_TARGET,
-  WURST_FS_CATALOG_TARGET,
-  WURST_FS_MAX_RECORD_PAYLOAD,
-  WURST_FS_RECORD,
+  PIG_FS_DEFAULT_CHUNK_SIZE,
+  PIG_FS_MAP_TARGET,
+  PIG_FS_CATALOG_TARGET,
+  PIG_FS_MAX_RECORD_PAYLOAD,
+  PIG_FS_RECORD,
   locateLatestFsCommit,
   makeFsRecord,
   readFsRecord
-} from './wurst-fs-records.js';
+} from './pig-fs-records.js';
 import {
   WURSTER_IDENTITY_FORMAT,
   deriveWursterIdentityMaterial,
@@ -19,49 +19,49 @@ import {
   wrapKeyForWursterIdentity
 } from './wurst-identity.js';
 
-export const WURST_FS_V2_FORMAT = 'wurst/fs-2';
-export const WURST_FS_V2_CATALOG_FORMAT = 'wurst/fs-realm-catalog-2';
-export const WURST_FS_V2_MAP_FORMAT = 'wurst/fs-realm-map-2';
-export const WURST_FS_V2_MUTATION_FORMAT = 'wurst/fs-mutation-2';
-export const WURST_FS_V2_COMMIT_CONTEXT = 'wurst/fs-commit-2';
-export const WURST_FS_V2_REALM_KEY_FORMAT = 'wurst/fs-realm-key-1';
-export const WURST_FS_V2_HISTORY_NONE = 'none';
-export const WURST_FS_V2_HISTORY_INTEGRITY = 'integrity';
-export const WURST_FS_V2_REALM_GOVERNANCE = Object.freeze(['personal', 'shared']);
-export const WURST_FS_V2_AUDIT_MODES = Object.freeze(['none', 'signed']);
-export const WURST_FS_V2_ORDINARY = 'ordinary';
+export const PIG_FS_FORMAT = 'wurst/pigfs-1';
+export const PIG_FS_CATALOG_FORMAT = 'wurst/pigfs-catalog-1';
+export const PIG_FS_MAP_FORMAT = 'wurst/pigfs-map-1';
+export const PIG_FS_MUTATION_FORMAT = 'wurst/pigfs-mutation-1';
+export const PIG_FS_COMMIT_CONTEXT = 'wurst/pigfs-commit-1';
+export const PIG_FS_REALM_KEY_FORMAT = 'wurst/pigfs-realm-key-1';
+export const PIG_FS_HISTORY_NONE = 'none';
+export const PIG_FS_HISTORY_INTEGRITY = 'integrity';
+export const PIG_FS_REALM_GOVERNANCE = Object.freeze(['personal', 'shared']);
+export const PIG_FS_AUDIT_MODES = Object.freeze(['none', 'signed']);
+export const PIG_FS_ORDINARY = 'ordinary';
 
 const REALM_ID_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 
-export function wurstFsRealmGovernance(realm = {}) {
+export function pigFsRealmGovernance(realm = {}) {
   const explicit = realm?.governance == null ? '' : String(realm.governance).trim().toLowerCase();
-  if (!explicit) return WURST_FS_V2_ORDINARY;
-  if (!WURST_FS_V2_REALM_GOVERNANCE.includes(explicit)) throw new Error(`Unsupported WurstFS realm governance: ${realm.governance}`);
+  if (!explicit) return PIG_FS_ORDINARY;
+  if (!PIG_FS_REALM_GOVERNANCE.includes(explicit)) throw new Error(`Unsupported PigFS realm governance: ${realm.governance}`);
   return explicit;
 }
 
 function normalizeRealmAudit(raw, governance) {
   const audit = String(raw ?? 'none').trim().toLowerCase();
-  if (!WURST_FS_V2_AUDIT_MODES.includes(audit)) throw new Error(`Unsupported WurstFS realm audit mode: ${raw}`);
-  if (governance !== 'shared' && audit !== 'none') throw new Error(`WurstFS ${governance} governance does not carry signed audit history`);
+  if (!PIG_FS_AUDIT_MODES.includes(audit)) throw new Error(`Unsupported PigFS realm audit mode: ${raw}`);
+  if (governance !== 'shared' && audit !== 'none') throw new Error(`PigFS ${governance} governance does not carry signed audit history`);
   return audit;
 }
 
 function rootHistoryMode(root) {
   const explicit = root?.historyMode == null ? null : String(root.historyMode);
   if (explicit) {
-    if (![WURST_FS_V2_HISTORY_NONE, WURST_FS_V2_HISTORY_INTEGRITY].includes(explicit)) throw new Error(`Unsupported WurstFS v2 history mode: ${explicit}`);
+    if (![PIG_FS_HISTORY_NONE, PIG_FS_HISTORY_INTEGRITY].includes(explicit)) throw new Error(`Unsupported PigFS history mode: ${explicit}`);
     return explicit;
   }
-  throw new Error('WurstFS root is missing historyMode');
+  throw new Error('PigFS root is missing historyMode');
 }
 
 function rootNeedsIntegrityChain(root) {
-  return Object.values(root?.realms ?? {}).some((realm) => wurstFsRealmGovernance(realm) === 'shared');
+  return Object.values(root?.realms ?? {}).some((realm) => pigFsRealmGovernance(realm) === 'shared');
 }
 
 function realmKeepsAudit(realm) {
-  return wurstFsRealmGovernance(realm) === 'shared' && (realm?.audit ?? 'none') === 'signed';
+  return pigFsRealmGovernance(realm) === 'shared' && (realm?.audit ?? 'none') === 'signed';
 }
 
 function canonicalStringify(value) {
@@ -93,53 +93,82 @@ function assertSafeOffset(value, label) {
   return number;
 }
 
-export function normalizeWurstFsRealmId(value) {
+export function normalizePigFsRealmId(value) {
   const id = String(value ?? '').trim().toLowerCase();
-  if (!REALM_ID_RE.test(id)) throw new Error(`Invalid WurstFS realm id: ${value}`);
+  if (!REALM_ID_RE.test(id)) throw new Error(`Invalid PigFS realm id: ${value}`);
   return id;
 }
 
-export function normalizeWurstFsRealmPath(value, { allowRoot = true } = {}) {
+export function normalizePigFsRealmPath(value, { allowRoot = true } = {}) {
   let normalized = String(value ?? '').replaceAll('\\', '/').replace(/^\/+/, '').replace(/\/+$/, '');
   if (!normalized) {
     if (allowRoot) return '';
-    throw new Error('WurstFS realm path cannot be empty');
+    throw new Error('PigFS realm path cannot be empty');
   }
-  if (normalized.includes('\0')) throw new Error('WurstFS realm path contains NUL');
+  if (normalized.includes('\0')) throw new Error('PigFS realm path contains NUL');
   const parts = normalized.split('/');
-  if (parts.some((part) => !part || part === '.' || part === '..')) throw new Error(`Unsafe WurstFS realm path: ${value}`);
+  if (parts.some((part) => !part || part === '.' || part === '..')) throw new Error(`Unsafe PigFS realm path: ${value}`);
   return parts.join('/');
 }
 
-export function parseWurstFsRealmPublicPath(value, { allowRealmRoot = true } = {}) {
-  const normalized = String(value ?? '').replaceAll('\\', '/').replace(/^\/+/, '').replace(/\/+$/, '');
-  const parts = normalized.split('/').filter(Boolean);
-  if (parts[0] !== 'data' || parts.length < 2) throw new Error('WurstFS v2 paths must live below /data/<realm>');
-  const realmId = normalizeWurstFsRealmId(parts[1]);
-  const path = normalizeWurstFsRealmPath(parts.slice(2).join('/'), { allowRoot: allowRealmRoot });
-  return { realmId, path };
+export function normalizePigFsPath(value, { allowRoot = true } = {}) {
+  const raw = String(value ?? '').replaceAll('\\', '/');
+  if (raw.includes('\0')) throw new Error('PigFS path contains NUL');
+  const parts = raw.split('/').filter(Boolean);
+  if (parts.some((part) => part === '.' || part === '..')) throw new Error(`Unsafe PigFS path: ${value}`);
+  const normalized = `/${parts.join('/')}`;
+  if (normalized === '/' && !allowRoot) throw new Error('PigFS path cannot be root');
+  return normalized;
 }
 
-export function wurstFsRealmPublicPath(realmId, realmPath = '') {
-  const id = normalizeWurstFsRealmId(realmId);
-  const path = normalizeWurstFsRealmPath(realmPath, { allowRoot: true });
-  return `/data/${id}${path ? `/${path}` : ''}`;
+export function normalizePigFsMount(value, realmId = '') {
+  const fallback = `/${normalizePigFsRealmId(realmId)}`;
+  const mount = normalizePigFsPath(value == null || value === '' ? fallback : value);
+  if (mount === '/') throw new Error('PigFS realm mount cannot be filesystem root');
+  return mount;
+}
+
+export function resolvePigFsPath(root, value, { allowRealmRoot = true } = {}) {
+  const path = normalizePigFsPath(value);
+  if (path === '/') return { root: true, realmId: null, realm: null, path: '' };
+  const realms = Object.values(root?.realms ?? {});
+  const matches = realms
+    .map((realm) => ({ realm, mount: normalizePigFsMount(realm.mount, realm.id) }))
+    .filter(({ mount }) => path === mount || path.startsWith(`${mount}/`))
+    .sort((a, b) => b.mount.length - a.mount.length);
+  if (!matches.length) {
+    const error = new Error(`PigFS path is outside declared realm mounts: ${path}`);
+    error.code = 'PIG_FS_OUTSIDE_MOUNTS';
+    throw error;
+  }
+  const { realm, mount } = matches[0];
+  const relative = path === mount ? '' : normalizePigFsRealmPath(path.slice(mount.length + 1), { allowRoot: allowRealmRoot });
+  if (!relative && !allowRealmRoot) throw new Error('PigFS operation requires a path inside a realm');
+  return { root: false, realmId: realm.id, realm, mount, path: relative };
+}
+
+export function pigFsRealmPublicPath(realmOrId, realmPath = '', root = null) {
+  const id = typeof realmOrId === 'object' ? normalizePigFsRealmId(realmOrId.id) : normalizePigFsRealmId(realmOrId);
+  const realm = typeof realmOrId === 'object' ? realmOrId : root?.realms?.[id] ?? { id, mount: `/${id}` };
+  const mount = normalizePigFsMount(realm.mount, id);
+  const path = normalizePigFsRealmPath(realmPath, { allowRoot: true });
+  return `${mount}${path ? `/${path}` : ''}`;
 }
 
 function normalizeIdentityIds(values = []) {
   return [...new Set((Array.isArray(values) ? values : []).map((value) => String(value ?? '').trim()).filter(Boolean))].sort();
 }
 
-export function normalizeWurstFsRealmAccess(raw = {}, protection = 'public') {
+export function normalizePigFsRealmAccess(raw = {}, protection = 'public') {
   const access = plainObject(raw) ? raw : {};
   const readRaw = plainObject(access.read) ? access.read : {};
   const writeRaw = plainObject(access.write) ? access.write : {};
   const readMode = String(readRaw.mode ?? (protection === 'sealed' ? 'members' : 'public'));
   const writeMode = String(writeRaw.mode ?? 'members');
-  if (!['public', 'members'].includes(readMode)) throw new Error('WurstFS realm read mode must be public or members');
-  if (!['members', 'authenticated', 'open'].includes(writeMode)) throw new Error('WurstFS realm write mode must be members, authenticated or open');
-  if (protection === 'sealed' && readMode !== 'members') throw new Error('Sealed WurstFS realms cannot be publicly readable');
-  if (protection === 'sealed' && writeMode !== 'members') throw new Error('Sealed WurstFS realms require explicit member writers');
+  if (!['public', 'members'].includes(readMode)) throw new Error('PigFS realm read mode must be public or members');
+  if (!['members', 'authenticated', 'open'].includes(writeMode)) throw new Error('PigFS realm write mode must be members, authenticated or open');
+  if (protection === 'sealed' && readMode !== 'members') throw new Error('Sealed PigFS realms cannot be publicly readable');
+  if (protection === 'sealed' && writeMode !== 'members') throw new Error('Sealed PigFS realms require explicit member writers');
   const readers = normalizeIdentityIds(readRaw.identities);
   const writers = normalizeIdentityIds(writeRaw.identities);
   const admins = normalizeIdentityIds(access.admins);
@@ -160,7 +189,7 @@ function accessContains(accessPart, identityId) {
   return Boolean(identityId) && Array.isArray(accessPart?.identities) && accessPart.identities.includes(identityId);
 }
 
-export function wurstFsRealmCapabilities(realm, identityId = null, { signedIdentity = Boolean(identityId) } = {}) {
+export function pigFsRealmCapabilities(realm, identityId = null, { signedIdentity = Boolean(identityId) } = {}) {
   if (!realm) return { read: false, write: false, admin: false };
   const id = identityId ? String(identityId) : null;
   const admin = Boolean(id && realm.access?.admins?.includes(id));
@@ -176,16 +205,16 @@ export function wurstFsRealmCapabilities(realm, identityId = null, { signedIdent
 }
 
 function validateIdentityRegistry(identities) {
-  if (!plainObject(identities)) throw new Error('WurstFS v2 identity registry must be an object');
+  if (!plainObject(identities)) throw new Error('PigFS identity registry must be an object');
   for (const [id, record] of Object.entries(identities)) {
-    if (record?.format !== WURSTER_IDENTITY_FORMAT || record.identityId !== id) throw new Error(`Invalid WurstFS Identity record: ${id}`);
+    if (record?.format !== WURSTER_IDENTITY_FORMAT || record.identityId !== id) throw new Error(`Invalid PigFS Identity record: ${id}`);
     const verified = verifyWursterIdentityRecord(record);
-    if (!verified.valid) throw new Error(`Invalid WurstFS Identity ${id}: ${verified.error}`);
+    if (!verified.valid) throw new Error(`Invalid PigFS Identity ${id}: ${verified.error}`);
   }
 }
 
 function personalRealmClaimed(realm) {
-  if (wurstFsRealmGovernance(realm) !== 'personal') return true;
+  if (pigFsRealmGovernance(realm) !== 'personal') return true;
   if (realm?.claimed != null) return Boolean(realm.claimed);
   const readers = realm?.access?.read?.identities ?? [];
   const writers = realm?.access?.write?.identities ?? [];
@@ -194,14 +223,17 @@ function personalRealmClaimed(realm) {
 }
 
 function validateRealmDescriptor(realm, identities) {
-  if (!plainObject(realm)) throw new Error('Invalid WurstFS realm descriptor');
-  realm.id = normalizeWurstFsRealmId(realm.id);
+  if (!plainObject(realm)) throw new Error('Invalid PigFS realm descriptor');
+  realm.id = normalizePigFsRealmId(realm.id);
+  realm.mount = normalizePigFsMount(realm.mount, realm.id);
+  if (realm.quotaBytes != null && (!Number.isSafeInteger(Number(realm.quotaBytes)) || Number(realm.quotaBytes) <= 0)) throw new Error(`Invalid PigFS quota for realm ${realm.id}`);
+  realm.quotaBytes = realm.quotaBytes == null ? null : Number(realm.quotaBytes);
   if (!['public', 'sealed'].includes(realm.protection)) throw new Error(`Unsupported protection for realm ${realm.id}`);
-  realm.access = normalizeWurstFsRealmAccess(realm.access, realm.protection);
-  const governance = wurstFsRealmGovernance(realm);
+  realm.access = normalizePigFsRealmAccess(realm.access, realm.protection);
+  const governance = pigFsRealmGovernance(realm);
   realm.audit = normalizeRealmAudit(realm.audit, governance);
 
-  if (governance === WURST_FS_V2_ORDINARY) {
+  if (governance === PIG_FS_ORDINARY) {
     if (realm.protection !== 'public' || realm.access.read.mode !== 'public' || realm.access.write.mode !== 'open') throw new Error(`Ordinary realm ${realm.id} must be public/read-public/write-open`);
     if (realm.access.admins.length) throw new Error(`Ordinary realm ${realm.id} cannot declare admins`);
   }
@@ -253,8 +285,8 @@ function validateRealmDescriptor(realm, identities) {
 
 function stateForHash(root) {
   return {
-    format: WURST_FS_V2_FORMAT,
-    historyMode: root.historyMode ?? WURST_FS_V2_HISTORY_INTEGRITY,
+    format: PIG_FS_FORMAT,
+    historyMode: root.historyMode ?? PIG_FS_HISTORY_INTEGRITY,
     generation: root.generation,
     previousCommitOffset: root.previousCommitOffset ?? null,
     previousCommitHash: root.previousCommitHash ?? null,
@@ -266,18 +298,18 @@ function stateForHash(root) {
   };
 }
 
-export function computeWurstFs2StateHash(root) {
+export function computePigFsStateHash(root) {
   return hashJson(stateForHash(root));
 }
 
-export function computeWurstFs2CommitHash(root) {
+export function computePigFsCommitHash(root) {
   return hashJson({ stateHash: root.stateHash, authorization: root.authorization ?? null });
 }
 
 function commitProofPayload(root) {
   return {
-    format: WURST_FS_V2_FORMAT,
-    historyMode: root.historyMode ?? WURST_FS_V2_HISTORY_INTEGRITY,
+    format: PIG_FS_FORMAT,
+    historyMode: root.historyMode ?? PIG_FS_HISTORY_INTEGRITY,
     generation: root.generation,
     previousCommitHash: root.previousCommitHash ?? null,
     stateHash: root.stateHash
@@ -288,7 +320,7 @@ function realmPolicyDigest(realm) {
   return hashJson({
     id: realm.id,
     label: realm.label ?? realm.id,
-    governance: wurstFsRealmGovernance(realm),
+    governance: pigFsRealmGovernance(realm),
     audit: realm.audit ?? 'none',
     protection: realm.protection,
     access: realm.access,
@@ -326,14 +358,14 @@ function realmAdmin(root, realm, actorId) {
 }
 
 function realmWriter(realm, actorId, signedIdentity) {
-  return wurstFsRealmCapabilities(realm, actorId, { signedIdentity }).write;
+  return pigFsRealmCapabilities(realm, actorId, { signedIdentity }).write;
 }
 
 function validateMutationShape(root) {
   const mutation = root.mutation;
-  if (!plainObject(mutation) || mutation.format !== WURST_FS_V2_MUTATION_FORMAT) throw new Error('Invalid WurstFS v2 mutation record');
-  if (mutation.actor !== (root.authorization?.signer ?? null)) throw new Error('WurstFS mutation actor does not match commit signer');
-  if (!Array.isArray(mutation.changes)) throw new Error('WurstFS mutation changes must be an array');
+  if (!plainObject(mutation) || mutation.format !== PIG_FS_MUTATION_FORMAT) throw new Error('Invalid PigFS mutation record');
+  if (mutation.actor !== (root.authorization?.signer ?? null)) throw new Error('PigFS mutation actor does not match commit signer');
+  if (!Array.isArray(mutation.changes)) throw new Error('PigFS mutation changes must be an array');
 }
 
 function inferRealmChanges(parent, next) {
@@ -357,73 +389,73 @@ function validateIdentityEvolution(parent, next) {
   validateIdentityRegistry(next.identities);
   if (!parent) return;
   for (const id of Object.keys(parent.identities ?? {})) {
-    if (!next.identities[id]) throw new Error(`WurstFS Identity registry is append/update-only; ${id} was removed`);
+    if (!next.identities[id]) throw new Error(`PigFS Identity registry is append/update-only; ${id} was removed`);
   }
 }
 
-export function validateWurstFs2Transition(parent, next, { parentCommitOffset = null } = {}) {
-  if (next?.format !== WURST_FS_V2_FORMAT) throw new Error('Unsupported WurstFS v2 root format');
-  if (!Number.isInteger(next.generation) || next.generation < 1) throw new Error('Invalid WurstFS v2 generation');
+export function validatePigFsTransition(parent, next, { parentCommitOffset = null } = {}) {
+  if (next?.format !== PIG_FS_FORMAT) throw new Error('Unsupported PigFS root format');
+  if (!Number.isInteger(next.generation) || next.generation < 1) throw new Error('Invalid PigFS generation');
   const historyMode = rootHistoryMode(next);
   next.historyMode = historyMode;
-  if (!plainObject(next.rootPolicy) || !Array.isArray(next.rootPolicy.admins)) throw new Error('Invalid WurstFS v2 root policy');
+  if (!plainObject(next.rootPolicy) || !Array.isArray(next.rootPolicy.admins)) throw new Error('Invalid PigFS root policy');
   next.rootPolicy.admins = normalizeIdentityIds(next.rootPolicy.admins);
-  if (historyMode === WURST_FS_V2_HISTORY_INTEGRITY) validateIdentityEvolution(parent, next);
+  if (historyMode === PIG_FS_HISTORY_INTEGRITY) validateIdentityEvolution(parent, next);
   else validateIdentityRegistry(next.identities);
-  if (!plainObject(next.realms)) throw new Error('WurstFS v2 realms must be an object');
+  if (!plainObject(next.realms)) throw new Error('PigFS realms must be an object');
   for (const [id, realm] of Object.entries(next.realms)) {
-    if (id !== realm.id) throw new Error(`WurstFS realm registry key mismatch: ${id}`);
+    if (id !== realm.id) throw new Error(`PigFS realm registry key mismatch: ${id}`);
     validateRealmDescriptor(realm, next.identities);
   }
 
-  if (historyMode === WURST_FS_V2_HISTORY_NONE) {
-    if (rootNeedsIntegrityChain(next)) throw new Error('Shared WurstFS realms require the integrity chain');
-    if (next.previousCommitHash != null || next.previousCommitOffset != null) throw new Error('History-free WurstFS snapshots cannot link previous commits');
-    if (next.authorization != null) throw new Error('History-free WurstFS snapshots are not mutation-signed');
-    if (next.mutation != null) throw new Error('History-free WurstFS snapshots do not retain mutation history');
-    if (next.stateHash !== computeWurstFs2StateHash(next)) throw new Error('WurstFS v2 state hash mismatch');
-    if (next.commitHash !== computeWurstFs2CommitHash(next)) throw new Error('WurstFS v2 commit hash mismatch');
+  if (historyMode === PIG_FS_HISTORY_NONE) {
+    if (rootNeedsIntegrityChain(next)) throw new Error('Shared PigFS realms require the integrity chain');
+    if (next.previousCommitHash != null || next.previousCommitOffset != null) throw new Error('History-free PigFS snapshots cannot link previous commits');
+    if (next.authorization != null) throw new Error('History-free PigFS snapshots are not mutation-signed');
+    if (next.mutation != null) throw new Error('History-free PigFS snapshots do not retain mutation history');
+    if (next.stateHash !== computePigFsStateHash(next)) throw new Error('PigFS state hash mismatch');
+    if (next.commitHash !== computePigFsCommitHash(next)) throw new Error('PigFS commit hash mismatch');
     return { valid: true, historyMode, changes: [] };
   }
 
   validateMutationShape(next);
-  if (next.stateHash !== computeWurstFs2StateHash(next)) throw new Error('WurstFS v2 state hash mismatch');
-  if (next.commitHash !== computeWurstFs2CommitHash(next)) throw new Error('WurstFS v2 commit hash mismatch');
+  if (next.stateHash !== computePigFsStateHash(next)) throw new Error('PigFS state hash mismatch');
+  if (next.commitHash !== computePigFsCommitHash(next)) throw new Error('PigFS commit hash mismatch');
 
   const actorId = next.authorization?.signer ?? null;
   const signedIdentity = Boolean(actorId);
   if (signedIdentity) {
     const identity = next.identities[actorId];
-    if (!identity) throw new Error(`WurstFS commit signer ${actorId} is not in the Identity registry`);
-    const proof = verifyWursterIdentityPayload(identity, commitProofPayload(next), next.authorization, { context: WURST_FS_V2_COMMIT_CONTEXT });
-    if (!proof.valid) throw new Error(`WurstFS commit signature is invalid: ${proof.error}`);
+    if (!identity) throw new Error(`PigFS commit signer ${actorId} is not in the Identity registry`);
+    const proof = verifyWursterIdentityPayload(identity, commitProofPayload(next), next.authorization, { context: PIG_FS_COMMIT_CONTEXT });
+    if (!proof.valid) throw new Error(`PigFS commit signature is invalid: ${proof.error}`);
   } else if (next.authorization != null) {
-    throw new Error('Unsigned WurstFS commits must have authorization = null');
+    throw new Error('Unsigned PigFS commits must have authorization = null');
   }
 
   if (!parent) {
-    if (next.generation !== 1 || next.previousCommitHash != null || next.previousCommitOffset != null) throw new Error('Invalid WurstFS v2 genesis linkage');
+    if (next.generation !== 1 || next.previousCommitHash != null || next.previousCommitOffset != null) throw new Error('Invalid PigFS genesis linkage');
     if (next.rootPolicy.admins.length && (!signedIdentity || !next.rootPolicy.admins.includes(actorId))) {
-      throw new Error('WurstFS v2 genesis with root admins must be signed by one of them');
+      throw new Error('PigFS genesis with root admins must be signed by one of them');
     }
     return { valid: true, historyMode, changes: inferRealmChanges(null, next) };
   }
 
-  if (rootHistoryMode(parent) !== WURST_FS_V2_HISTORY_INTEGRITY) throw new Error('Cannot continue an integrity chain from a history-free WurstFS snapshot');
-  if (next.generation !== parent.generation + 1) throw new Error('WurstFS v2 generation is not sequential');
-  if (next.previousCommitHash !== parent.commitHash) throw new Error('WurstFS v2 previous commit hash mismatch');
-  if (parentCommitOffset != null && next.previousCommitOffset !== parentCommitOffset) throw new Error('WurstFS v2 previous commit offset mismatch');
+  if (rootHistoryMode(parent) !== PIG_FS_HISTORY_INTEGRITY) throw new Error('Cannot continue an integrity chain from a history-free PigFS snapshot');
+  if (next.generation !== parent.generation + 1) throw new Error('PigFS generation is not sequential');
+  if (next.previousCommitHash !== parent.commitHash) throw new Error('PigFS previous commit hash mismatch');
+  if (parentCommitOffset != null && next.previousCommitOffset !== parentCommitOffset) throw new Error('PigFS previous commit offset mismatch');
 
   const rootPolicyChanged = !sameJson(parent.rootPolicy, next.rootPolicy);
-  if (rootPolicyChanged && !rootAdmin(parent, actorId)) throw new Error('WurstFS root policy change is not authorized');
+  if (rootPolicyChanged && !rootAdmin(parent, actorId)) throw new Error('PigFS root policy change is not authorized');
 
   const changes = inferRealmChanges(parent, next);
   for (const change of changes) {
     const before = parent.realms?.[change.realm] ?? null;
     const after = next.realms?.[change.realm] ?? null;
-    const governance = wurstFsRealmGovernance(before ?? after);
+    const governance = pigFsRealmGovernance(before ?? after);
     if (change.created || change.deleted) {
-      if (!rootAdmin(parent, actorId)) throw new Error(`Creating/removing realm ${change.realm} requires WurstFS root admin`);
+      if (!rootAdmin(parent, actorId)) throw new Error(`Creating/removing realm ${change.realm} requires PigFS root admin`);
       continue;
     }
     if (governance === 'shared') {
@@ -432,40 +464,40 @@ export function validateWurstFs2Transition(parent, next, { parentCommitOffset = 
     } else if (change.policy) {
       const personalClaim = governance === 'personal' && !personalRealmClaimed(before) && personalRealmClaimed(after)
         && after.access.admins?.[0] === actorId && !change.content;
-      if (!personalClaim) throw new Error(`WurstFS ${governance} realm ${change.realm} does not support mutable sharing policy`);
+      if (!personalClaim) throw new Error(`PigFS ${governance} realm ${change.realm} does not support mutable sharing policy`);
     }
   }
 
   const declared = [...next.mutation.changes].map((item) => ({
-    realm: normalizeWurstFsRealmId(item.realm),
+    realm: normalizePigFsRealmId(item.realm),
     created: Boolean(item.created),
     deleted: Boolean(item.deleted),
     policy: Boolean(item.policy),
     content: Boolean(item.content)
   })).sort((a, b) => a.realm.localeCompare(b.realm));
-  if (!sameJson(declared, changes)) throw new Error('WurstFS mutation declaration does not match the state transition');
+  if (!sameJson(declared, changes)) throw new Error('PigFS mutation declaration does not match the state transition');
   return { valid: true, historyMode, changes };
 }
 
-export async function loadWurstFs2Commit(source, commitOffset) {
+export async function loadPigFsCommit(source, commitOffset) {
   const record = await readFsRecord(source, commitOffset);
-  if (record.type !== WURST_FS_RECORD.COMMIT) throw new Error('WurstFS v2 commit pointer does not reference a commit record');
+  if (record.type !== PIG_FS_RECORD.COMMIT) throw new Error('PigFS commit pointer does not reference a commit record');
   let root;
-  try { root = JSON.parse(record.payload.toString('utf8')); } catch { throw new Error('Invalid WurstFS v2 commit JSON'); }
-  if (root?.format !== WURST_FS_V2_FORMAT) throw new Error(`Expected ${WURST_FS_V2_FORMAT}, got ${root?.format ?? 'missing'}`);
+  try { root = JSON.parse(record.payload.toString('utf8')); } catch { throw new Error('Invalid PigFS commit JSON'); }
+  if (root?.format !== PIG_FS_FORMAT) throw new Error(`Expected ${PIG_FS_FORMAT}, got ${root?.format ?? 'missing'}`);
   return { root, record };
 }
 
-export async function verifyWurstFs2History(source, baseOffset) {
-  const latestOffset = await locateLatestFsCommit(source, assertSafeOffset(baseOffset, 'WurstFS v2 base offset'));
-  if (latestOffset == null) return { valid: true, format: WURST_FS_V2_FORMAT, historyMode: WURST_FS_V2_HISTORY_NONE, root: null, commitOffset: null, commits: [] };
-  const latestCommit = await loadWurstFs2Commit(source, latestOffset);
+export async function verifyPigFsHistory(source, baseOffset) {
+  const latestOffset = await locateLatestFsCommit(source, assertSafeOffset(baseOffset, 'PigFS base offset'));
+  if (latestOffset == null) return { valid: true, format: PIG_FS_FORMAT, historyMode: PIG_FS_HISTORY_NONE, root: null, commitOffset: null, commits: [] };
+  const latestCommit = await loadPigFsCommit(source, latestOffset);
   const mode = rootHistoryMode(latestCommit.root);
-  if (mode === WURST_FS_V2_HISTORY_NONE) {
-    validateWurstFs2Transition(null, latestCommit.root);
+  if (mode === PIG_FS_HISTORY_NONE) {
+    validatePigFsTransition(null, latestCommit.root);
     return {
       valid: true,
-      format: WURST_FS_V2_FORMAT,
+      format: PIG_FS_FORMAT,
       historyMode: mode,
       root: clone(latestCommit.root),
       commitOffset: latestOffset,
@@ -477,23 +509,23 @@ export async function verifyWurstFs2History(source, baseOffset) {
   let offset = latestOffset;
   const seen = new Set();
   while (offset != null) {
-    if (seen.has(offset)) throw new Error('WurstFS v2 commit chain contains a loop');
+    if (seen.has(offset)) throw new Error('PigFS commit chain contains a loop');
     seen.add(offset);
-    const { root, record } = await loadWurstFs2Commit(source, offset);
-    if (rootHistoryMode(root) !== WURST_FS_V2_HISTORY_INTEGRITY) throw new Error('WurstFS v2 integrity chain crosses a history-free snapshot');
+    const { root, record } = await loadPigFsCommit(source, offset);
+    if (rootHistoryMode(root) !== PIG_FS_HISTORY_INTEGRITY) throw new Error('PigFS integrity chain crosses a history-free snapshot');
     reverse.push({ offset, root, record });
-    offset = root.previousCommitOffset == null ? null : assertSafeOffset(root.previousCommitOffset, 'WurstFS v2 previous commit offset');
+    offset = root.previousCommitOffset == null ? null : assertSafeOffset(root.previousCommitOffset, 'PigFS previous commit offset');
   }
   const commits = reverse.reverse();
   for (let index = 0; index < commits.length; index += 1) {
     const current = commits[index];
     const parent = index ? commits[index - 1] : null;
-    validateWurstFs2Transition(parent?.root ?? null, current.root, { parentCommitOffset: parent?.offset ?? null });
+    validatePigFsTransition(parent?.root ?? null, current.root, { parentCommitOffset: parent?.offset ?? null });
   }
   const latest = commits.at(-1);
   return {
     valid: true,
-    format: WURST_FS_V2_FORMAT,
+    format: PIG_FS_FORMAT,
     historyMode: mode,
     root: clone(latest.root),
     commitOffset: latest.offset,
@@ -510,9 +542,9 @@ export async function verifyWurstFs2History(source, baseOffset) {
   };
 }
 
-export function compareWurstFs2Histories(left, right) {
-  if ((left?.historyMode ?? WURST_FS_V2_HISTORY_NONE) === WURST_FS_V2_HISTORY_NONE
-      || (right?.historyMode ?? WURST_FS_V2_HISTORY_NONE) === WURST_FS_V2_HISTORY_NONE) {
+export function comparePigFsHistories(left, right) {
+  if ((left?.historyMode ?? PIG_FS_HISTORY_NONE) === PIG_FS_HISTORY_NONE
+      || (right?.historyMode ?? PIG_FS_HISTORY_NONE) === PIG_FS_HISTORY_NONE) {
     if (left?.root?.commitHash && left.root.commitHash === right?.root?.commitHash) return { relation: 'same', commonGeneration: left.root.generation ?? 0 };
     return { relation: 'untracked', commonGeneration: null };
   }
@@ -532,8 +564,8 @@ function splitJsonItems(items, makePayload, targetBytes) {
   for (const item of items) {
     const candidate = [...current, item];
     const bytes = Buffer.from(JSON.stringify(makePayload(candidate)));
-    if (bytes.length > WURST_FS_MAX_RECORD_PAYLOAD) {
-      if (!current.length) throw new Error('A single WurstFS v2 metadata item exceeds 4 MiB');
+    if (bytes.length > PIG_FS_MAX_RECORD_PAYLOAD) {
+      if (!current.length) throw new Error('A single PigFS metadata item exceeds 4 MiB');
       pages.push(current);
       current = [item];
     } else if (current.length && bytes.length > targetBytes) {
@@ -546,56 +578,56 @@ function splitJsonItems(items, makePayload, targetBytes) {
 }
 
 function sealRealmBytes(realmKey, data, aad) {
-  if (!Buffer.isBuffer(realmKey) || realmKey.length !== 32) throw new Error('WurstFS realm key must be 32 bytes');
+  if (!Buffer.isBuffer(realmKey) || realmKey.length !== 32) throw new Error('PigFS realm key must be 32 bytes');
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', realmKey, iv);
   cipher.setAAD(Buffer.from(aad));
   const ciphertext = Buffer.concat([cipher.update(data), cipher.final()]);
   return {
     data: ciphertext,
-    encryption: { format: WURST_FS_V2_REALM_KEY_FORMAT, algorithm: 'aes-256-gcm', iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64') }
+    encryption: { format: PIG_FS_REALM_KEY_FORMAT, algorithm: 'aes-256-gcm', iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64') }
   };
 }
 
 function openRealmBytes(realmKey, data, encryption, aad) {
-  if (!Buffer.isBuffer(realmKey) || realmKey.length !== 32) throw new Error('WurstFS realm key must be 32 bytes');
-  if (encryption?.format !== WURST_FS_V2_REALM_KEY_FORMAT || encryption.algorithm !== 'aes-256-gcm') throw new Error('Unsupported WurstFS realm encryption');
+  if (!Buffer.isBuffer(realmKey) || realmKey.length !== 32) throw new Error('PigFS realm key must be 32 bytes');
+  if (encryption?.format !== PIG_FS_REALM_KEY_FORMAT || encryption.algorithm !== 'aes-256-gcm') throw new Error('Unsupported PigFS realm encryption');
   try {
     const decipher = crypto.createDecipheriv('aes-256-gcm', realmKey, Buffer.from(encryption.iv, 'base64'));
     decipher.setAAD(Buffer.from(aad));
     decipher.setAuthTag(Buffer.from(encryption.tag, 'base64'));
     return Buffer.concat([decipher.update(data), decipher.final()]);
   } catch {
-    const error = new Error('WurstFS realm record failed authentication');
-    error.code = 'WURST_FS_LOCKED';
+    const error = new Error('PigFS realm record failed authentication');
+    error.code = 'PIG_FS_LOCKED';
     throw error;
   }
 }
 
 async function decodeRealmMetadata(source, descriptor, expectedType, expectedFormat, realm, realmKey = null) {
   const record = await readFsRecord(source, descriptor.recordOffset);
-  if (record.type !== expectedType) throw new Error('WurstFS v2 metadata record type mismatch');
+  if (record.type !== expectedType) throw new Error('PigFS metadata record type mismatch');
   let payload = record.payload;
   if (realm.protection === 'sealed') {
     if (!realmKey) {
-      const error = new Error(`WurstFS realm ${realm.id} is sealed`);
-      error.code = 'WURST_FS_LOCKED';
+      const error = new Error(`PigFS realm ${realm.id} is sealed`);
+      error.code = 'PIG_FS_LOCKED';
       throw error;
     }
     if (!descriptor.encryption) throw new Error(`Sealed realm ${realm.id} contains plaintext metadata`);
     payload = openRealmBytes(realmKey, payload, descriptor.encryption, descriptor.aad);
   } else if (descriptor.encryption) throw new Error(`Public realm ${realm.id} contains sealed metadata`);
-  if (descriptor.plainSha256 && sha256(payload) !== descriptor.plainSha256) throw new Error('WurstFS v2 metadata integrity check failed');
+  if (descriptor.plainSha256 && sha256(payload) !== descriptor.plainSha256) throw new Error('PigFS metadata integrity check failed');
   let parsed;
-  try { parsed = JSON.parse(payload.toString('utf8')); } catch { throw new Error('Invalid WurstFS v2 metadata JSON'); }
-  if (parsed?.format !== expectedFormat) throw new Error(`Unexpected WurstFS v2 metadata format ${parsed?.format ?? 'missing'}`);
+  try { parsed = JSON.parse(payload.toString('utf8')); } catch { throw new Error('Invalid PigFS metadata JSON'); }
+  if (parsed?.format !== expectedFormat) throw new Error(`Unexpected PigFS metadata format ${parsed?.format ?? 'missing'}`);
   return parsed;
 }
 
-export async function loadWurstFs2RealmCatalog(source, realm, { realmKey = null } = {}) {
+export async function loadPigFsRealmCatalog(source, realm, { realmKey = null } = {}) {
   const entries = new Map();
   for (const page of realm?.catalogPages ?? []) {
-    const parsed = await decodeRealmMetadata(source, page, WURST_FS_RECORD.CATALOG, WURST_FS_V2_CATALOG_FORMAT, realm, realmKey);
+    const parsed = await decodeRealmMetadata(source, page, PIG_FS_RECORD.CATALOG, PIG_FS_CATALOG_FORMAT, realm, realmKey);
     for (const entry of parsed.entries ?? []) entries.set(entry.path, clone(entry));
   }
   return entries;
@@ -620,24 +652,24 @@ function catalogCandidates(realm, target) {
   return [...hinted, ...fallback];
 }
 
-export async function statWurstFs2Entry(source, root, fsPath, { realmKey = null } = {}) {
-  const { realmId, path } = parseWurstFsRealmPublicPath(fsPath, { allowRealmRoot: true });
+export async function statPigFsEntry(source, root, fsPath, { realmKey = null } = {}) {
+  const { realmId, path } = resolvePigFsPath(root, fsPath, { allowRealmRoot: true });
   const realm = root?.realms?.[realmId];
   if (!realm) return null;
-  if (!path) return { path: wurstFsRealmPublicPath(realmId), realm: realmId, name: realm.label ?? realm.id, type: 'directory', size: 0, revision: root.generation };
+  if (!path) return { path: pigFsRealmPublicPath(realm), realm: realmId, name: realm.label ?? realm.id, type: 'directory', size: 0, revision: root.generation };
   for (const page of catalogCandidates(realm, path)) {
-    const parsed = await decodeRealmMetadata(source, page, WURST_FS_RECORD.CATALOG, WURST_FS_V2_CATALOG_FORMAT, realm, realmKey);
+    const parsed = await decodeRealmMetadata(source, page, PIG_FS_RECORD.CATALOG, PIG_FS_CATALOG_FORMAT, realm, realmKey);
     const entry = parsed.entries?.find((item) => item.path === path);
-    if (entry) return { ...clone(entry), path: wurstFsRealmPublicPath(realmId, entry.path), realm: realmId };
+    if (entry) return { ...clone(entry), path: pigFsRealmPublicPath(realm, entry.path), realm: realmId };
   }
   return null;
 }
 
-export async function listWurstFs2Directory(source, root, fsPath = '/data', { realmKeys = new Map(), realmKey = null } = {}) {
-  const normalized = String(fsPath ?? '/data').replaceAll('\\', '/').replace(/\/+$/, '') || '/data';
-  if (normalized === '/data' || normalized === 'data') {
+export async function listPigFsDirectory(source, root, fsPath = '/', { realmKeys = new Map(), realmKey = null } = {}) {
+  const normalized = normalizePigFsPath(fsPath ?? '/');
+  if (normalized === '/') {
     return Object.values(root?.realms ?? {}).sort((a, b) => a.id.localeCompare(b.id)).map((realm) => ({
-      path: wurstFsRealmPublicPath(realm.id),
+      path: pigFsRealmPublicPath(realm),
       realm: realm.id,
       name: realm.label ?? realm.id,
       type: 'realm',
@@ -645,26 +677,26 @@ export async function listWurstFs2Directory(source, root, fsPath = '/data', { re
       size: 0
     }));
   }
-  const parsedPath = parseWurstFsRealmPublicPath(normalized, { allowRealmRoot: true });
+  const parsedPath = resolvePigFsPath(root, normalized, { allowRealmRoot: true });
   const realm = root?.realms?.[parsedPath.realmId];
   if (!realm) return [];
   const key = realmKey ?? realmKeys.get?.(realm.id) ?? null;
-  const catalog = await loadWurstFs2RealmCatalog(source, realm, { realmKey: key });
+  const catalog = await loadPigFsRealmCatalog(source, realm, { realmKey: key });
   const prefix = parsedPath.path ? `${parsedPath.path}/` : '';
   const result = [];
   for (const entry of catalog.values()) {
     if (!entry.path.startsWith(prefix)) continue;
     const remainder = entry.path.slice(prefix.length);
     if (!remainder || remainder.includes('/')) continue;
-    result.push({ ...clone(entry), path: wurstFsRealmPublicPath(realm.id, entry.path), realm: realm.id });
+    result.push({ ...clone(entry), path: pigFsRealmPublicPath(realm, entry.path), realm: realm.id });
   }
   return result.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function loadWurstFs2RealmChunks(source, realm, entry, realmKey = null) {
+export async function loadPigFsRealmChunks(source, realm, entry, realmKey = null) {
   const chunks = [];
   for (const page of entry.mapPages ?? []) {
-    const parsed = await decodeRealmMetadata(source, page, WURST_FS_RECORD.MAP, WURST_FS_V2_MAP_FORMAT, realm, realmKey);
+    const parsed = await decodeRealmMetadata(source, page, PIG_FS_RECORD.MAP, PIG_FS_MAP_FORMAT, realm, realmKey);
     chunks.push(...(parsed.chunks ?? []));
   }
   return chunks.sort((a, b) => a.plainOffset - b.plainOffset);
@@ -672,9 +704,9 @@ export async function loadWurstFs2RealmChunks(source, realm, entry, realmKey = n
 
 
 
-export async function measureWurstFs2Storage(source, root, { baseOffset = 0, commitOffset = null, realmKeys = new Map() } = {}) {
+export async function measurePigFsStorage(source, root, { baseOffset = 0, commitOffset = null, realmKeys = new Map() } = {}) {
   const physicalBytes = Math.max(0, Number(source.size) - Number(baseOffset));
-  if (!root) return { physicalBytes, liveBytes: 0, reclaimableBytes: physicalBytes, logicalBytes: 0, files: 0, directories: 0, historyMode: WURST_FS_V2_HISTORY_NONE };
+  if (!root) return { physicalBytes, liveBytes: 0, reclaimableBytes: physicalBytes, logicalBytes: 0, files: 0, directories: 0, historyMode: PIG_FS_HISTORY_NONE };
   const historyMode = rootHistoryMode(root);
   let logicalBytes = 0;
   let files = 0;
@@ -686,7 +718,7 @@ export async function measureWurstFs2Storage(source, root, { baseOffset = 0, com
       directories += Number(realm.stats?.directories ?? 0);
     }
   }
-  if (historyMode !== WURST_FS_V2_HISTORY_NONE) {
+  if (historyMode !== PIG_FS_HISTORY_NONE) {
     return { physicalBytes, liveBytes: null, reclaimableBytes: null, logicalBytes, files, directories, historyMode, reason: 'integrity-chain-retained' };
   }
 
@@ -707,11 +739,11 @@ export async function measureWurstFs2Storage(source, root, { baseOffset = 0, com
       return { physicalBytes, liveBytes: null, reclaimableBytes: null, logicalBytes, files, directories, historyMode, lockedRealm: realm.id };
     }
     for (const page of realm.catalogPages ?? []) await addRecord(page.recordOffset);
-    const catalog = await loadWurstFs2RealmCatalog(source, realm, { realmKey: key });
+    const catalog = await loadPigFsRealmCatalog(source, realm, { realmKey: key });
     for (const entry of catalog.values()) {
       if (entry.type !== 'file') continue;
       for (const page of entry.mapPages ?? []) await addRecord(page.recordOffset);
-      const chunks = await loadWurstFs2RealmChunks(source, realm, entry, key);
+      const chunks = await loadPigFsRealmChunks(source, realm, entry, key);
       for (const chunk of chunks) await addRecord(chunk.recordOffset);
     }
   }
@@ -726,18 +758,18 @@ export async function measureWurstFs2Storage(source, root, { baseOffset = 0, com
   };
 }
 
-export async function readWurstFs2Range(source, root, fsPath, offset = 0, length = null, { realmKey = null } = {}) {
-  const { realmId, path } = parseWurstFsRealmPublicPath(fsPath, { allowRealmRoot: false });
+export async function readPigFsRange(source, root, fsPath, offset = 0, length = null, { realmKey = null } = {}) {
+  const { realmId, path } = resolvePigFsPath(root, fsPath, { allowRealmRoot: false });
   const realm = root?.realms?.[realmId];
   if (!realm) return null;
-  const publicEntry = await statWurstFs2Entry(source, root, fsPath, { realmKey });
+  const publicEntry = await statPigFsEntry(source, root, fsPath, { realmKey });
   if (!publicEntry || publicEntry.type !== 'file') return null;
   const entry = { ...publicEntry, path };
-  const start = assertSafeOffset(offset, 'WurstFS v2 read offset');
-  if (start > entry.size) throw new Error('WurstFS v2 read offset exceeds file size');
-  const wanted = length == null ? entry.size - start : assertSafeOffset(length, 'WurstFS v2 read length');
+  const start = assertSafeOffset(offset, 'PigFS read offset');
+  if (start > entry.size) throw new Error('PigFS read offset exceeds file size');
+  const wanted = length == null ? entry.size - start : assertSafeOffset(length, 'PigFS read length');
   const end = Math.min(entry.size, start + wanted);
-  const chunks = await loadWurstFs2RealmChunks(source, realm, entry, realmKey);
+  const chunks = await loadPigFsRealmChunks(source, realm, entry, realmKey);
   const pieces = [];
   let total = 0;
   for (const chunk of chunks) {
@@ -745,19 +777,19 @@ export async function readWurstFs2Range(source, root, fsPath, offset = 0, length
     const chunkEnd = chunkStart + chunk.plainLength;
     if (chunkEnd <= start || chunkStart >= end) continue;
     const record = await readFsRecord(source, chunk.recordOffset);
-    if (record.type !== WURST_FS_RECORD.DATA) throw new Error('WurstFS v2 chunk points to non-data record');
+    if (record.type !== PIG_FS_RECORD.DATA) throw new Error('PigFS chunk points to non-data record');
     let plain = record.payload;
     if (realm.protection === 'sealed') {
       if (!realmKey) {
-        const error = new Error(`WurstFS realm ${realm.id} is sealed`);
-        error.code = 'WURST_FS_LOCKED';
+        const error = new Error(`PigFS realm ${realm.id} is sealed`);
+        error.code = 'PIG_FS_LOCKED';
         throw error;
       }
       if (!chunk.encryption) throw new Error(`Sealed realm ${realm.id} contains plaintext data`);
       plain = openRealmBytes(realmKey, plain, chunk.encryption, chunk.aad);
     } else if (chunk.encryption) throw new Error(`Public realm ${realm.id} contains sealed data`);
-    if (plain.length !== chunk.plainLength) throw new Error('WurstFS v2 chunk length mismatch');
-    if (chunk.plainSha256 && sha256(plain) !== chunk.plainSha256) throw new Error('WurstFS v2 chunk integrity mismatch');
+    if (plain.length !== chunk.plainLength) throw new Error('PigFS chunk length mismatch');
+    if (chunk.plainSha256 && sha256(plain) !== chunk.plainSha256) throw new Error('PigFS chunk integrity mismatch');
     const sliceStart = Math.max(start, chunkStart) - chunkStart;
     const sliceEnd = Math.min(end, chunkEnd) - chunkStart;
     const piece = Buffer.from(plain.subarray(sliceStart, sliceEnd));
@@ -795,6 +827,7 @@ function ensureParents(entries, path, timestamp, actorId, generation) {
   for (const parent of parentPaths(path)) {
     if (entries.has(parent)) continue;
     entries.set(parent, {
+      objectId: crypto.randomUUID(),
       path: parent,
       name: entryName(parent),
       type: 'directory',
@@ -809,12 +842,12 @@ function ensureParents(entries, path, timestamp, actorId, generation) {
   }
 }
 
-export class WurstFs2Store {
+export class PigFsStore {
   constructor({ source, baseOffset, append, sync = async () => {} } = {}) {
-    if (!source || typeof source.read !== 'function' || !Number.isSafeInteger(source.size)) throw new Error('WurstFS v2 store requires random-access source');
-    if (typeof append !== 'function') throw new Error('WurstFS v2 store requires append(bytes)');
+    if (!source || typeof source.read !== 'function' || !Number.isSafeInteger(source.size)) throw new Error('PigFS store requires random-access source');
+    if (typeof append !== 'function') throw new Error('PigFS store requires append(bytes)');
     this.source = source;
-    this.baseOffset = assertSafeOffset(baseOffset, 'WurstFS v2 base offset');
+    this.baseOffset = assertSafeOffset(baseOffset, 'PigFS base offset');
     this.append = append;
     this.sync = sync;
     this.root = null;
@@ -825,10 +858,12 @@ export class WurstFs2Store {
     this.sessions = new Map();
     this.appendTail = Promise.resolve();
     this.mutationTail = Promise.resolve();
+    this.watchers = new Map();
+    this.transactions = new Map();
   }
 
   async init() {
-    const history = await verifyWurstFs2History(this.source, this.baseOffset);
+    const history = await verifyPigFsHistory(this.source, this.baseOffset);
     this.root = history.root;
     this.commitOffset = history.commitOffset;
     return this;
@@ -869,7 +904,7 @@ export class WurstFs2Store {
   }
 
   async initialize({ actor = null, rootAdmins = null, identities = [], realms = [] } = {}) {
-    if (this.root) throw new Error('WurstFS v2 is already initialized');
+    if (this.root) throw new Error('PigFS is already initialized');
     const actorRecord = actor?.publicRecord ?? null;
     const registry = {};
     for (const record of [...identities, actorRecord].filter(Boolean)) {
@@ -881,17 +916,17 @@ export class WurstFs2Store {
     const realmMap = {};
     let needsIdentity = false;
     for (const spec of realms) {
-      const id = normalizeWurstFsRealmId(spec.id);
-      if (realmMap[id]) throw new Error(`Duplicate WurstFS realm ${id}`);
+      const id = normalizePigFsRealmId(spec.id);
+      if (realmMap[id]) throw new Error(`Duplicate PigFS realm ${id}`);
       for (const record of spec.identities ?? []) {
         const verified = verifyWursterIdentityRecord(record);
         if (!verified.valid) throw new Error(`Invalid Wurster Identity: ${verified.error}`);
         registry[record.identityId] = clone(record);
       }
 
-      if (Object.hasOwn(spec, 'mode')) throw new Error(`WurstFS realm ${id} uses removed field mode; omit governance for ordinary storage or use governance: personal/shared`);
+      if (Object.hasOwn(spec, 'mode')) throw new Error(`PigFS realm ${id} uses removed field mode; omit governance for ordinary storage or use governance: personal/shared`);
       const requestedGovernanceRaw = spec.governance == null ? '' : String(spec.governance).trim().toLowerCase();
-      if (requestedGovernanceRaw && !WURST_FS_V2_REALM_GOVERNANCE.includes(requestedGovernanceRaw)) throw new Error(`Unsupported WurstFS realm governance: ${spec.governance}`);
+      if (requestedGovernanceRaw && !PIG_FS_REALM_GOVERNANCE.includes(requestedGovernanceRaw)) throw new Error(`Unsupported PigFS realm governance: ${spec.governance}`);
       const requestedGovernance = requestedGovernanceRaw || null;
       const protectionGuess = requestedGovernance === 'personal' ? 'sealed' : String(spec.protection ?? 'public');
       let access;
@@ -899,12 +934,12 @@ export class WurstFs2Store {
       let claimed = true;
 
       if (!requestedGovernance && protectionGuess === 'public' && !spec.access) {
-        governance = WURST_FS_V2_ORDINARY;
-        access = normalizeWurstFsRealmAccess({ read: { mode: 'public' }, write: { mode: 'open' }, admins: [] }, 'public');
+        governance = PIG_FS_ORDINARY;
+        access = normalizePigFsRealmAccess({ read: { mode: 'public' }, write: { mode: 'open' }, admins: [] }, 'public');
       } else if (requestedGovernance === 'personal') {
         governance = 'personal';
         if (actorRecord) {
-          access = normalizeWurstFsRealmAccess({
+          access = normalizePigFsRealmAccess({
             read: { mode: 'members', identities: [actorRecord.identityId] },
             write: { mode: 'members', identities: [actorRecord.identityId] },
             admins: [actorRecord.identityId]
@@ -915,7 +950,7 @@ export class WurstFs2Store {
           // its sole owner. This lets a Wurst carry ordinary public data before
           // the recipient has ever used it without inventing a placeholder key.
           claimed = false;
-          access = normalizeWurstFsRealmAccess({
+          access = normalizePigFsRealmAccess({
             read: { mode: 'members', identities: [] },
             write: { mode: 'members', identities: [] },
             admins: []
@@ -923,28 +958,28 @@ export class WurstFs2Store {
         }
       } else {
         const protection = protectionGuess;
-        const rawAccess = normalizeWurstFsRealmAccess(spec.access ?? {}, protection);
-        governance = requestedGovernance || wurstFsRealmGovernance({ protection, access: rawAccess });
-        if (governance === WURST_FS_V2_ORDINARY) access = normalizeWurstFsRealmAccess({ read: { mode: 'public' }, write: { mode: 'open' }, admins: [] }, 'public');
+        const rawAccess = normalizePigFsRealmAccess(spec.access ?? {}, protection);
+        governance = requestedGovernance || pigFsRealmGovernance({ protection, access: rawAccess });
+        if (governance === PIG_FS_ORDINARY) access = normalizePigFsRealmAccess({ read: { mode: 'public' }, write: { mode: 'open' }, admins: [] }, 'public');
         else if (governance === 'personal') {
           if (actorRecord) {
-            access = normalizeWurstFsRealmAccess({
+            access = normalizePigFsRealmAccess({
               read: { mode: 'members', identities: [actorRecord.identityId] },
               write: { mode: 'members', identities: [actorRecord.identityId] },
               admins: [actorRecord.identityId]
             }, 'sealed');
           } else {
             claimed = false;
-            access = normalizeWurstFsRealmAccess({ read: { mode: 'members', identities: [] }, write: { mode: 'members', identities: [] }, admins: [] }, 'sealed');
+            access = normalizePigFsRealmAccess({ read: { mode: 'members', identities: [] }, write: { mode: 'members', identities: [] }, admins: [] }, 'sealed');
           }
         } else {
-          if (!actorRecord) throw new Error(`Shared WurstFS realm ${id} requires an authenticated owner identity`);
+          if (!actorRecord) throw new Error(`Shared PigFS realm ${id} requires an authenticated owner identity`);
           needsIdentity = true;
           access = rawAccess;
         }
       }
 
-      const protection = governance === WURST_FS_V2_ORDINARY ? 'public' : governance === 'personal' ? 'sealed' : protectionGuess;
+      const protection = governance === PIG_FS_ORDINARY ? 'public' : governance === 'personal' ? 'sealed' : protectionGuess;
       const audit = normalizeRealmAudit(spec.audit, governance);
       const keyWraps = [];
       if (protection === 'sealed' && (governance !== 'personal' || claimed)) {
@@ -958,8 +993,10 @@ export class WurstFs2Store {
       }
       realmMap[id] = {
         id,
+        mount: normalizePigFsMount(spec.mount, id),
+        quotaBytes: spec.quotaBytes == null ? null : Number(spec.quotaBytes),
         label: String(spec.label ?? id).slice(0, 120),
-        ...(governance === WURST_FS_V2_ORDINARY ? {} : { governance }),
+        ...(governance === PIG_FS_ORDINARY ? {} : { governance }),
         ...(governance === 'personal' ? { claimed } : {}),
         audit,
         protection,
@@ -970,15 +1007,18 @@ export class WurstFs2Store {
       };
     }
 
-    if (needsIdentity && !actorRecord) throw new Error('WurstFS identity-backed realms require an authenticated owner identity');
-    const historyMode = Object.values(realmMap).some((realm) => wurstFsRealmGovernance(realm) === 'shared')
-      ? WURST_FS_V2_HISTORY_INTEGRITY
-      : WURST_FS_V2_HISTORY_NONE;
+    const mounts = Object.values(realmMap).map((realm) => realm.mount);
+    if (new Set(mounts).size !== mounts.length) throw new Error('PigFS realm mounts must be unique');
+    for (const a of mounts) for (const b of mounts) if (a !== b && (a.startsWith(`${b}/`) || b.startsWith(`${a}/`))) throw new Error('PigFS realm mounts may not overlap');
+    if (needsIdentity && !actorRecord) throw new Error('PigFS identity-backed realms require an authenticated owner identity');
+    const historyMode = Object.values(realmMap).some((realm) => pigFsRealmGovernance(realm) === 'shared')
+      ? PIG_FS_HISTORY_INTEGRITY
+      : PIG_FS_HISTORY_NONE;
     const admins = normalizeIdentityIds(rootAdmins ?? (actorRecord ? [actorRecord.identityId] : []));
-    for (const id of admins) if (!registry[id]) throw new Error(`Unknown WurstFS root admin ${id}`);
+    for (const id of admins) if (!registry[id]) throw new Error(`Unknown PigFS root admin ${id}`);
 
     const root = {
-      format: WURST_FS_V2_FORMAT,
+      format: PIG_FS_FORMAT,
       historyMode,
       generation: 1,
       previousCommitOffset: null,
@@ -987,18 +1027,18 @@ export class WurstFs2Store {
       rootPolicy: { admins },
       identities: registry,
       realms: realmMap,
-      mutation: historyMode === WURST_FS_V2_HISTORY_INTEGRITY
-        ? { format: WURST_FS_V2_MUTATION_FORMAT, actor: actorRecord?.identityId ?? null, changes: inferRealmChanges(null, { realms: realmMap }), operations: Object.values(realmMap).some(realmKeepsAudit) ? [{ type: 'genesis' }] : [] }
+      mutation: historyMode === PIG_FS_HISTORY_INTEGRITY
+        ? { format: PIG_FS_MUTATION_FORMAT, actor: actorRecord?.identityId ?? null, changes: inferRealmChanges(null, { realms: realmMap }), operations: Object.values(realmMap).some(realmKeepsAudit) ? [{ type: 'genesis' }] : [] }
         : null,
       authorization: null,
       stateHash: null,
       commitHash: null
     };
-    root.stateHash = computeWurstFs2StateHash(root);
-    if (historyMode === WURST_FS_V2_HISTORY_INTEGRITY && actor) root.authorization = signWursterIdentityPayload(actor, commitProofPayload(root), { context: WURST_FS_V2_COMMIT_CONTEXT });
-    root.commitHash = computeWurstFs2CommitHash(root);
-    validateWurstFs2Transition(null, root);
-    const commit = await this.appendRecord(WURST_FS_RECORD.COMMIT, Buffer.from(JSON.stringify(root)), 0);
+    root.stateHash = computePigFsStateHash(root);
+    if (historyMode === PIG_FS_HISTORY_INTEGRITY && actor) root.authorization = signWursterIdentityPayload(actor, commitProofPayload(root), { context: PIG_FS_COMMIT_CONTEXT });
+    root.commitHash = computePigFsCommitHash(root);
+    validatePigFsTransition(null, root);
+    const commit = await this.appendRecord(PIG_FS_RECORD.COMMIT, Buffer.from(JSON.stringify(root)), 0);
     await this.sync();
     this.root = root;
     this.commitOffset = commit.recordStart;
@@ -1010,19 +1050,19 @@ export class WurstFs2Store {
   }
 
   realm(id) {
-    const realm = this.root?.realms?.[normalizeWurstFsRealmId(id)];
+    const realm = this.root?.realms?.[normalizePigFsRealmId(id)];
     return realm ? clone(realm) : null;
   }
 
   async claimPersonalRealm(realmId, { actor } = {}) {
     return this.withMutationLock(async () => {
-      if (!this.root) throw new Error('WurstFS v2 is not initialized');
-      const id = normalizeWurstFsRealmId(realmId);
+      if (!this.root) throw new Error('PigFS is not initialized');
+      const id = normalizePigFsRealmId(realmId);
       const realm = this.root.realms?.[id];
-      if (!realm) throw new Error(`Unknown WurstFS realm ${id}`);
-      if (wurstFsRealmGovernance(realm) !== 'personal') {
-        const error = new Error(`WurstFS realm ${id} is not a personal realm`);
-        error.code = 'WURST_FS_NOT_PERSONAL';
+      if (!realm) throw new Error(`Unknown PigFS realm ${id}`);
+      if (pigFsRealmGovernance(realm) !== 'personal') {
+        const error = new Error(`PigFS realm ${id} is not a personal realm`);
+        error.code = 'PIG_FS_NOT_PERSONAL';
         throw error;
       }
       if (personalRealmClaimed(realm)) return { realm: id, claimed: false, owner: realm.access.admins?.[0] ?? null };
@@ -1042,7 +1082,7 @@ export class WurstFs2Store {
       nextRealm.governance = 'personal';
       nextRealm.claimed = true;
       nextRealm.protection = 'sealed';
-      nextRealm.access = normalizeWurstFsRealmAccess({
+      nextRealm.access = normalizePigFsRealmAccess({
         read: { mode: 'members', identities: [actorRecord.identityId] },
         write: { mode: 'members', identities: [actorRecord.identityId] },
         admins: [actorRecord.identityId]
@@ -1064,20 +1104,20 @@ export class WurstFs2Store {
   }
 
   unlockRealm(realmId, materialOrMeatphrase) {
-    const id = normalizeWurstFsRealmId(realmId);
+    const id = normalizePigFsRealmId(realmId);
     const realm = this.root?.realms?.[id];
-    if (!realm) throw new Error(`Unknown WurstFS realm ${id}`);
+    if (!realm) throw new Error(`Unknown PigFS realm ${id}`);
     if (realm.protection === 'public') return { realm: id, unlocked: true, public: true };
-    if (wurstFsRealmGovernance(realm) === 'personal' && !personalRealmClaimed(realm)) {
+    if (pigFsRealmGovernance(realm) === 'personal' && !personalRealmClaimed(realm)) {
       const error = new Error(`Personal realm ${id} has not been claimed yet`);
-      error.code = 'WURST_FS_UNCLAIMED';
+      error.code = 'PIG_FS_UNCLAIMED';
       throw error;
     }
     const material = typeof materialOrMeatphrase === 'string' ? deriveWursterIdentityMaterial(materialOrMeatphrase) : materialOrMeatphrase;
     const wrap = realm.keyWraps.find((item) => item.recipient === material?.publicRecord?.identityId);
     if (!wrap) {
       const error = new Error(`Wurster Identity has no read access to realm ${id}`);
-      error.code = 'WURST_FS_FORBIDDEN';
+      error.code = 'PIG_FS_FORBIDDEN';
       throw error;
     }
     const key = unwrapKeyForWursterIdentity(wrap, material, { realmId: id });
@@ -1088,17 +1128,17 @@ export class WurstFs2Store {
   }
 
   lockRealm(realmId) {
-    const id = normalizeWurstFsRealmId(realmId);
+    const id = normalizePigFsRealmId(realmId);
     const key = this.realmKeys.get(id);
     if (key) key.fill(0);
     return this.realmKeys.delete(id);
   }
 
   async currentCatalog(realmId) {
-    const id = normalizeWurstFsRealmId(realmId);
+    const id = normalizePigFsRealmId(realmId);
     const realm = this.root?.realms?.[id];
-    if (!realm) throw new Error(`Unknown WurstFS realm ${id}`);
-    return loadWurstFs2RealmCatalog(this.source, realm, { realmKey: this.realmKeys.get(id) ?? null });
+    if (!realm) throw new Error(`Unknown PigFS realm ${id}`);
+    return loadPigFsRealmCatalog(this.source, realm, { realmKey: this.realmKeys.get(id) ?? null });
   }
 
   assertWriter(realm, actor) {
@@ -1106,21 +1146,21 @@ export class WurstFs2Store {
     const signed = Boolean(actorId);
     if (!realmWriter(realm, actorId, signed)) {
       const error = new Error(`Identity is not allowed to write realm ${realm.id}`);
-      error.code = 'WURST_FS_FORBIDDEN';
+      error.code = 'PIG_FS_FORBIDDEN';
       throw error;
     }
     if (realm.protection === 'sealed' && !this.realmKeys.has(realm.id)) {
       const error = new Error(`Realm ${realm.id} must be unlocked before writing`);
-      error.code = 'WURST_FS_LOCKED';
+      error.code = 'PIG_FS_LOCKED';
       throw error;
     }
   }
 
   beginWrite(fsPath, { actor = null, mime = 'application/octet-stream', createdAt = Date.now(), modifiedAt = Date.now() } = {}) {
-    if (!this.root) throw new Error('WurstFS v2 is not initialized');
-    const { realmId, path } = parseWurstFsRealmPublicPath(fsPath, { allowRealmRoot: false });
+    if (!this.root) throw new Error('PigFS is not initialized');
+    const { realmId, path } = resolvePigFsPath(this.root, fsPath, { allowRealmRoot: false });
     const realm = this.root.realms[realmId];
-    if (!realm) throw new Error(`Unknown WurstFS realm ${realmId}`);
+    if (!realm) throw new Error(`Unknown PigFS realm ${realmId}`);
     this.assertWriter(realm, actor);
     if (actor) {
       const verified = verifyWursterIdentityRecord(actor.publicRecord);
@@ -1136,21 +1176,22 @@ export class WurstFs2Store {
       baseCommitOffset: this.commitOffset,
       baseCommitHash: this.root.commitHash,
       baseGeneration: this.root.generation,
-      baseRealm: clone(realm)
+      baseRealm: clone(realm),
+      contentHash: crypto.createHash('sha256')
     });
     return id;
   }
 
   session(id) {
     const session = this.sessions.get(String(id));
-    if (!session) throw new Error('Unknown WurstFS v2 write session');
+    if (!session) throw new Error('Unknown PigFS write session');
     return session;
   }
 
   async writeChunk(id, plainBytes) {
     const session = this.session(id);
     const bytes = Buffer.isBuffer(plainBytes) ? Buffer.from(plainBytes) : Buffer.from(plainBytes ?? []);
-    if (bytes.length > WURST_FS_MAX_RECORD_PAYLOAD) throw new Error('WurstFS v2 write chunks may not exceed 4 MiB');
+    if (bytes.length > PIG_FS_MAX_RECORD_PAYLOAD) throw new Error('PigFS write chunks may not exceed 4 MiB');
     const realm = this.root.realms[session.realmId];
     const chunkIndex = session.chunks.length;
     const aad = `wurst-fs2-data:${session.realmId}:${session.baseGeneration + 1}:${session.path}:${chunkIndex}`;
@@ -1161,7 +1202,7 @@ export class WurstFs2Store {
       stored = sealed.data;
       encryption = sealed.encryption;
     }
-    const appended = await this.appendRecord(WURST_FS_RECORD.DATA, stored, session.baseCommitOffset ?? 0);
+    const appended = await this.appendRecord(PIG_FS_RECORD.DATA, stored, session.baseCommitOffset ?? 0);
     session.chunks.push({
       plainOffset: session.size,
       plainLength: bytes.length,
@@ -1171,6 +1212,7 @@ export class WurstFs2Store {
       encryption,
       aad: encryption ? aad : null
     });
+    session.contentHash.update(bytes);
     session.size += bytes.length;
     return { offset: session.size - bytes.length, length: bytes.length, storedLength: stored.length };
   }
@@ -1204,20 +1246,22 @@ export class WurstFs2Store {
     const nextRealm = clone(realm);
     for (const [path, chunks] of changedMaps) {
       const entry = entries.get(path);
-      const groups = splitJsonItems(chunks, (part) => ({ format: WURST_FS_V2_MAP_FORMAT, chunks: part }), WURST_FS_MAP_TARGET);
+      const groups = splitJsonItems(chunks, (part) => ({ format: PIG_FS_MAP_FORMAT, chunks: part }), PIG_FS_MAP_TARGET);
       entry.mapPages = [];
       for (let index = 0; index < groups.length; index += 1) {
         const part = groups[index];
-        const meta = await this.encodeMetadata(nextRealm, WURST_FS_RECORD.MAP, { format: WURST_FS_V2_MAP_FORMAT, chunks: part }, `wurst-fs2-map:${nextRealm.id}:${generation}:${path}:${index}`, previousCommitOffset);
+        const meta = await this.encodeMetadata(nextRealm, PIG_FS_RECORD.MAP, { format: PIG_FS_MAP_FORMAT, chunks: part }, `wurst-fs2-map:${nextRealm.id}:${generation}:${path}:${index}`, previousCommitOffset);
         entry.mapPages.push({ ...meta, plainStart: part[0]?.plainOffset ?? 0, plainEnd: part.length ? part.at(-1).plainOffset + part.at(-1).plainLength : 0, count: part.length });
       }
     }
     const sorted = [...entries.values()].sort((a, b) => compareWurstFsPath(a.path, b.path));
-    const groups = splitJsonItems(sorted, (part) => ({ format: WURST_FS_V2_CATALOG_FORMAT, entries: part }), WURST_FS_CATALOG_TARGET);
+    const logicalBytes = [...entries.values()].filter((entry) => entry.type === 'file').reduce((sum, entry) => sum + Number(entry.size ?? 0), 0);
+    if (nextRealm.quotaBytes != null && logicalBytes > Number(nextRealm.quotaBytes)) { const error = new Error(`PigFS realm ${nextRealm.id} quota exceeded`); error.code = 'PIG_FS_QUOTA'; throw error; }
+    const groups = splitJsonItems(sorted, (part) => ({ format: PIG_FS_CATALOG_FORMAT, entries: part }), PIG_FS_CATALOG_TARGET);
     nextRealm.catalogPages = [];
     for (let index = 0; index < groups.length; index += 1) {
       const part = groups[index];
-      const meta = await this.encodeMetadata(nextRealm, WURST_FS_RECORD.CATALOG, { format: WURST_FS_V2_CATALOG_FORMAT, entries: part }, `wurst-fs2-catalog:${nextRealm.id}:${generation}:${index}`, previousCommitOffset);
+      const meta = await this.encodeMetadata(nextRealm, PIG_FS_RECORD.CATALOG, { format: PIG_FS_CATALOG_FORMAT, entries: part }, `wurst-fs2-catalog:${nextRealm.id}:${generation}:${index}`, previousCommitOffset);
       nextRealm.catalogPages.push({
         ...meta,
         first: meta.encryption ? null : (part[0]?.path ?? ''),
@@ -1228,50 +1272,50 @@ export class WurstFs2Store {
     const files = sorted.filter((entry) => entry.type === 'file');
     nextRealm.stats = nextRealm.protection === 'sealed'
       ? { sealed: true, hasEntries: sorted.length > 0 }
-      : { files: files.length, directories: sorted.length - files.length, logicalBytes: files.reduce((sum, entry) => sum + Number(entry.size ?? 0), 0) };
+      : { files: files.length, directories: sorted.length - files.length, logicalBytes };
     return nextRealm;
   }
 
   async commitRoot(nextRoot, actor, operations = []) {
     const actorRecord = actor?.publicRecord ?? null;
     const historyMode = rootNeedsIntegrityChain(nextRoot)
-      ? WURST_FS_V2_HISTORY_INTEGRITY
-      : WURST_FS_V2_HISTORY_NONE;
-    nextRoot.format = WURST_FS_V2_FORMAT;
+      ? PIG_FS_HISTORY_INTEGRITY
+      : PIG_FS_HISTORY_NONE;
+    nextRoot.format = PIG_FS_FORMAT;
     nextRoot.historyMode = historyMode;
     nextRoot.generation = this.root.generation + 1;
     nextRoot.committedAt = Date.now();
     nextRoot.identities = this.identityRegistryWith(Object.values(nextRoot.identities ?? {}), actorRecord);
     nextRoot.authorization = null;
 
-    if (historyMode === WURST_FS_V2_HISTORY_INTEGRITY) {
+    if (historyMode === PIG_FS_HISTORY_INTEGRITY) {
       // Once shared governance exists we retain a tiny integrity lineage. Rich
       // operation history is opt-in per shared realm; ordinary/personal
       // writes do not become a Git log just because they coexist with sharing.
       nextRoot.previousCommitOffset = this.commitOffset;
       nextRoot.previousCommitHash = this.root.commitHash;
       nextRoot.mutation = {
-        format: WURST_FS_V2_MUTATION_FORMAT,
+        format: PIG_FS_MUTATION_FORMAT,
         actor: actorRecord?.identityId ?? null,
         changes: inferRealmChanges(this.root, nextRoot),
         operations: operations
           .filter((operation) => operation?.realm && realmKeepsAudit(nextRoot.realms?.[operation.realm]))
           .map((operation) => publicMutationOperation(operation, nextRoot.realms))
       };
-      nextRoot.stateHash = computeWurstFs2StateHash(nextRoot);
-      if (actor) nextRoot.authorization = signWursterIdentityPayload(actor, commitProofPayload(nextRoot), { context: WURST_FS_V2_COMMIT_CONTEXT });
-      nextRoot.commitHash = computeWurstFs2CommitHash(nextRoot);
-      validateWurstFs2Transition(this.root, nextRoot, { parentCommitOffset: this.commitOffset });
+      nextRoot.stateHash = computePigFsStateHash(nextRoot);
+      if (actor) nextRoot.authorization = signWursterIdentityPayload(actor, commitProofPayload(nextRoot), { context: PIG_FS_COMMIT_CONTEXT });
+      nextRoot.commitHash = computePigFsCommitHash(nextRoot);
+      validatePigFsTransition(this.root, nextRoot, { parentCommitOffset: this.commitOffset });
     } else {
       nextRoot.previousCommitOffset = null;
       nextRoot.previousCommitHash = null;
       nextRoot.mutation = null;
-      nextRoot.stateHash = computeWurstFs2StateHash(nextRoot);
-      nextRoot.commitHash = computeWurstFs2CommitHash(nextRoot);
-      validateWurstFs2Transition(null, nextRoot);
+      nextRoot.stateHash = computePigFsStateHash(nextRoot);
+      nextRoot.commitHash = computePigFsCommitHash(nextRoot);
+      validatePigFsTransition(null, nextRoot);
     }
 
-    const commit = await this.appendRecord(WURST_FS_RECORD.COMMIT, Buffer.from(JSON.stringify(nextRoot)), historyMode === WURST_FS_V2_HISTORY_INTEGRITY ? (this.commitOffset ?? 0) : 0);
+    const commit = await this.appendRecord(PIG_FS_RECORD.COMMIT, Buffer.from(JSON.stringify(nextRoot)), historyMode === PIG_FS_HISTORY_INTEGRITY ? (this.commitOffset ?? 0) : 0);
     await this.sync();
     this.root = nextRoot;
     this.commitOffset = commit.recordStart;
@@ -1280,18 +1324,18 @@ export class WurstFs2Store {
 
   async publishStandaloneRoot(nextRoot, { generation = null } = {}) {
     const root = clone(nextRoot);
-    root.format = WURST_FS_V2_FORMAT;
-    root.historyMode = WURST_FS_V2_HISTORY_NONE;
+    root.format = PIG_FS_FORMAT;
+    root.historyMode = PIG_FS_HISTORY_NONE;
     root.generation = generation == null ? Math.max(1, Number(root.generation ?? 1)) : Math.max(1, Number(generation));
     root.previousCommitOffset = null;
     root.previousCommitHash = null;
     root.committedAt = Number(root.committedAt ?? Date.now());
     root.mutation = null;
     root.authorization = null;
-    root.stateHash = computeWurstFs2StateHash(root);
-    root.commitHash = computeWurstFs2CommitHash(root);
-    validateWurstFs2Transition(null, root);
-    const commit = await this.appendRecord(WURST_FS_RECORD.COMMIT, Buffer.from(JSON.stringify(root)), 0);
+    root.stateHash = computePigFsStateHash(root);
+    root.commitHash = computePigFsCommitHash(root);
+    validatePigFsTransition(null, root);
+    const commit = await this.appendRecord(PIG_FS_RECORD.COMMIT, Buffer.from(JSON.stringify(root)), 0);
     await this.sync();
     this.root = root;
     this.commitOffset = commit.recordStart;
@@ -1303,8 +1347,8 @@ export class WurstFs2Store {
       const session = this.session(id);
       let realm = this.root.realms[session.realmId];
       if (!realm) {
-        const error = new Error(`WurstFS realm ${session.realmId} no longer exists`);
-        error.code = 'WURST_FS_CONFLICT';
+        const error = new Error(`PigFS realm ${session.realmId} no longer exists`);
+        error.code = 'PIG_FS_CONFLICT';
         throw error;
       }
       this.assertWriter(realm, session.actor);
@@ -1315,15 +1359,15 @@ export class WurstFs2Store {
         // commits. Rebase is safe when this exact target and the realm policy
         // are unchanged. Two concurrent writers of the same object conflict.
         if (realmPolicyDigest(session.baseRealm) !== realmPolicyDigest(realm)) {
-          const error = new Error('WurstFS realm policy changed while this write was in progress');
-          error.code = 'WURST_FS_CONFLICT';
+          const error = new Error('PigFS realm policy changed while this write was in progress');
+          error.code = 'PIG_FS_CONFLICT';
           throw error;
         }
         const realmKey = realm.protection === 'sealed' ? this.realmKeys.get(realm.id) ?? null : null;
-        const baseEntries = await loadWurstFs2RealmCatalog(this.source, session.baseRealm, { realmKey });
+        const baseEntries = await loadPigFsRealmCatalog(this.source, session.baseRealm, { realmKey });
         if (entryVersionFingerprint(baseEntries.get(session.path)) !== entryVersionFingerprint(entries.get(session.path))) {
-          const error = new Error('WurstFS target changed while this write was in progress');
-          error.code = 'WURST_FS_CONFLICT';
+          const error = new Error('PigFS target changed while this write was in progress');
+          error.code = 'PIG_FS_CONFLICT';
           throw error;
         }
       }
@@ -1337,6 +1381,7 @@ export class WurstFs2Store {
       ensureParents(entries, session.path, timestamp, actorId, this.root.generation + 1);
       const previous = entries.get(session.path);
       entries.set(session.path, {
+        objectId: previous?.objectId ?? crypto.randomUUID(),
         path: session.path,
         name: entryName(session.path),
         type: 'file',
@@ -1347,6 +1392,7 @@ export class WurstFs2Store {
         revision: (previous?.revision ?? 0) + 1,
         modifiedBy: actorId,
         modifiedGeneration: this.root.generation + 1,
+        contentSha256: session.contentHash.digest('hex'),
         mapPages: []
       });
       const nextRoot = clone(this.root);
@@ -1354,18 +1400,19 @@ export class WurstFs2Store {
       nextRoot.realms[realm.id] = await this.buildRealmWithCatalog(realm, entries, new Map([[session.path, session.chunks]]), this.root.generation + 1, this.commitOffset);
       const result = await this.commitRoot(nextRoot, session.actor, [{ type: 'write', realm: realm.id, path: session.path, revision: entries.get(session.path).revision }]);
       this.sessions.delete(String(id));
-      return { ...result, entry: { ...clone(entries.get(session.path)), path: wurstFsRealmPublicPath(realm.id, session.path), realm: realm.id } };
+      this.emitWatch({ type: previous ? 'modified' : 'created', path: pigFsRealmPublicPath(realm, session.path), realm: realm.id, objectId: entries.get(session.path).objectId, generation: this.root.generation });
+      return { ...result, entry: { ...clone(entries.get(session.path)), path: pigFsRealmPublicPath(realm, session.path), realm: realm.id } };
     });
   }
 
   async mkdir(fsPath, { actor = null, recursive = true } = {}) {
-    const { realmId, path } = parseWurstFsRealmPublicPath(fsPath, { allowRealmRoot: false });
+    const { realmId, path } = resolvePigFsPath(this.root, fsPath, { allowRealmRoot: false });
     const realm = this.root.realms[realmId];
-    if (!realm) throw new Error(`Unknown WurstFS realm ${realmId}`);
+    if (!realm) throw new Error(`Unknown PigFS realm ${realmId}`);
     this.assertWriter(realm, actor);
     const entries = await this.currentCatalog(realmId);
     if (entries.has(path)) {
-      if (entries.get(path).type !== 'directory') throw new Error('WurstFS v2 path already exists as a file');
+      if (entries.get(path).type !== 'directory') throw new Error('PigFS path already exists as a file');
       return clone(entries.get(path));
     }
     const actorId = actor?.publicRecord?.identityId ?? null;
@@ -1373,27 +1420,28 @@ export class WurstFs2Store {
     if (recursive) ensureParents(entries, path, timestamp, actorId, this.root.generation + 1);
     else {
       const parent = path.split('/').slice(0, -1).join('/');
-      if (parent && !entries.has(parent)) throw new Error('WurstFS v2 parent directory does not exist');
+      if (parent && !entries.has(parent)) throw new Error('PigFS parent directory does not exist');
     }
-    entries.set(path, { path, name: entryName(path), type: 'directory', size: 0, mime: null, createdAt: timestamp, modifiedAt: timestamp, revision: 1, modifiedBy: actorId, modifiedGeneration: this.root.generation + 1 });
+    entries.set(path, { objectId: crypto.randomUUID(), path, name: entryName(path), type: 'directory', size: 0, mime: null, createdAt: timestamp, modifiedAt: timestamp, revision: 1, modifiedBy: actorId, modifiedGeneration: this.root.generation + 1 });
     const nextRoot = clone(this.root);
     nextRoot.identities = this.identityRegistryWith(actor?.publicRecord);
     nextRoot.realms[realmId] = await this.buildRealmWithCatalog(realm, entries, new Map(), this.root.generation + 1, this.commitOffset);
     await this.commitRoot(nextRoot, actor, [{ type: 'mkdir', realm: realmId, path }]);
-    return { ...clone(entries.get(path)), path: wurstFsRealmPublicPath(realmId, path), realm: realmId };
+    this.emitWatch({ type: 'created', path: pigFsRealmPublicPath(realm, path), realm: realmId, objectId: entries.get(path).objectId, generation: this.root.generation });
+    return { ...clone(entries.get(path)), path: pigFsRealmPublicPath(realm, path), realm: realmId };
   }
 
   async remove(fsPath, { actor = null, recursive = false } = {}) {
-    const { realmId, path } = parseWurstFsRealmPublicPath(fsPath, { allowRealmRoot: false });
+    const { realmId, path } = resolvePigFsPath(this.root, fsPath, { allowRealmRoot: false });
     const realm = this.root.realms[realmId];
-    if (!realm) throw new Error(`Unknown WurstFS realm ${realmId}`);
+    if (!realm) throw new Error(`Unknown PigFS realm ${realmId}`);
     this.assertWriter(realm, actor);
     const entries = await this.currentCatalog(realmId);
     const target = entries.get(path);
     if (!target) return false;
     if (target.type === 'directory') {
       const children = [...entries.keys()].filter((key) => key.startsWith(`${path}/`));
-      if (children.length && !recursive) throw new Error('WurstFS v2 directory is not empty');
+      if (children.length && !recursive) throw new Error('PigFS directory is not empty');
       for (const child of children) entries.delete(child);
     }
     entries.delete(path);
@@ -1401,26 +1449,27 @@ export class WurstFs2Store {
     nextRoot.identities = this.identityRegistryWith(actor?.publicRecord);
     nextRoot.realms[realmId] = await this.buildRealmWithCatalog(realm, entries, new Map(), this.root.generation + 1, this.commitOffset);
     await this.commitRoot(nextRoot, actor, [{ type: 'remove', realm: realmId, path, recursive: Boolean(recursive) }]);
+    this.emitWatch({ type: 'deleted', path: pigFsRealmPublicPath(realm, path), realm: realmId, objectId: target.objectId ?? null, generation: this.root.generation });
     return true;
   }
 
   async rename(fromPath, toPath, { actor = null } = {}) {
-    const from = parseWurstFsRealmPublicPath(fromPath, { allowRealmRoot: false });
-    const to = parseWurstFsRealmPublicPath(toPath, { allowRealmRoot: false });
+    const from = resolvePigFsPath(this.root, fromPath, { allowRealmRoot: false });
+    const to = resolvePigFsPath(this.root, toPath, { allowRealmRoot: false });
     if (from.realmId !== to.realmId) {
-      const error = new Error('WurstFS v2 cross-realm rename is not supported; copy into the target realm and remove the source instead');
-      error.code = 'WURST_FS_CROSS_REALM';
+      const error = new Error('PigFS cross-realm rename is not supported; copy into the target realm and remove the source instead');
+      error.code = 'PIG_FS_CROSS_REALM';
       throw error;
     }
     if (from.path === to.path) return this.stat(fromPath);
-    if (to.path.startsWith(`${from.path}/`)) throw new Error('Cannot move a WurstFS v2 directory inside itself');
+    if (to.path.startsWith(`${from.path}/`)) throw new Error('Cannot move a PigFS directory inside itself');
     const realm = this.root.realms[from.realmId];
-    if (!realm) throw new Error(`Unknown WurstFS realm ${from.realmId}`);
+    if (!realm) throw new Error(`Unknown PigFS realm ${from.realmId}`);
     this.assertWriter(realm, actor);
     const entries = await this.currentCatalog(from.realmId);
     const source = entries.get(from.path);
     if (!source) return null;
-    if (entries.has(to.path)) throw new Error('WurstFS v2 destination already exists');
+    if (entries.has(to.path)) throw new Error('PigFS destination already exists');
     const actorId = actor?.publicRecord?.identityId ?? null;
     const timestamp = Date.now();
     ensureParents(entries, to.path, timestamp, actorId, this.root.generation + 1);
@@ -1432,7 +1481,7 @@ export class WurstFs2Store {
     for (const [oldPath, entry] of moving) {
       const suffix = oldPath === from.path ? '' : oldPath.slice(from.path.length + 1);
       const newPath = suffix ? `${to.path}/${suffix}` : to.path;
-      if (entries.has(newPath)) throw new Error(`WurstFS v2 rename collides with existing path ${newPath}`);
+      if (entries.has(newPath)) throw new Error(`PigFS rename collides with existing path ${newPath}`);
       entries.set(newPath, {
         ...entry,
         path: newPath,
@@ -1447,23 +1496,24 @@ export class WurstFs2Store {
     nextRoot.identities = this.identityRegistryWith(actor?.publicRecord);
     nextRoot.realms[from.realmId] = await this.buildRealmWithCatalog(realm, entries, new Map(), this.root.generation + 1, this.commitOffset);
     await this.commitRoot(nextRoot, actor, [{ type: 'rename', realm: from.realmId, from: from.path, to: to.path }]);
-    return { ...clone(entries.get(to.path)), path: wurstFsRealmPublicPath(from.realmId, to.path), realm: from.realmId };
+    this.emitWatch({ type: 'renamed', path: pigFsRealmPublicPath(realm, to.path), from: pigFsRealmPublicPath(realm, from.path), realm: from.realmId, objectId: entries.get(to.path).objectId ?? null, generation: this.root.generation });
+    return { ...clone(entries.get(to.path)), path: pigFsRealmPublicPath(realm, to.path), realm: from.realmId };
   }
 
   async grant(realmId, identityRecord, capabilities = {}, { actor } = {}) {
-    const id = normalizeWurstFsRealmId(realmId);
+    const id = normalizePigFsRealmId(realmId);
     const realm = this.root.realms[id];
-    if (!realm) throw new Error(`Unknown WurstFS realm ${id}`);
-    const governance = wurstFsRealmGovernance(realm);
+    if (!realm) throw new Error(`Unknown PigFS realm ${id}`);
+    const governance = pigFsRealmGovernance(realm);
     if (governance !== 'shared') {
-      const error = new Error(`WurstFS ${governance} realm ${id} is not shareable`);
-      error.code = 'WURST_FS_NOT_SHAREABLE';
+      const error = new Error(`PigFS ${governance} realm ${id} is not shareable`);
+      error.code = 'PIG_FS_NOT_SHAREABLE';
       throw error;
     }
     const actorId = actor?.publicRecord?.identityId ?? null;
     if (!realmAdmin(this.root, realm, actorId)) {
       const error = new Error(`Identity is not allowed to administer realm ${id}`);
-      error.code = 'WURST_FS_FORBIDDEN';
+      error.code = 'PIG_FS_FORBIDDEN';
       throw error;
     }
     const target = verifyWursterIdentityRecord(identityRecord);
@@ -1488,7 +1538,7 @@ export class WurstFs2Store {
         if (nextRealm.access.write.mode === 'members') writeIds.add(targetId);
       }
     }
-    nextRealm.access = normalizeWurstFsRealmAccess({
+    nextRealm.access = normalizePigFsRealmAccess({
       read: { ...nextRealm.access.read, identities: [...readIds] },
       write: { ...nextRealm.access.write, identities: [...writeIds] },
       admins: [...adminIds]
@@ -1497,44 +1547,44 @@ export class WurstFs2Store {
       const key = this.realmKeys.get(id);
       if (!key) {
         const error = new Error(`Realm ${id} must be unlocked to grant read access`);
-        error.code = 'WURST_FS_LOCKED';
+        error.code = 'PIG_FS_LOCKED';
         throw error;
       }
       nextRealm.keyWraps.push(wrapKeyForWursterIdentity(key, identityRecord, { realmId: id }));
       nextRealm.keyWraps.sort((a, b) => a.recipient.localeCompare(b.recipient));
     }
     await this.commitRoot(nextRoot, actor, [{ type: 'grant', realm: id, identity: targetId, capabilities: { read: Boolean(capabilities.read), write: Boolean(capabilities.write), admin: Boolean(capabilities.admin) } }]);
-    return wurstFsRealmCapabilities(this.root.realms[id], targetId, { signedIdentity: true });
+    return pigFsRealmCapabilities(this.root.realms[id], targetId, { signedIdentity: true });
   }
 
   async rekeyRealm(realmId, { actor, removeReaders = [] } = {}) {
-    const id = normalizeWurstFsRealmId(realmId);
+    const id = normalizePigFsRealmId(realmId);
     const realm = this.root.realms[id];
-    if (!realm) throw new Error(`Unknown WurstFS realm ${id}`);
-    const governance = wurstFsRealmGovernance(realm);
+    if (!realm) throw new Error(`Unknown PigFS realm ${id}`);
+    const governance = pigFsRealmGovernance(realm);
     if (governance !== 'shared') {
-      const error = new Error(`WurstFS ${governance} realm ${id} is not shareable`);
-      error.code = 'WURST_FS_NOT_SHAREABLE';
+      const error = new Error(`PigFS ${governance} realm ${id} is not shareable`);
+      error.code = 'PIG_FS_NOT_SHAREABLE';
       throw error;
     }
-    if (realm.protection !== 'sealed') throw new Error('Only sealed WurstFS realms have encryption keys to rotate');
+    if (realm.protection !== 'sealed') throw new Error('Only sealed PigFS realms have encryption keys to rotate');
     const actorId = actor?.publicRecord?.identityId ?? null;
     if (!realmAdmin(this.root, realm, actorId)) {
       const error = new Error(`Identity is not allowed to administer realm ${id}`);
-      error.code = 'WURST_FS_FORBIDDEN';
+      error.code = 'PIG_FS_FORBIDDEN';
       throw error;
     }
     const oldKey = this.realmKeys.get(id);
     if (!oldKey) {
       const error = new Error(`Realm ${id} must be unlocked before rekeying`);
-      error.code = 'WURST_FS_LOCKED';
+      error.code = 'PIG_FS_LOCKED';
       throw error;
     }
     const remove = new Set(normalizeIdentityIds(removeReaders));
     if (remove.has(actorId) && realm.access.admins.length === 1 && realm.access.admins[0] === actorId) {
       throw new Error('The last active realm admin cannot remove their own read access during rekey');
     }
-    const entries = await loadWurstFs2RealmCatalog(this.source, realm, { realmKey: oldKey });
+    const entries = await loadPigFsRealmCatalog(this.source, realm, { realmKey: oldKey });
     const generation = this.root.generation + 1;
     const newKey = crypto.randomBytes(32);
     const nextRoot = clone(this.root);
@@ -1543,7 +1593,7 @@ export class WurstFs2Store {
     nextRealm.access.read.identities = nextRealm.access.read.identities.filter((value) => !remove.has(value));
     if (nextRealm.access.write.mode === 'members') nextRealm.access.write.identities = nextRealm.access.write.identities.filter((value) => !remove.has(value));
     nextRealm.access.admins = nextRealm.access.admins.filter((value) => !remove.has(value));
-    nextRealm.access = normalizeWurstFsRealmAccess(nextRealm.access, 'sealed');
+    nextRealm.access = normalizePigFsRealmAccess(nextRealm.access, 'sealed');
     nextRealm.keyWraps = nextRealm.access.read.identities.map((readerId) => {
       const identity = nextRoot.identities[readerId];
       if (!identity) throw new Error(`Cannot rekey realm ${id}; missing Identity ${readerId}`);
@@ -1554,18 +1604,18 @@ export class WurstFs2Store {
     try {
       for (const [entryPath, entry] of entries) {
         if (entry.type !== 'file') continue;
-        const oldChunks = await loadWurstFs2RealmChunks(this.source, realm, entry, oldKey);
+        const oldChunks = await loadPigFsRealmChunks(this.source, realm, entry, oldKey);
         const newChunks = [];
         for (let index = 0; index < oldChunks.length; index += 1) {
           const chunk = oldChunks[index];
           const record = await readFsRecord(this.source, chunk.recordOffset);
-          if (record.type !== WURST_FS_RECORD.DATA) throw new Error('WurstFS v2 rekey found a non-data chunk');
+          if (record.type !== PIG_FS_RECORD.DATA) throw new Error('PigFS rekey found a non-data chunk');
           let plain = record.payload;
           if (!chunk.encryption) throw new Error(`Sealed realm ${id} contains plaintext data during rekey`);
           plain = openRealmBytes(oldKey, plain, chunk.encryption, chunk.aad);
           const aad = `wurst-fs2-rekey:${id}:${generation}:${entryPath}:${index}`;
           const sealed = sealRealmBytes(newKey, plain, aad);
-          const appended = await this.appendRecord(WURST_FS_RECORD.DATA, sealed.data, this.commitOffset ?? 0);
+          const appended = await this.appendRecord(PIG_FS_RECORD.DATA, sealed.data, this.commitOffset ?? 0);
           newChunks.push({
             plainOffset: chunk.plainOffset,
             plainLength: plain.length,
@@ -1591,25 +1641,25 @@ export class WurstFs2Store {
   }
 
   async revoke(realmId, identityId, capabilities = {}, { actor } = {}) {
-    const id = normalizeWurstFsRealmId(realmId);
+    const id = normalizePigFsRealmId(realmId);
     const realm = this.root.realms[id];
-    if (!realm) throw new Error(`Unknown WurstFS realm ${id}`);
-    const governance = wurstFsRealmGovernance(realm);
+    if (!realm) throw new Error(`Unknown PigFS realm ${id}`);
+    const governance = pigFsRealmGovernance(realm);
     if (governance !== 'shared') {
-      const error = new Error(`WurstFS ${governance} realm ${id} is not shareable`);
-      error.code = 'WURST_FS_NOT_SHAREABLE';
+      const error = new Error(`PigFS ${governance} realm ${id} is not shareable`);
+      error.code = 'PIG_FS_NOT_SHAREABLE';
       throw error;
     }
     const actorId = actor?.publicRecord?.identityId ?? null;
     if (!realmAdmin(this.root, realm, actorId)) {
       const error = new Error(`Identity is not allowed to administer realm ${id}`);
-      error.code = 'WURST_FS_FORBIDDEN';
+      error.code = 'PIG_FS_FORBIDDEN';
       throw error;
     }
     const targetId = String(identityId ?? '');
     if (realm.protection === 'sealed' && capabilities.read === true && realm.access.read.identities.includes(targetId)) {
       const error = new Error('Revoking read access to a sealed realm requires realm rekeying so the current snapshot is re-encrypted');
-      error.code = 'WURST_FS_REKEY_REQUIRED';
+      error.code = 'PIG_FS_REKEY_REQUIRED';
       throw error;
     }
     const nextRoot = clone(this.root);
@@ -1617,62 +1667,169 @@ export class WurstFs2Store {
     const nextRealm = nextRoot.realms[id];
     if (capabilities.write === true && nextRealm.access.write.mode === 'members') nextRealm.access.write.identities = nextRealm.access.write.identities.filter((value) => value !== targetId);
     if (capabilities.admin === true) nextRealm.access.admins = nextRealm.access.admins.filter((value) => value !== targetId);
-    nextRealm.access = normalizeWurstFsRealmAccess(nextRealm.access, nextRealm.protection);
+    nextRealm.access = normalizePigFsRealmAccess(nextRealm.access, nextRealm.protection);
     await this.commitRoot(nextRoot, actor, [{ type: 'revoke', realm: id, identity: targetId, capabilities: { read: false, write: Boolean(capabilities.write), admin: Boolean(capabilities.admin) } }]);
-    return wurstFsRealmCapabilities(this.root.realms[id], targetId, { signedIdentity: true });
+    return pigFsRealmCapabilities(this.root.realms[id], targetId, { signedIdentity: true });
   }
 
   async stat(fsPath) {
-    const parsed = parseWurstFsRealmPublicPath(fsPath, { allowRealmRoot: true });
-    return statWurstFs2Entry(this.source, this.root, fsPath, { realmKey: this.realmKeys.get(parsed.realmId) ?? null });
+    const parsed = resolvePigFsPath(this.root, fsPath, { allowRealmRoot: true });
+    return statPigFsEntry(this.source, this.root, fsPath, { realmKey: this.realmKeys.get(parsed.realmId) ?? null });
   }
 
-  async list(fsPath = '/data') {
-    return listWurstFs2Directory(this.source, this.root, fsPath, { realmKeys: this.realmKeys });
+  async list(fsPath = '/') {
+    return listPigFsDirectory(this.source, this.root, fsPath, { realmKeys: this.realmKeys });
   }
 
   async read(fsPath, { offset = 0, length = null } = {}) {
-    const parsed = parseWurstFsRealmPublicPath(fsPath, { allowRealmRoot: false });
-    return readWurstFs2Range(this.source, this.root, fsPath, offset, length, { realmKey: this.realmKeys.get(parsed.realmId) ?? null });
+    const parsed = resolvePigFsPath(this.root, fsPath, { allowRealmRoot: false });
+    return readPigFsRange(this.source, this.root, fsPath, offset, length, { realmKey: this.realmKeys.get(parsed.realmId) ?? null });
+  }
+
+  watch(path = '/', listener) {
+    if (typeof listener !== 'function') throw new TypeError('PigFS watch requires a listener');
+    const rootPath = normalizePigFsPath(path);
+    const id = crypto.randomUUID();
+    this.watchers.set(id, { path: rootPath, listener });
+    return () => this.watchers.delete(id);
+  }
+
+  emitWatch(event) {
+    for (const watcher of this.watchers.values()) {
+      if (watcher.path !== '/' && event.path !== watcher.path && !event.path.startsWith(`${watcher.path}/`) && event.from !== watcher.path && !String(event.from ?? '').startsWith(`${watcher.path}/`)) continue;
+      try { watcher.listener({ format: 'wurst/pigfs-event-1', ...clone(event) }); } catch {}
+    }
+  }
+
+  async object(objectId) {
+    const id = String(objectId ?? '').replace(/^pigfs:\/\/object\//, '');
+    for (const realm of Object.values(this.root?.realms ?? {})) {
+      const catalog = await this.currentCatalog(realm.id);
+      for (const entry of catalog.values()) if (entry.objectId === id) return { ...clone(entry), realm: realm.id, path: pigFsRealmPublicPath(realm, entry.path), handle: `pigfs://object/${id}` };
+    }
+    return null;
+  }
+
+  async readlink(fsPath) {
+    const entry = await this.stat(fsPath);
+    if (!entry || entry.type !== 'symlink') return null;
+    return entry.target;
+  }
+
+  async symlink(targetPath, linkPath, { actor = null } = {}) {
+    const target = resolvePigFsPath(this.root, targetPath, { allowRealmRoot: false });
+    const link = resolvePigFsPath(this.root, linkPath, { allowRealmRoot: false });
+    if (target.realmId !== link.realmId) { const error = new Error('PigFS symlinks cannot cross realm boundaries'); error.code = 'PIG_FS_CROSS_REALM'; throw error; }
+    const realm = this.root.realms[link.realmId];
+    this.assertWriter(realm, actor);
+    const entries = await this.currentCatalog(link.realmId);
+    if (entries.has(link.path)) throw new Error('PigFS symlink destination already exists');
+    const actorId = actor?.publicRecord?.identityId ?? null, now = Date.now();
+    ensureParents(entries, link.path, now, actorId, this.root.generation + 1);
+    entries.set(link.path, { objectId: crypto.randomUUID(), path: link.path, name: entryName(link.path), type: 'symlink', target: pigFsRealmPublicPath(realm, target.path), size: 0, mime: null, createdAt: now, modifiedAt: now, revision: 1, modifiedBy: actorId, modifiedGeneration: this.root.generation + 1 });
+    const nextRoot = clone(this.root); nextRoot.identities = this.identityRegistryWith(actor?.publicRecord);
+    nextRoot.realms[realm.id] = await this.buildRealmWithCatalog(realm, entries, new Map(), this.root.generation + 1, this.commitOffset);
+    await this.commitRoot(nextRoot, actor, [{ type: 'symlink', realm: realm.id, path: link.path, target: target.path }]);
+    const result = { ...clone(entries.get(link.path)), realm: realm.id, path: pigFsRealmPublicPath(realm, link.path) };
+    this.emitWatch({ type: 'created', path: result.path, realm: realm.id, objectId: result.objectId, generation: this.root.generation });
+    return result;
+  }
+
+  async snapshot(fsPath = '/') {
+    const path = normalizePigFsPath(fsPath);
+    const entries = [];
+    for (const realm of Object.values(this.root?.realms ?? {}).sort((a,b)=>a.mount.localeCompare(b.mount))) {
+      if (path !== '/' && path !== realm.mount && !path.startsWith(`${realm.mount}/`) && !realm.mount.startsWith(`${path}/`)) continue;
+      const catalog = await this.currentCatalog(realm.id);
+      for (const entry of catalog.values()) {
+        const publicPath = pigFsRealmPublicPath(realm, entry.path);
+        if (path !== '/' && publicPath !== path && !publicPath.startsWith(`${path}/`)) continue;
+        entries.push({ path: publicPath, objectId: entry.objectId ?? null, type: entry.type, size: Number(entry.size ?? 0), contentSha256: entry.contentSha256 ?? null, target: entry.target ?? null, realm: realm.id });
+      }
+    }
+    entries.sort((a,b)=>a.path.localeCompare(b.path));
+    const digest = `sha256:${hashJson(entries)}`;
+    return { format: 'wurst/pigfs-snapshot-1', path, generation: this.root?.generation ?? 0, digest, objects: entries.length, logicalBytes: entries.filter(e=>e.type==='file').reduce((s,e)=>s+e.size,0), entries };
+  }
+
+  beginTransaction({ actor = null } = {}) {
+    if (!this.root) throw new Error('PigFS is not initialized');
+    const id = crypto.randomUUID();
+    this.transactions.set(id, { id, actor, baseCommitHash: this.root.commitHash, baseCommitOffset: this.commitOffset, operations: [] });
+    return id;
+  }
+
+  transactionWrite(id, path, data, options = {}) { const tx = this.transactions.get(String(id)); if (!tx) throw new Error('Unknown PigFS transaction'); tx.operations.push({ type:'write', path:normalizePigFsPath(path,{allowRoot:false}), data:Buffer.from(data ?? []), mime:String(options.mime||'application/octet-stream') }); return tx.operations.length; }
+  transactionMkdir(id, path) { const tx=this.transactions.get(String(id)); if(!tx)throw new Error('Unknown PigFS transaction'); tx.operations.push({type:'mkdir',path:normalizePigFsPath(path,{allowRoot:false})}); }
+  transactionRemove(id, path, options={}) { const tx=this.transactions.get(String(id)); if(!tx)throw new Error('Unknown PigFS transaction'); tx.operations.push({type:'remove',path:normalizePigFsPath(path,{allowRoot:false}),recursive:Boolean(options.recursive)}); }
+  transactionRename(id, from, to) { const tx=this.transactions.get(String(id)); if(!tx)throw new Error('Unknown PigFS transaction'); tx.operations.push({type:'rename',from:normalizePigFsPath(from,{allowRoot:false}),to:normalizePigFsPath(to,{allowRoot:false})}); }
+  abortTransaction(id) { return this.transactions.delete(String(id)); }
+
+  async commitTransaction(id) {
+    return this.withMutationLock(async () => {
+      const tx=this.transactions.get(String(id)); if(!tx)throw new Error('Unknown PigFS transaction');
+      if(tx.baseCommitHash!==this.root.commitHash||tx.baseCommitOffset!==this.commitOffset){const e=new Error('PigFS changed while transaction was open');e.code='PIG_FS_CONFLICT';throw e;}
+      const actor=tx.actor, actorId=actor?.publicRecord?.identityId??null, generation=this.root.generation+1, now=Date.now();
+      const catalogs=new Map(), changedMaps=new Map(), touched=new Set(), events=[];
+      const getCatalog=async(realm)=>{if(!catalogs.has(realm.id))catalogs.set(realm.id,await this.currentCatalog(realm.id));return catalogs.get(realm.id)};
+      for(const op of tx.operations){
+        if(op.type==='write'){
+          const r=resolvePigFsPath(this.root,op.path,{allowRealmRoot:false}), realm=this.root.realms[r.realmId]; this.assertWriter(realm,actor); const entries=await getCatalog(realm); ensureParents(entries,r.path,now,actorId,generation); const prev=entries.get(r.path); const chunks=[]; let offset=0; const bytes=op.data;
+          for(let pos=0;pos<bytes.length||(!bytes.length&&pos===0);pos+=PIG_FS_DEFAULT_CHUNK_SIZE){const part=bytes.subarray(pos,Math.min(bytes.length,pos+PIG_FS_DEFAULT_CHUNK_SIZE)); if(!bytes.length&&pos===0&&part.length===0)break; const aad=`pigfs-tx-data:${realm.id}:${generation}:${r.path}:${chunks.length}`; let stored=part,encryption=null;if(realm.protection==='sealed'){const sealed=sealRealmBytes(this.realmKeys.get(realm.id),part,aad);stored=sealed.data;encryption=sealed.encryption;} const appended=await this.appendRecord(PIG_FS_RECORD.DATA,stored,this.commitOffset??0);chunks.push({plainOffset:offset,plainLength:part.length,recordOffset:appended.recordStart,storedLength:stored.length,plainSha256:realm.protection==='sealed'?null:sha256(part),encryption,aad:encryption?aad:null});offset+=part.length;}
+          entries.set(r.path,{objectId:prev?.objectId??crypto.randomUUID(),path:r.path,name:entryName(r.path),type:'file',size:bytes.length,mime:op.mime,createdAt:prev?.createdAt??now,modifiedAt:now,revision:(prev?.revision??0)+1,modifiedBy:actorId,modifiedGeneration:generation,contentSha256:sha256(bytes),mapPages:[]}); changedMaps.set(`${realm.id}\0${r.path}`,chunks); touched.add(realm.id); events.push({type:prev?'modified':'created',path:op.path,realm:realm.id,objectId:entries.get(r.path).objectId});
+        } else if(op.type==='mkdir'){
+          const r=resolvePigFsPath(this.root,op.path,{allowRealmRoot:false}),realm=this.root.realms[r.realmId];this.assertWriter(realm,actor);const entries=await getCatalog(realm);ensureParents(entries,r.path,now,actorId,generation);if(!entries.has(r.path))entries.set(r.path,{objectId:crypto.randomUUID(),path:r.path,name:entryName(r.path),type:'directory',size:0,mime:null,createdAt:now,modifiedAt:now,revision:1,modifiedBy:actorId,modifiedGeneration:generation});touched.add(realm.id);events.push({type:'created',path:op.path,realm:realm.id,objectId:entries.get(r.path).objectId});
+        } else if(op.type==='remove'){
+          const r=resolvePigFsPath(this.root,op.path,{allowRealmRoot:false}),realm=this.root.realms[r.realmId];this.assertWriter(realm,actor);const entries=await getCatalog(realm),target=entries.get(r.path);if(target){const kids=[...entries.keys()].filter(k=>k.startsWith(`${r.path}/`));if(kids.length&&!op.recursive)throw new Error('PigFS directory is not empty');for(const k of kids)entries.delete(k);entries.delete(r.path);events.push({type:'deleted',path:op.path,realm:realm.id,objectId:target.objectId??null});}touched.add(realm.id);
+        } else if(op.type==='rename'){
+          const a=resolvePigFsPath(this.root,op.from,{allowRealmRoot:false}),b=resolvePigFsPath(this.root,op.to,{allowRealmRoot:false});if(a.realmId!==b.realmId){const e=new Error('PigFS cross-realm rename is not supported');e.code='PIG_FS_CROSS_REALM';throw e;}const realm=this.root.realms[a.realmId];this.assertWriter(realm,actor);const entries=await getCatalog(realm),src=entries.get(a.path);if(!src)continue;if(entries.has(b.path))throw new Error('PigFS destination already exists');ensureParents(entries,b.path,now,actorId,generation);const moving=[...entries.entries()].filter(([p])=>p===a.path||p.startsWith(`${a.path}/`)).sort((x,y)=>x[0].length-y[0].length);for(const [p]of moving)entries.delete(p);for(const [p,e]of moving){const suffix=p===a.path?'':p.slice(a.path.length+1),np=suffix?`${b.path}/${suffix}`:b.path;entries.set(np,{...e,path:np,name:entryName(np),modifiedAt:now,revision:Number(e.revision??0)+1,modifiedBy:actorId,modifiedGeneration:generation});}touched.add(realm.id);events.push({type:'renamed',from:op.from,path:op.to,realm:realm.id,objectId:src.objectId??null});
+        }
+      }
+      const nextRoot=clone(this.root);nextRoot.identities=this.identityRegistryWith(actor?.publicRecord);
+      for(const realmId of touched){const realm=this.root.realms[realmId],maps=new Map();for(const [k,v]of changedMaps){const [rid,path]=k.split('\0');if(rid===realmId)maps.set(path,v);}nextRoot.realms[realmId]=await this.buildRealmWithCatalog(realm,catalogs.get(realmId),maps,generation,this.commitOffset);}
+      const result=await this.commitRoot(nextRoot,actor,tx.operations.map(op=>({...op,data:undefined})));this.transactions.delete(String(id));for(const event of events)this.emitWatch({...event,generation:this.root.generation});return {...result,operations:tx.operations.length};
+    });
   }
 
   async history() {
-    return verifyWurstFs2History(this.source, this.baseOffset);
+    return verifyPigFsHistory(this.source, this.baseOffset);
   }
 
   close() {
     for (const key of this.realmKeys.values()) key.fill(0);
     this.realmKeys.clear();
     this.sessions.clear();
+    this.transactions.clear();
+    this.watchers.clear();
   }
 }
 
-export async function openWurstFs2Bytes(buffer, baseOffset) {
+export async function openPigFsBytes(buffer, baseOffset) {
   const backing = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
   const source = {
     size: backing.length,
     async read(offset, length) {
-      const start = assertSafeOffset(offset, 'WurstFS v2 buffer read offset');
-      const count = assertSafeOffset(length, 'WurstFS v2 buffer read length');
-      if (start + count > this.size) throw new Error('WurstFS v2 buffer read exceeds source');
+      const start = assertSafeOffset(offset, 'PigFS buffer read offset');
+      const count = assertSafeOffset(length, 'PigFS buffer read length');
+      if (start + count > this.size) throw new Error('PigFS buffer read exceeds source');
       return Buffer.from(backing.subarray(start, start + count));
     }
   };
-  return verifyWurstFs2History(source, baseOffset);
+  return verifyPigFsHistory(source, baseOffset);
 }
 
-export async function createMemoryWurstFs2Store(baseBytes = Buffer.alloc(0)) {
+export async function createMemoryPigFsStore(baseBytes = Buffer.alloc(0)) {
   let bytes = Buffer.isBuffer(baseBytes) ? Buffer.from(baseBytes) : Buffer.from(baseBytes ?? []);
   const source = {
     size: bytes.length,
     async read(offset, length) {
-      const start = assertSafeOffset(offset, 'WurstFS v2 memory read offset');
-      const count = assertSafeOffset(length, 'WurstFS v2 memory read length');
-      if (start + count > bytes.length) throw new Error('WurstFS v2 memory read exceeds source');
+      const start = assertSafeOffset(offset, 'PigFS memory read offset');
+      const count = assertSafeOffset(length, 'PigFS memory read length');
+      if (start + count > bytes.length) throw new Error('PigFS memory read exceeds source');
       return Buffer.from(bytes.subarray(start, start + count));
     }
   };
-  const store = new WurstFs2Store({
+  const store = new PigFsStore({
     source,
     baseOffset: bytes.length,
     append: async (chunk) => { bytes = Buffer.concat([bytes, Buffer.from(chunk)]); source.size = bytes.length; },
@@ -1682,4 +1839,4 @@ export async function createMemoryWurstFs2Store(baseBytes = Buffer.alloc(0)) {
   return { store, bytes: () => Buffer.from(bytes), source };
 }
 
-export const WURST_FS_V2_CHUNK_SIZE = WURST_FS_DEFAULT_CHUNK_SIZE;
+export const PIG_FS_CHUNK_SIZE = PIG_FS_DEFAULT_CHUNK_SIZE;

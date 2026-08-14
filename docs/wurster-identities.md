@@ -1,6 +1,6 @@
 ---
 title: Wurster Identities
-group: Trust & Identity
+group: Security & Trust
 groupOrder: 3
 order: 4
 ---
@@ -8,7 +8,7 @@ order: 4
 
 A Wurster Identity is the public cryptographic persona behind a Meat Identity.
 
-It is designed for an offline/federated world: two people can exchange public identities by file, QR code, chat message or USB and then grant each other WurstFS access without creating an account anywhere.
+It is designed for an offline/federated world: two people can exchange public identities by file, QR code, chat message or USB and then grant each other PigFS access without creating an account anywhere.
 
 ## Public and private halves
 
@@ -18,10 +18,10 @@ From it Wurster deterministically derives two independent keypairs:
 
 ```text
 Ed25519 signing key
-  signed WurstFS mutations and future attestations
+  signed PigFS mutations and future attestations
 
 X25519 encryption key
-  receives wrapped WurstFS realm keys
+  receives wrapped PigFS realm keys
 ```
 
 The public record is `wurst/identity-1` and has an identity ID derived from both public keys:
@@ -52,7 +52,7 @@ A recipient can therefore add an identity to access policy before the owner has 
 
 ## Unknown signers
 
-A WurstFS commit identifies its signer by Wurster Identity fingerprint and carries/retains the public identity record needed to validate that signature.
+A PigFS commit identifies its signer by Wurster Identity fingerprint and carries/retains the public identity record needed to validate that signature.
 
 A Wurster does not need the signer in its local contacts first.
 

@@ -1,12 +1,11 @@
 name: Deploy wrst.io
 
 on:
-  workflow_call:
-    inputs:
-      ref:
-        description: Release tag or commit to deploy
-        required: true
-        type: string
+  workflow_run:
+    workflows:
+      - Release Wurster Runtime
+    types:
+      - completed
   workflow_dispatch:
     inputs:
       ref:
@@ -26,6 +25,11 @@ concurrency:
 
 jobs:
   build:
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+          (github.event.workflow_run.conclusion == 'success' &&
+           github.event.workflow_run.event == 'push' &&
+           startsWith(github.event.workflow_run.head_branch, 'v')) }}
     runs-on: ubuntu-latest
     env:
       WURSTER_RELEASE_REPOSITORY: ${{ github.repository }}
@@ -33,7 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.ref }}
 
       - uses: actions/setup-node@v4
         with:

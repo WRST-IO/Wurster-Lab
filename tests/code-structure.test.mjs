@@ -19,9 +19,9 @@ const pigsty = await text('packages/pigsty/src/index.js');
 const pigletRuntime = await text('runtime/desktop/src/piglet-runtime.mjs');
 const pigletPackageRuntime = await text('runtime/desktop/src/piglet-package.mjs');
 const pigletStorageRuntime = await text('runtime/desktop/src/piglet-storage-runtime.mjs');
-const pigletSurfaceRuntime = await text('runtime/desktop/src/piglet-surface-runtime.mjs');
+const pigletEmbedRuntime = await text('runtime/desktop/src/piglet-embed-runtime.mjs');
 const pigletBackingRuntime = await text('runtime/desktop/src/piglet-backing-runtime.mjs');
-const pigletWurstFsRuntime = await text('runtime/desktop/src/piglet-wurstfs-runtime.mjs');
+const pigletPigFsRuntime = await text('runtime/desktop/src/piglet-pigfs-runtime.mjs');
 const trustedSurfaceRuntime = await text('runtime/desktop/src/trusted-surface-runtime.mjs');
 const piglinkRuntime = await text('runtime/desktop/src/piglink-runtime.mjs');
 const pigstyRuntime = await text('runtime/desktop/src/pigsty-runtime.mjs');
@@ -38,9 +38,9 @@ for (const [name, source] of [
   ['piglet-runtime', pigletRuntime],
   ['piglet-package-runtime', pigletPackageRuntime],
   ['piglet-storage-runtime', pigletStorageRuntime],
-  ['piglet-surface-runtime', pigletSurfaceRuntime],
+  ['piglet-embed-runtime', pigletEmbedRuntime],
   ['piglet-backing-runtime', pigletBackingRuntime],
-  ['piglet-wurstfs-runtime', pigletWurstFsRuntime],
+  ['piglet-pigfs-runtime', pigletPigFsRuntime],
   ['trusted-surface-runtime', trustedSurfaceRuntime],
   ['piglink-runtime', piglinkRuntime],
   ['pigsty-runtime', pigstyRuntime],
@@ -53,6 +53,10 @@ assert.doesNotMatch(main, /ipcMain\.(?:handle|on)\(['"]wurst:pig(?:let|link|sty)
   'Pig IPC ownership belongs in the dedicated desktop runtime modules');
 assert.doesNotMatch(main, /from ['"]@wurster\/pigsty['"]/, 'desktop main must not own the Pigsty engine implementation');
 assert.doesNotMatch(main, /from ['"]@wurster\/piglink['"]/, 'desktop main must not own PigLink validation');
+assert.doesNotMatch(main, /createPigletSurfaceManager|piglet-surface-runtime|pigletSurface/, 'Piglet application UI must not use native WebContentsView surfaces');
+assert.match(main, /allowServiceWorkers:\s*true/, 'wurst: must permit the Wurster-owned embed host service worker');
+assert.match(main, /process\.resourcesPath, 'web-runtime'/, 'packaged Desktop must load the shared Wurster Web embed runtime from extraResources');
+assert.match(await text('runtime/desktop/src/wurst-preload.cjs'), /wurst:\/\/runtime\/wurster-embed\.mjs/, 'Desktop Wursts must receive the universal <wurst-embed> runtime');
 
 const directIpcRegistrations = [...main.matchAll(/^ipcMain\.(?:handle|on)\(/gm)].length;
 assert.ok(directIpcRegistrations <= 81, `desktop main owns too many direct IPC registrations (${directIpcRegistrations})`);
