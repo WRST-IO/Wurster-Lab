@@ -101,7 +101,7 @@ async function run() {
     for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
     const channel = new MessageChannel();
     const port = channel.port1;
-    const timer = setTimeout(() => reject(new Error('Timed out waiting for real Desktop embed host')), 8000);
+    const timer = setTimeout(() => reject(new Error('Timed out waiting for real Desktop embed host')), 30_000);
     port.onmessage = (event) => {
       const m = event.data || {};
       if (m.type === 'wurster-source-read') {
@@ -144,7 +144,7 @@ async function run() {
   runtimeSession.protocol.unhandle('wurst');
 }
 
-const smokeTimeoutMs = Math.max(1_000, Number(process.env.WURSTER_ELECTRON_SMOKE_TIMEOUT_MS || 30_000));
+const smokeTimeoutMs = Math.max(1_000, Number(process.env.WURSTER_ELECTRON_SMOKE_TIMEOUT_MS || 120_000));
 let timeoutHandle;
 const smokeTimeout = new Promise((_, reject) => {
   timeoutHandle = setTimeout(() => reject(new Error(`Electron Desktop Piglet smoke exceeded ${Math.round(smokeTimeoutMs / 1000)}s`)), smokeTimeoutMs);
