@@ -18,7 +18,7 @@ assert.match(updateHtml, /Oink oink/);
 assert.match(updateHtml, /wursterUpdate\?\.onState/);
 
 class FakeUpdater extends EventEmitter {
-  constructor(result = { isUpdateAvailable: true, updateInfo: { version: '0.32.7' }, cancellationToken: { id: 'token' } }) {
+  constructor(result = { isUpdateAvailable: true, updateInfo: { version: '0.32.8' }, cancellationToken: { id: 'token' } }) {
     super();
     this.result = result;
     this.downloaded = null;
@@ -57,7 +57,7 @@ assert.equal(autoUpdateSupported({ isPackaged: false, platform: 'darwin' }), fal
 }
 
 {
-  const updater = new FakeUpdater({ isUpdateAvailable: false, updateInfo: { version: '0.32.7' } });
+  const updater = new FakeUpdater({ isUpdateAvailable: false, updateInfo: { version: '0.32.8' } });
   const states = [];
   const result = await runStartupAutoUpdate({ isPackaged: true, platform: 'win32', settings: {}, loadUpdater: async () => updater, onState: async (state) => states.push(state), settleDelayMs: 0 });
   assert.equal(result.status, 'current');
@@ -70,7 +70,7 @@ assert.equal(autoUpdateSupported({ isPackaged: false, platform: 'darwin' }), fal
   const states = [];
   const result = await runStartupAutoUpdate({ isPackaged: true, platform: 'darwin', settings: {}, loadUpdater: async () => updater, onState: async (state) => states.push(state), settleDelayMs: 0 });
   assert.equal(result.status, 'installing');
-  assert.equal(result.version, '0.32.7');
+  assert.equal(result.version, '0.32.8');
   assert.equal(updater.autoDownload, false);
   assert.equal(updater.autoInstallEvent, 'manual');
   assert.equal(updater.autoRunAppAfterInstall, true);

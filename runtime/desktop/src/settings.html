@@ -18,59 +18,84 @@
 .reveal{margin-top:12px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:11px;font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-word}.danger-zone{margin-top:20px;padding-top:15px;border-top:1px solid var(--line)}.danger-confirm{padding:12px;border-radius:13px;background:#fff1f2;border:1px solid #f2d4d8;margin-top:9px;font-size:11px;color:#7a4d55}.error{font-size:10px;color:var(--danger);min-height:16px;margin-top:8px}.totp-qr-wrap{display:flex;justify-content:center;margin:4px 0 14px}.totp-qr{width:220px;height:220px;border-radius:16px;background:#fff;border:1px solid var(--line);padding:10px}.totp-secret{font:10px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:#fff5f7;border:1px solid #efd9de;border-radius:12px;padding:9px;word-break:break-all;color:#756068}.micro{font-size:10px;line-height:1.5;color:var(--muted)}
 .otp-edit{position:relative;display:flex;gap:8px}.otp-edit input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:text}.otp-digit{width:42px;height:48px;border:1px solid #e8d9dd;border-radius:12px;background:#fff;display:grid;place-items:center;font:750 19px/1 ui-monospace,SFMono-Regular,Menlo,monospace}.otp-digit.active{border-color:#e58fa2;box-shadow:0 0 0 3px rgba(233,86,115,.09)}
 .publisher-icon{width:42px;height:42px;border:0;background:#f1ecec;border-radius:13px;display:grid;place-items:center;font-size:19px}.verify-badge{font-size:9px;font-weight:800;border-radius:999px;padding:4px 7px;background:#eee8ea;color:#81747a}.verify-badge.good{background:#e3f3eb;color:#277452}.verify-badge.bad{background:#ffe5e9;color:#aa4051}.fingerprint{font:10px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all;color:#75666c}.dns-record{margin-top:10px;padding:10px;border:1px solid var(--line);background:#f8f3f4;border-radius:12px;font:10px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all}.inline-status{font-size:10px;color:var(--muted);margin-top:7px;min-height:15px}
+
+.category-nav{display:flex;gap:7px;margin-bottom:28px;padding:5px;background:#f7e9ec;border:1px solid var(--line);border-radius:15px}.category-nav button{flex:1;border:0;background:transparent;color:#8d737c;border-radius:11px;padding:9px 10px;font-size:11px;font-weight:800}.category-nav button.active{background:var(--paper);color:var(--ink);box-shadow:0 3px 12px rgba(75,43,52,.08)}.settings-page.hidden{display:none!important}.lock-panel{padding:28px;text-align:center}.lock-pig{font-size:38px}.lock-panel h2{font-size:18px;margin:8px 0 5px}.lock-panel p{font-size:11px;color:var(--muted);line-height:1.5;max-width:430px;margin:0 auto 15px}.about-hero{padding:28px;text-align:center}.about-pig{font-size:52px}.about-version{font-size:24px;font-weight:820;letter-spacing:-.035em;margin-top:6px}.about-copy{font-size:11px;line-height:1.6;color:var(--muted);max-width:480px;margin:7px auto 0}.about-facts{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line);margin-top:22px}.about-fact{padding:14px;text-align:left}.about-fact+ .about-fact{border-left:1px solid var(--line)}.about-fact span{display:block;font-size:9px;font-weight:800;color:#a08790;text-transform:uppercase;letter-spacing:.08em}.about-fact strong{display:block;font-size:12px;margin-top:4px}
 </style>
 </head>
 <body>
-<header class="topbar"><div class="window-controls"><button class="dot close-dot" id="windowClose" aria-label="Close"></button><button class="dot min-dot" id="windowMin" aria-label="Minimize"></button></div><div class="logo"><img src="../build/icons/wurster.png" alt=""></div><div class="brand"><strong>Wurster Settings</strong><span>local Meat Locker</span></div><button class="back" id="backToWurster">← Wurster</button></header>
+<header class="topbar"><div class="window-controls"><button class="dot close-dot" id="windowClose" aria-label="Close"></button><button class="dot min-dot" id="windowMin" aria-label="Minimize"></button></div><div class="logo"><img src="../build/icons/wurster.png" alt=""></div><div class="brand"><strong>Wurster Settings</strong><span>runtime, security & Meat Locker</span></div><button class="back" id="backToWurster">← Wurster</button></header>
 <main class="content">
-  <section class="section">
-    <div class="section-head"><div><div class="section-title">Meat Locker</div><div id="lockerSubtitle" class="section-sub"></div></div><button id="addIdentity" class="button primary">＋ Add Identity</button></div>
-    <div id="identityPanel" class="panel"></div>
-  </section>
-  <section class="section">
-    <div class="section-head"><div><div class="section-title">MeatGrinder Signers</div><div id="publisherSubtitle" class="section-sub">Publisher identities for signing Wursts.</div></div><button id="addPublisher" class="button primary">＋ Add Signer</button></div>
-    <div id="publisherPanel" class="panel"></div>
-  </section>
-  <section class="section">
-    <div class="section-head"><div><div class="section-title">Updates</div><div class="section-sub">Keep the installed Wurster runtime fresh from public GitHub releases.</div></div></div>
-    <div class="panel">
-      <div class="security-row"><div class="security-icon">🐽</div><div class="security-copy"><div class="security-name">Automatic Wurster updates</div><div id="updateMeta" class="security-meta"></div></div><label class="switch"><input id="autoUpdateToggle" type="checkbox"><span class="slider"></span></label></div>
+  <nav class="category-nav" aria-label="Settings categories"><button id="navGeneral" class="active">General</button><button id="navIdentities">🔐 Identities</button><button id="navAbout">About</button></nav>
+
+  <div id="generalPage" class="settings-page">
+    <section class="section">
+      <div class="section-head"><div><div class="section-title">Updates</div><div class="section-sub">Keep the installed Wurster runtime fresh from public GitHub releases.</div></div></div>
+      <div class="panel"><div class="security-row"><div class="security-icon">🐽</div><div class="security-copy"><div class="security-name">Automatic Wurster updates</div><div id="updateMeta" class="security-meta"></div></div><label class="switch"><input id="autoUpdateToggle" type="checkbox"><span class="slider"></span></label></div></div>
+    </section>
+    <section class="section">
+      <div class="section-head"><div><div class="section-title">Runtime security</div><div class="section-sub">General runtime state. Opening this page never unlocks identities or signing material.</div></div></div>
+      <div class="panel"><div class="security-row"><div class="security-icon">🔐</div><div class="security-copy"><div class="security-name">Local secure storage</div><div id="storageMeta" class="security-meta"></div></div><div id="storageStatus" class="status"></div></div></div>
+    </section>
+  </div>
+
+  <div id="identitiesPage" class="settings-page hidden">
+    <section id="identityLockSection" class="section">
+      <div class="panel lock-panel"><div class="lock-pig">🔐🐷</div><h2>Meat Locker locked</h2><p>Identities, Meatphrases and signing keys stay behind local user verification. General Wurster settings remain available without unlocking them.</p><button id="unlockIdentities" class="button primary">Unlock Identities</button></div>
+    </section>
+    <div id="identityUnlockedContent" class="hidden">
+      <section class="section">
+        <div class="section-head"><div><div class="section-title">Meat Locker</div><div id="lockerSubtitle" class="section-sub"></div></div><button id="addIdentity" class="button primary">＋ Add Identity</button></div>
+        <div id="identityPanel" class="panel"></div>
+      </section>
+      <section class="section">
+        <div class="section-head"><div><div class="section-title">MeatGrinder Signers</div><div id="publisherSubtitle" class="section-sub">Publisher identities for signing Wursts.</div></div><button id="addPublisher" class="button primary">＋ Add Signer</button></div>
+        <div id="publisherPanel" class="panel"></div>
+      </section>
+      <section class="section">
+        <div class="section-head"><div><div class="section-title">Identity protection</div><div class="section-sub">Optional extra protection for locally stored Meat Identities.</div></div></div>
+        <div class="panel"><div class="security-row"><div class="security-icon">⏱️</div><div class="security-copy"><div class="security-name">Authenticator app</div><div id="totpMeta" class="security-meta"></div></div><button id="totpAction" class="button"></button></div></div>
+      </section>
     </div>
-  </section>
-  <section class="section">
-    <div class="section-head"><div><div class="section-title">Security</div><div class="section-sub">Protection for this Wurster only. Wursts stay portable.</div></div></div>
-    <div class="panel">
-      <div class="security-row"><div class="security-icon">🔐</div><div class="security-copy"><div class="security-name">Local secure storage</div><div id="storageMeta" class="security-meta"></div></div><div id="storageStatus" class="status"></div></div>
-      <div class="security-row" style="border-top:1px solid var(--line)"><div class="security-icon">⏱️</div><div class="security-copy"><div class="security-name">Authenticator app</div><div id="totpMeta" class="security-meta"></div></div><button id="totpAction" class="button"></button></div>
-    </div>
-  </section>
+  </div>
+
+  <div id="aboutPage" class="settings-page hidden">
+    <section class="section"><div class="panel about-hero"><div class="about-pig">🐷</div><div class="about-version">Wurster <span id="aboutVersion"></span></div><div class="about-copy">The deliberately tiny runtime for portable .wurst and .wrst applications. Wurster owns isolation, identities, PigFS, Piglet sessions and the desktop update lane so individual Wursts do not have to.</div><div class="about-facts"><div class="about-fact"><span>Runtime</span><strong>Wurster Desktop</strong></div><div class="about-fact"><span>Updates</span><strong id="aboutUpdates"></strong></div></div></div></section>
+  </div>
 </main>
 
 <div id="scrim" class="scrim hidden"><div id="modal" class="modal"></div></div>
 <script>
 (async()=>{
-const api=window.wursterSettings,launcher=window.wursterLauncher,$=s=>document.querySelector(s);const EMOJIS=['🐷','🐖','🐽','🥓','🌭','🥩','🍖','🧀','🔐','🗝️','🕵️','🥷','🧠','💼','🏠','🧪','🛠️','🎨','💾','🛰️'];let ctx;
+const api=window.wursterSettings,launcher=window.wursterLauncher,$=s=>document.querySelector(s);const EMOJIS=['🐷','🐖','🐽','🥓','🌭','🥩','🍖','🧀','🔐','🗝️','🕵️','🥷','🧠','💼','🏠','🧪','🛠️','🎨','💾','🛰️'];let ctx,activeSection='general';
 function esc(v){return String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
 function closeModal(){$('#scrim').classList.add('hidden');$('#modal').innerHTML='';}
 function openModal(html){$('#modal').innerHTML=html;$('#scrim').classList.remove('hidden');$('#modal').querySelector('[data-close]')?.addEventListener('click',closeModal);}
 function wireOtp(id){const input=$(`#${id}`);if(!input)return;const host=input.closest('.otp-edit');const cells=[...host.querySelectorAll('.otp-digit')];const paint=()=>{const digits=String(input.value||'').replace(/\D/g,'').slice(0,6);input.value=digits;cells.forEach((c,i)=>{c.textContent=digits[i]||'';c.classList.toggle('active',document.activeElement===input&&i===Math.min(digits.length,5))})};input.addEventListener('input',paint);input.addEventListener('focus',paint);input.addEventListener('blur',paint);host.addEventListener('pointerdown',e=>{e.preventDefault();input.focus()});paint();setTimeout(()=>input.focus(),30)}
 function otpMarkup(id){return `<div class="otp-edit"><input id="${id}" inputmode="numeric" maxlength="6" autocomplete="one-time-code">${'<span class="otp-digit"></span>'.repeat(6)}</div>`}
 function emojiPicker(target,button,current,setter){target.innerHTML='';for(const e of EMOJIS){const b=document.createElement('button');b.textContent=e;b.onclick=()=>{setter(e);button.textContent=e;target.classList.add('hidden')};target.appendChild(b)}button.onclick=()=>target.classList.toggle('hidden');}
-async function refresh(){ctx=await api.context();render();}
+async function refresh(){ctx=await api.context();if(ctx.initialSection)activeSection=ctx.initialSection;render();}
+function openSection(section){activeSection=section;render();}
+async function unlockIdentitySection(){try{ctx=await api.unlockIdentities();activeSection='identities';render()}catch(error){alert(error?.message||'Wurster identities stayed locked.')}}
 function protectionMeta(id){const p=[];if(ctx.devicePresenceAvailable)p.push(ctx.devicePresenceLabel);else p.push(ctx.storageLabel);if(id.protection?.totp)p.push('Authenticator');return p.join(' + ');}
 function publisherName(p){return p.domain||p.email||p.label||`${String(p.fingerprint||'').slice(0,12)}…`;}
 function authorityClaims(p){return Array.isArray(p?.authority?.claims)?p.authority.claims:[]}function hasAuthorityClaim(p,type){return authorityClaims(p).some(c=>c.type===type)}function publisherStatus(p){if(p?.authority?.verified)return {text:'Verified by WRST.IO',cls:'good'};const v=p.verification||{};if(!p.domain)return {text:p.email?'Email not verified':'Local key',cls:''};if(v.verified)return {text:v.status==='previously-verified'?'Direct DNS verified before':'Direct DNS verified',cls:'good'};if(v.conflict)return {text:'DNS conflict',cls:'bad'};if(v.status==='unavailable')return {text:'DNS unavailable',cls:''};if(v.status==='unverified')return {text:'Not verified',cls:''};return {text:'Not checked',cls:''};}
 function render(){
-  $('#lockerSubtitle').textContent=ctx.meatLockerAvailable?`${ctx.identities.length} ${ctx.identities.length===1?'identity':'identities'} on this Wurster`:'Meat Locker unavailable on this runtime';
-  $('#publisherSubtitle').textContent=ctx.meatLockerAvailable?`${ctx.publisherSigners.length} ${ctx.publisherSigners.length===1?'signer':'signers'} stored locally`:'Secure local storage unavailable';
+  for(const [name,id] of [['general','#generalPage'],['identities','#identitiesPage'],['about','#aboutPage']])$(id).classList.toggle('hidden',activeSection!==name);
+  for(const [name,id] of [['general','#navGeneral'],['identities','#navIdentities'],['about','#navAbout']])$(id).classList.toggle('active',activeSection===name);
   $('#storageMeta').textContent=ctx.meatLockerAvailable?ctx.storageLabel:'No secure local storage is available';$('#storageStatus').textContent=ctx.meatLockerAvailable?'Available':'Unavailable';$('#storageStatus').classList.toggle('off',!ctx.meatLockerAvailable);
+  $('#autoUpdateToggle').checked=ctx.autoUpdate;$('#autoUpdateToggle').disabled=!ctx.autoUpdateSupported;$('#updateMeta').textContent=ctx.autoUpdateSupported?`Wurster ${ctx.version}. Checks public desktop releases on startup. Turn this off to stay on this version.`:`Wurster ${ctx.version}. Automatic desktop updates are available on macOS and Windows.`;
+  $('#aboutVersion').textContent=ctx.version;$('#aboutUpdates').textContent=ctx.autoUpdate?'Automatic':'Pinned to this version';
+  $('#identityLockSection').classList.toggle('hidden',Boolean(ctx.identitiesUnlocked));$('#identityUnlockedContent').classList.toggle('hidden',!ctx.identitiesUnlocked);
+  if(!ctx.identitiesUnlocked)return;
+  const identities=Array.isArray(ctx.identities)?ctx.identities:[],publishers=Array.isArray(ctx.publisherSigners)?ctx.publisherSigners:[];
+  $('#lockerSubtitle').textContent=ctx.meatLockerAvailable?`${identities.length} ${identities.length===1?'identity':'identities'} on this Wurster`:'Meat Locker unavailable on this runtime';
+  $('#publisherSubtitle').textContent=ctx.meatLockerAvailable?`${publishers.length} ${publishers.length===1?'signer':'signers'} stored locally`:'Secure local storage unavailable';
   $('#addIdentity').disabled=!ctx.meatLockerAvailable;$('#addPublisher').disabled=!ctx.meatLockerAvailable;
   $('#totpMeta').textContent=ctx.totpConfigured?'Configured. Individual identities may require a one-time code.':'Optional extra check for stored Meat Identities.';$('#totpAction').textContent=ctx.totpConfigured?'Manage':'Set up';$('#totpAction').disabled=!ctx.meatLockerAvailable;
-  $('#autoUpdateToggle').checked=ctx.autoUpdate;$('#autoUpdateToggle').disabled=!ctx.autoUpdateSupported;$('#updateMeta').textContent=ctx.autoUpdateSupported?`Wurster ${ctx.version}. Checks public desktop releases on startup. Turn this off to stay on this version.`:`Wurster ${ctx.version}. Automatic desktop updates are available on macOS and Windows.`;
-  const panel=$('#identityPanel');panel.innerHTML='';if(!ctx.identities.length)panel.innerHTML='<div class="empty">No Meat Identities yet.</div>';
-  else for(const id of ctx.identities){const row=document.createElement('div');row.className='identity-row';row.innerHTML=`<button class="identity-icon"></button><div class="identity-copy"><div class="identity-name"></div><div class="identity-meta"></div></div><button class="chevron">›</button>`;row.querySelector('.identity-icon').textContent=id.emoji||'🐷';row.querySelector('.identity-name').textContent=id.name;row.querySelector('.identity-meta').textContent=protectionMeta(id);row.querySelector('.identity-icon').onclick=()=>manageIdentity(id,true);row.querySelector('.chevron').onclick=()=>manageIdentity(id,false);row.querySelector('.identity-copy').onclick=()=>manageIdentity(id,false);panel.appendChild(row)}
-  const pp=$('#publisherPanel');pp.innerHTML='';if(!ctx.publisherSigners.length)pp.innerHTML='<div class="empty">No MeatGrinder signing identities yet. Unsigned remains the default.</div>';
-  else for(const p of ctx.publisherSigners){const st=publisherStatus(p);const row=document.createElement('div');row.className='identity-row';row.innerHTML=`<button class="publisher-icon">🔏</button><div class="identity-copy"><div class="identity-name"></div><div class="identity-meta"></div></div><span class="verify-badge ${st.cls}">${esc(st.text)}</span><button class="chevron">›</button>`;row.querySelector('.identity-name').textContent=publisherName(p);row.querySelector('.identity-meta').textContent=`Ed25519 · ${String(p.fingerprint).slice(0,16)}…`;row.querySelector('.publisher-icon').onclick=()=>managePublisher(p);row.querySelector('.identity-copy').onclick=()=>managePublisher(p);row.querySelector('.chevron').onclick=()=>managePublisher(p);pp.appendChild(row)}
+  const panel=$('#identityPanel');panel.innerHTML='';if(!identities.length)panel.innerHTML='<div class="empty">No Meat Identities yet.</div>';
+  else for(const id of identities){const row=document.createElement('div');row.className='identity-row';row.innerHTML=`<button class="identity-icon"></button><div class="identity-copy"><div class="identity-name"></div><div class="identity-meta"></div></div><button class="chevron">›</button>`;row.querySelector('.identity-icon').textContent=id.emoji||'🐷';row.querySelector('.identity-name').textContent=id.name;row.querySelector('.identity-meta').textContent=protectionMeta(id);row.querySelector('.identity-icon').onclick=()=>manageIdentity(id,true);row.querySelector('.chevron').onclick=()=>manageIdentity(id,false);row.querySelector('.identity-copy').onclick=()=>manageIdentity(id,false);panel.appendChild(row)}
+  const pp=$('#publisherPanel');pp.innerHTML='';if(!publishers.length)pp.innerHTML='<div class="empty">No MeatGrinder signing identities yet. Unsigned remains the default.</div>';
+  else for(const p of publishers){const st=publisherStatus(p);const row=document.createElement('div');row.className='identity-row';row.innerHTML=`<button class="publisher-icon">🔏</button><div class="identity-copy"><div class="identity-name"></div><div class="identity-meta"></div></div><span class="verify-badge ${st.cls}">${esc(st.text)}</span><button class="chevron">›</button>`;row.querySelector('.identity-name').textContent=publisherName(p);row.querySelector('.identity-meta').textContent=`Ed25519 · ${String(p.fingerprint).slice(0,16)}…`;row.querySelector('.publisher-icon').onclick=()=>managePublisher(p);row.querySelector('.identity-copy').onclick=()=>managePublisher(p);row.querySelector('.chevron').onclick=()=>managePublisher(p);pp.appendChild(row)}
 }
 async function newIdentity(){
   const g=await api.generateMeatphrase();let emoji='🐷';openModal(`<div class="modal-head"><div><h2>New Meat Identity</h2><p class="lead">A new portable Meatphrase was generated locally.</p></div><button class="close" data-close>×</button></div><div class="identity-edit"><button id="newEmoji" class="emoji-button">🐷</button><div class="field" style="margin:0"><label>Name</label><input id="newName" class="input" maxlength="80" value="Personal Meat"></div></div><div id="newEmojiPicker" class="emoji-picker hidden"></div><div class="recovery"><div class="recovery-code">${esc(g.meatphrase)}</div><div class="recovery-note">Write this Meatphrase down and keep it safe. It is the portable recovery secret for this identity. Losing every copy means losing recovery.</div></div><div id="newErr" class="error"></div><div class="modal-actions"><button id="switchImport" class="link-button">Import Meatphrase instead</button><button data-close class="button">Cancel</button><button id="confirmNew" class="button primary">I wrote it down · Create Identity</button></div>`);emojiPicker($('#newEmojiPicker'),$('#newEmoji'),emoji,v=>emoji=v);$('#switchImport').onclick=importIdentity;$('#confirmNew').onclick=async()=>{try{await api.addIdentity({name:$('#newName').value,emoji,meatphrase:g.meatphrase});closeModal();await refresh()}catch(e){$('#newErr').textContent=e.message}};
@@ -107,7 +132,7 @@ async function manageTotp(){
   openModal(`<div class="modal-head"><div><h2>Authenticator App</h2><p class="lead">Authenticator protection is enabled on this Wurster.</p></div><button class="close" data-close>×</button></div><p class="micro">Disable it only after entering a current code. Identities that require it will return to local storage protection only.</p><div class="field"><label>Current 6-digit code</label>${otpMarkup('disableCode')}</div><div id="disableErr" class="error"></div><div class="modal-actions"><button data-close class="button">Cancel</button><button id="disableTotp" class="button danger">Disable Authenticator</button></div>`);wireOtp('disableCode');
   $('#disableTotp').onclick=async()=>{try{await api.disableTotp($('#disableCode').value);closeModal();await refresh()}catch(e){$('#disableErr').textContent=e.message}};
 }
-$('#backToWurster').onclick=()=>launcher.back();$('#windowMin').onclick=()=>launcher.minimize();$('#windowClose').onclick=()=>launcher.close();$('#addIdentity').onclick=newIdentity;$('#addPublisher').onclick=newPublisher;$('#totpAction').onclick=manageTotp;$('#autoUpdateToggle').onchange=async e=>{const wanted=e.target.checked;e.target.disabled=true;try{ctx=await api.setAutoUpdate(wanted);render()}catch(err){e.target.checked=!wanted;alert(err.message)}finally{e.target.disabled=!ctx?.autoUpdateSupported}};$('#scrim').addEventListener('click',e=>{if(e.target===$('#scrim'))closeModal()});await refresh();
+$('#backToWurster').onclick=()=>launcher.back();$('#windowMin').onclick=()=>launcher.minimize();$('#windowClose').onclick=()=>launcher.close();$('#navGeneral').onclick=()=>openSection('general');$('#navIdentities').onclick=()=>openSection('identities');$('#navAbout').onclick=()=>openSection('about');$('#unlockIdentities').onclick=unlockIdentitySection;$('#addIdentity').onclick=newIdentity;$('#addPublisher').onclick=newPublisher;$('#totpAction').onclick=manageTotp;$('#autoUpdateToggle').onchange=async e=>{const wanted=e.target.checked;e.target.disabled=true;try{ctx=await api.setAutoUpdate(wanted);render()}catch(err){e.target.checked=!wanted;alert(err.message)}finally{e.target.disabled=!ctx?.autoUpdateSupported}};$('#scrim').addEventListener('click',e=>{if(e.target===$('#scrim'))closeModal()});await refresh();
 })();
 </script>
 </body>

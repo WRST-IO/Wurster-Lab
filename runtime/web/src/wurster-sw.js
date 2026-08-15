@@ -2,7 +2,18 @@ const owners = new Map();
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
 self.addEventListener('message', (event) => {
-  if (event.data?.type === 'wurster-register-session' && event.data.sessionId && event.source?.id) owners.set(String(event.data.sessionId), event.source.id);
+  if (event.data?.type !== 'wurster-register-session' || !event.data.sessionId) return;
+  const sessionId = String(event.data.sessionId);
+  const clientId = event.source?.id ? String(event.source.id) : '';
+  if (clientId) owners.set(sessionId, clientId);
+  try {
+    event.ports?.[0]?.postMessage({
+      type: 'wurster-session-registered',
+      sessionId,
+      ok: Boolean(clientId),
+      ...(clientId ? {} : { error: 'Wurster Web session owner is unavailable' })
+    });
+  } catch {}
 });
 function route(url) {
   const parts = url.pathname.split('/').filter(Boolean);

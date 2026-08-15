@@ -4,6 +4,7 @@ import { BlobWurstSource, HttpWurstSource, MessagePortWurstSource, sourceFrom } 
 import { verifyPublisherCertificateWeb, verifyTrustBundleWeb } from './trust-runtime.mjs';
 import { mimeFor, normalizeCapabilityDeclaration, parseRange } from './web-runtime-util.mjs';
 import { mountWebMachineSession } from './piglet-machine-runtime.mjs';
+import { registerServiceWorkerSession, waitForServiceWorkerControl } from './service-worker-runtime.mjs';
 export { BlobWurstSource, HttpWurstSource, MessagePortWurstSource } from './wurst-source.mjs';
 export { verifyPublisherCertificateWeb, verifyTrustBundleWeb } from './trust-runtime.mjs';
 const WRST_MAGIC = new Uint8Array([0x57, 0x52, 0x53, 0x54]);
@@ -20,7 +21,7 @@ const FS_END_MAGIC = new Uint8Array([0x57, 0x37, 0x52, 0x45]);
 const FS_RECORD = Object.freeze({ DATA: 1, MAP: 2, CATALOG: 3, COMMIT: 4 });
 const SIGNATURE_PATH = '__wurst/signature.json';
 const SEALED_APP_INDEX_PATH = '__wurst/sealed-app/index.json';
-const WURSTER_WEB_VERSION = '0.32.7';
+const WURSTER_WEB_VERSION = '0.32.8';
 const te = new TextEncoder();
 const td = new TextDecoder();
 function bytes(value) {
@@ -623,13 +624,12 @@ export class WursterWebSession {
     return this;
   }
   async _mountFrame(target = this._mountTarget) {
-    const swUrl = this.options.serviceWorkerUrl || '/wurster-sw.js';
-    const swScope = this.options.serviceWorkerScope || '/';
-    const registration = await navigator.serviceWorker.register(swUrl, { scope: swScope });
+    const swUrl = this.options.serviceWorkerUrl || '/wurster-sw.js', swScope = this.options.serviceWorkerScope || '/';
+    await navigator.serviceWorker.register(swUrl, { scope: swScope });
     await navigator.serviceWorker.ready;
-    addEventListener('message', this._boundMessage);
-    navigator.serviceWorker.addEventListener('message', this._boundSw);
-    (registration.active || registration.waiting || registration.installing)?.postMessage({ type: 'wurster-register-session', sessionId: this.id });
+    const controller = await waitForServiceWorkerControl(navigator.serviceWorker, { timeoutMs: this.options.serviceWorkerControlTimeoutMs || 5000 });
+    addEventListener('message', this._boundMessage); navigator.serviceWorker.addEventListener('message', this._boundSw);
+    await registerServiceWorkerSession(controller, this.id, { timeoutMs: this.options.serviceWorkerRegistrationTimeoutMs || 3000 });
     const frame = document.createElement('iframe');
     frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals allow-downloads allow-top-navigation-by-user-activation');
     frame.setAttribute('referrerpolicy', 'no-referrer');

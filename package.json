@@ -1,6 +1,6 @@
 {
   "name": "wurster-lab",
-  "version": "0.32.7",
+  "version": "0.32.8",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -10,7 +10,7 @@
     "authority/wrst.io/worker"
   ],
   "scripts": {
-    "test": "node tests/format.test.mjs && node tests/pigfs.test.mjs && node tests/pigfs-storage.test.mjs && node tests/pigfs-runtime-contract.test.mjs && node tests/authority.test.mjs && node tests/authority-worker.test.mjs && node tests/authority-deployment.test.mjs && node tests/cli.test.mjs && node tests/protection-worker.test.mjs && node tests/identity-core.test.mjs && node tests/code-structure.test.mjs && node tests/devtools-runtime.test.mjs && node tests/desktop-pig-runtime.test.mjs && node tests/piglet-parent-grants.test.mjs && node tests/piglet-collaboration.test.mjs && node tests/embed-lifecycle.test.mjs && node tests/headless-piglet.test.mjs && node tests/piglet-operational.test.mjs && node tests/runtime-module-contract.test.mjs && node tests/runtime-trust-ui.test.mjs && node tests/session.test.mjs && node tests/interface.test.mjs && node tests/piglet-pigsty.test.mjs && node tests/pigsty-edge-wasix.test.mjs && node tests/edge-runtime-packaging.test.mjs && node tests/web-runtime.test.mjs && node tests/wurster-lab-wurst.test.mjs && node tests/update-runtime.test.mjs && node tests/release-update-metadata.test.mjs && node tests/release-workflow.test.mjs",
+    "test": "node tests/format.test.mjs && node tests/pigfs.test.mjs && node tests/pigfs-storage.test.mjs && node tests/pigfs-runtime-contract.test.mjs && node tests/authority.test.mjs && node tests/authority-worker.test.mjs && node tests/authority-deployment.test.mjs && node tests/cli.test.mjs && node tests/protection-worker.test.mjs && node tests/identity-core.test.mjs && node tests/code-structure.test.mjs && node tests/settings-runtime.test.mjs && node tests/devtools-runtime.test.mjs && node tests/desktop-pig-runtime.test.mjs && node tests/piglet-parent-grants.test.mjs && node tests/piglet-collaboration.test.mjs && node tests/embed-lifecycle.test.mjs && node tests/desktop-piglet-route.test.mjs && node tests/headless-piglet.test.mjs && node tests/piglet-operational.test.mjs && node tests/runtime-module-contract.test.mjs && node tests/runtime-trust-ui.test.mjs && node tests/session.test.mjs && node tests/interface.test.mjs && node tests/piglet-pigsty.test.mjs && node tests/pigsty-edge-wasix.test.mjs && node tests/edge-runtime-packaging.test.mjs && node tests/web-runtime.test.mjs && node tests/wurster-lab-wurst.test.mjs && node tests/update-runtime.test.mjs && node tests/release-update-metadata.test.mjs && node tests/release-workflow.test.mjs",
     "dist:win": "npm run dist:win --workspace @wurster/desktop",
     "meatphrase": "node packages/meatgrinder/src/cli.js meatphrase 12",
     "dist:mac": "npm run dist:mac:universal",

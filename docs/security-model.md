@@ -62,7 +62,7 @@ Publisher signatures authenticate immutable application bytes. Carrying or embed
 
 ## Pigsty
 
-Pigsty may compile, install or transform against Wurst-owned files, but it must not become a Host Node/Shell/FS escape hatch or materialize protected plaintext onto uncontrolled Host storage. Native Edge/WASIX production isolation remains unfinished, so Pigsty stays non-blocking and experimental in 0.32.7.
+Pigsty may compile, install or transform against Wurst-owned files, but it must not become a Host Node/Shell/FS escape hatch or materialize protected plaintext onto uncontrolled Host storage. Native Edge/WASIX production isolation remains unfinished, so Pigsty stays non-blocking and experimental in 0.32.8.
 
 ## Current crypto primitives
 

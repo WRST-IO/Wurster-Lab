@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.32.8 - Settings Surface and Desktop Piglet Virtual Route Repair
+
+- Split Wurster Settings into General, Identities and About categories. General settings such as automatic updates are available without unlocking the Meat Locker, while identities, Meatphrases, publisher signing keys and Authenticator configuration remain behind local user verification.
+- Replaced the launcher footer's protected Identities shortcut with Settings, kept explicit protected identity entry points for authentication and MeatGrinder flows, and added an About surface driven by the running Wurster version.
+- Removed the launcher's decorative maximize traffic light and marked the fixed Wurster launcher as non-maximizable/fullscreenable. The launcher version label now comes from Electron's actual app version instead of a hard-coded 0.32.0 string.
+- Fixed Desktop Piglet virtual application startup by waiting until the `wurst://runtime` Service Worker actually controls the embed host, then waiting for an acknowledged WursterWeb session registration before navigating the child iframe to `__wurster/<session>/app/<entry>`.
+- Added a Desktop Piglet route regression that proves the virtual child navigation waits for Service Worker ownership and that the actual child `index.html` is served through the WursterWeb resource layer.
+- Bumped Wurster runtime/workspace release metadata to 0.32.8 as the next public update-lane release after 0.32.7.
+
 ## 0.32.7 - Desktop Piglet Session Bridge Repair
 
 - Fixed `<wurst-embed>` lifecycle ordering so a newly opened Desktop Piglet attachment is no longer immediately closed by frame teardown before session subscriptions are installed.

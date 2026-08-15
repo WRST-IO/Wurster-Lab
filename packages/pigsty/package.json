@@ -1,6 +1,6 @@
 {
   "name": "@wurster/pigsty",
-  "version": "0.32.7",
+  "version": "0.32.8",
   "description": "Pigsty: controlled internal computation worker for Wurst workspaces.",
   "type": "module",
   "exports": {

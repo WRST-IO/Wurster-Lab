@@ -7,6 +7,8 @@ function filePath(file) {
 contextBridge.exposeInMainWorld('wursterLauncher', Object.freeze({
   choose: () => ipcRenderer.invoke('wurster:launcher:choose'),
   openFile: (file) => ipcRenderer.invoke('wurster:launcher:open', filePath(file)),
+  settings: () => ipcRenderer.invoke('wurster:launcher:settings'),
+  version: () => ipcRenderer.invoke('wurster:launcher:version'),
   identities: () => ipcRenderer.invoke('wurster:launcher:identities'),
   back: () => ipcRenderer.invoke('wurster:launcher:back'),
   minimize: () => ipcRenderer.send('wurster:launcher:minimize'),
@@ -36,6 +38,7 @@ contextBridge.exposeInMainWorld('meatGrinder', Object.freeze({
 
 contextBridge.exposeInMainWorld('wursterSettings', Object.freeze({
   context: () => ipcRenderer.invoke('wurster:settings:context'),
+  unlockIdentities: () => ipcRenderer.invoke('wurster:settings:identities:unlock'),
   generateMeatphrase: () => ipcRenderer.invoke('wurster:settings:generate-meatphrase'),
   addIdentity: (payload) => ipcRenderer.invoke('wurster:settings:identity:add', payload),
   updateIdentity: (id, payload) => ipcRenderer.invoke('wurster:settings:identity:update', id, payload),

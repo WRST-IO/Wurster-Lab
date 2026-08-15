@@ -123,6 +123,8 @@ const devToolsRuntime = createDesktopDevToolsRuntime({ BrowserWindow });
 let launcherWindow = null;
 let launcherReturnMode = 'launcher';
 let launcherView = 'launcher';
+let settingsIdentityUnlocked = false;
+let settingsInitialSection = 'general';
 let verificationPayload = null;
 let verificationReturnMode = 'launcher';
 let pendingTotpSetup = null;
@@ -382,6 +384,7 @@ function configureSession(wurstSession, context) {
       }
       if (parsedUrl.hostname === 'runtime') {
         const requested = decodeURIComponent(parsedUrl.pathname.replace(/^\/+/, ''));
+        if (requested.startsWith('__wurster/')) return new Response('Wurster Web virtual route is waiting for Service Worker control', { status: 503 });
         const allowed = new Map([
           ['wurster-embed.mjs', ['wurster-embed.mjs', 'text/javascript; charset=utf-8']],
           ['wurster-embed-host.html', ['wurster-embed-host.html', 'text/html; charset=utf-8']],
@@ -2482,18 +2485,21 @@ async function totpQrDataUrl(uri) {
 
 async function settingsContext() {
   const settings = await readWursterSettings();
-  return {
+  const context = {
     meatLockerAvailable: meatLockerAvailable(),
     storageLabel: localStorageLabel(),
     devicePresenceAvailable: devicePresenceAvailable(),
     devicePresenceLabel: process.platform === 'darwin' ? 'Touch ID' : process.platform === 'win32' ? 'Windows Security' : 'device presence',
-    totpConfigured: Boolean(settings.totp?.protectedSecret),
     version: app.getVersion(),
     autoUpdate: settings.updates.autoUpdate,
     autoUpdateSupported: ['darwin', 'win32'].includes(process.platform),
-    identities: await listMeatIdentities(),
-    publisherSigners: await listPublisherSigners()
+    identitiesUnlocked: settingsIdentityUnlocked,
+    initialSection: settingsInitialSection
   };
+  if (settingsIdentityUnlocked) Object.assign(context, {
+    totpConfigured: Boolean(settings.totp?.protectedSecret), identities: await listMeatIdentities(), publisherSigners: await listPublisherSigners()
+  });
+  return context;
 }
 
 function assertSettingsSender(event) {
@@ -2502,28 +2508,39 @@ function assertSettingsSender(event) {
   }
 }
 
-ipcMain.handle('wurster:settings:context', async (event) => { assertSettingsSender(event); return settingsContext(); });
-ipcMain.handle('wurster:settings:update:auto', async (event, enabled) => { assertSettingsSender(event); const settings = await readWursterSettings(); settings.updates = { ...settings.updates, autoUpdate: Boolean(enabled) }; await writeWursterSettings(settings); return settingsContext(); });
-ipcMain.handle('wurster:settings:generate-meatphrase', async (event) => { assertSettingsSender(event); return generateMeatphrase(12); });
-ipcMain.handle('wurster:settings:identity:add', async (event, payload = {}) => {
+function assertSettingsIdentityUnlocked(event) {
   assertSettingsSender(event);
+  if (!settingsIdentityUnlocked) throw new Error('Wurster identities are locked');
+}
+
+ipcMain.handle('wurster:settings:context', async (event) => { assertSettingsSender(event); return settingsContext(); });
+ipcMain.handle('wurster:settings:identities:unlock', async (event) => {
+  assertSettingsSender(event);
+  if (!settingsIdentityUnlocked) await promptWursterAdministrationPresence();
+  settingsIdentityUnlocked = true; settingsInitialSection = 'identities';
+  return settingsContext();
+});
+ipcMain.handle('wurster:settings:update:auto', async (event, enabled) => { assertSettingsSender(event); const settings = await readWursterSettings(); settings.updates = { ...settings.updates, autoUpdate: Boolean(enabled) }; await writeWursterSettings(settings); return settingsContext(); });
+ipcMain.handle('wurster:settings:generate-meatphrase', async (event) => { assertSettingsIdentityUnlocked(event); return generateMeatphrase(12); });
+ipcMain.handle('wurster:settings:identity:add', async (event, payload = {}) => {
+  assertSettingsIdentityUnlocked(event);
   return saveMeatIdentity(payload.name, payload.meatphrase, payload.protection ?? {}, payload.emoji);
 });
 ipcMain.handle('wurster:settings:identity:update', async (event, id, payload = {}) => {
-  assertSettingsSender(event);
+  assertSettingsIdentityUnlocked(event);
   return updateMeatIdentity(id, payload);
 });
 ipcMain.handle('wurster:settings:identity:delete', async (event, id) => {
-  assertSettingsSender(event);
+  assertSettingsIdentityUnlocked(event);
   return deleteMeatIdentity(id);
 });
 ipcMain.handle('wurster:settings:identity:reveal', async (event, id, authorization = {}) => {
-  assertSettingsSender(event);
+  assertSettingsIdentityUnlocked(event);
   const identity = await revealMeatIdentity(id, authorization);
   return { id: identity.id, name: identity.name, meatphrase: identity.meatphrase };
 });
 ipcMain.handle('wurster:settings:identity:public-copy', async (event, id) => {
-  assertSettingsSender(event);
+  assertSettingsIdentityUnlocked(event);
   const identities = await listMeatIdentities();
   const identity = identities.find((item) => item.id === String(id));
   if (!identity?.wursterIdentity) throw new Error('Wurster public identity is not available');
@@ -2532,7 +2549,7 @@ ipcMain.handle('wurster:settings:identity:public-copy', async (event, id) => {
   return { copied: true, identityId: identity.wursterIdentity.identityId };
 });
 ipcMain.handle('wurster:settings:identity:public-save', async (event, id) => {
-  assertSettingsSender(event);
+  assertSettingsIdentityUnlocked(event);
   const identities = await listMeatIdentities();
   const identity = identities.find((item) => item.id === String(id));
   if (!identity?.wursterIdentity) throw new Error('Wurster public identity is not available');
@@ -2547,35 +2564,35 @@ ipcMain.handle('wurster:settings:identity:public-save', async (event, id) => {
   return { saved: true, filePath: result.filePath, identityId: identity.wursterIdentity.identityId };
 });
 ipcMain.handle('wurster:settings:publisher:add', async (event, payload = {}) => {
-  assertSettingsSender(event);
+  assertSettingsIdentityUnlocked(event);
   return savePublisherSigner(payload);
 });
 ipcMain.handle('wurster:settings:publisher:verify', async (event, id) => {
-  assertSettingsSender(event);
+  assertSettingsIdentityUnlocked(event);
   return verifyPublisherSignerDns(id);
 });
 ipcMain.handle('wurster:settings:publisher:authority-domain-begin', async (event, id) => {
-  assertSettingsSender(event);
+  assertSettingsIdentityUnlocked(event);
   return beginPublisherAuthorityDomain(id);
 });
 ipcMain.handle('wurster:settings:publisher:authority-domain-complete', async (event, id) => {
-  assertSettingsSender(event);
+  assertSettingsIdentityUnlocked(event);
   return completePublisherAuthorityDomain(id);
 });
 ipcMain.handle('wurster:settings:publisher:authority-email-begin', async (event, id) => {
-  assertSettingsSender(event);
+  assertSettingsIdentityUnlocked(event);
   return beginPublisherAuthorityEmail(id);
 });
 ipcMain.handle('wurster:settings:publisher:authority-email-complete', async (event, id, code) => {
-  assertSettingsSender(event);
+  assertSettingsIdentityUnlocked(event);
   return completePublisherAuthorityEmail(id, code);
 });
 ipcMain.handle('wurster:settings:publisher:reveal', async (event, id) => {
-  assertSettingsSender(event);
+  assertSettingsIdentityUnlocked(event);
   return revealPublisherSignerMeatphrase(id);
 });
 ipcMain.handle('wurster:settings:publisher:import', async (event, meatphrase) => {
-  assertSettingsSender(event);
+  assertSettingsIdentityUnlocked(event);
   const result = await dialog.showOpenDialog(launcherWindow, {
     title: 'Import MeatGrinder signing key',
     properties: ['openFile'],
@@ -2586,7 +2603,7 @@ ipcMain.handle('wurster:settings:publisher:import', async (event, meatphrase) =>
   return importPublisherSigner({ bundle, meatphrase: String(meatphrase ?? '') });
 });
 ipcMain.handle('wurster:settings:publisher:export', async (event, id) => {
-  assertSettingsSender(event);
+  assertSettingsIdentityUnlocked(event);
   const material = await loadPublisherSignerMaterial(id, { prompt: true });
   const stem = String(material.summary.domain ?? material.summary.email ?? material.summary.label ?? 'publisher').replace(/[^a-z0-9._-]+/gi, '_');
   const result = await dialog.showSaveDialog(launcherWindow, {
@@ -2599,11 +2616,11 @@ ipcMain.handle('wurster:settings:publisher:export', async (event, id) => {
   return result.filePath;
 });
 ipcMain.handle('wurster:settings:publisher:delete', async (event, id) => {
-  assertSettingsSender(event);
+  assertSettingsIdentityUnlocked(event);
   return deletePublisherSigner(id);
 });
 ipcMain.handle('wurster:settings:totp:begin', async (event) => {
-  assertSettingsSender(event);
+  assertSettingsIdentityUnlocked(event);
   if (!meatLockerAvailable()) throw new Error('Secure local storage is required before Authenticator protection can be configured');
   const secret = generateTotpSecret();
   const uri = totpUri(secret, { issuer: 'Wurster', account: 'Meat Locker' });
@@ -2611,7 +2628,7 @@ ipcMain.handle('wurster:settings:totp:begin', async (event) => {
   return { secret, uri, qrDataUrl: await totpQrDataUrl(uri) };
 });
 ipcMain.handle('wurster:settings:totp:confirm', async (event, code) => {
-  assertSettingsSender(event);
+  assertSettingsIdentityUnlocked(event);
   if (!pendingTotpSetup || Date.now() - pendingTotpSetup.createdAt > 10 * 60 * 1000) throw new Error('Authenticator setup expired. Start again.');
   if (!verifyTotp(pendingTotpSetup.secret, code)) throw new Error('Invalid authenticator code');
   const settings = await readWursterSettings();
@@ -2624,7 +2641,7 @@ ipcMain.handle('wurster:settings:totp:confirm', async (event, code) => {
   return true;
 });
 ipcMain.handle('wurster:settings:totp:disable', async (event, code) => {
-  assertSettingsSender(event);
+  assertSettingsIdentityUnlocked(event);
   await verifyLockerTotp(code);
   const settings = await readWursterSettings();
   settings.totp = null;
@@ -2770,6 +2787,8 @@ ipcMain.handle('wurster:verification:close', async (event) => {
 async function showLauncherHome({ focus = true } = {}) {
   if (!launcherWindow || launcherWindow.isDestroyed()) return openLauncherWindow();
   launcherView = 'launcher';
+  settingsIdentityUnlocked = false;
+  settingsInitialSection = 'general';
   launcherWindow.setMinimumSize(374, 430);
   launcherWindow.setMaximumSize(980, 860);
   launcherWindow.setSize(374, 430, true);
@@ -2782,10 +2801,12 @@ async function showLauncherHome({ focus = true } = {}) {
   return launcherWindow;
 }
 
-async function showSettingsInLauncher() {
+async function showSettingsInLauncher({ section = 'general', identitiesUnlocked = false } = {}) {
   if (!launcherWindow || launcherWindow.isDestroyed()) openLauncherWindow({ show: false });
   launcherReturnMode = currentWindow && !currentWindow.isDestroyed() ? 'hide' : 'launcher';
   launcherView = 'settings';
+  settingsInitialSection = section === 'identities' ? 'identities' : section === 'about' ? 'about' : 'general';
+  settingsIdentityUnlocked = Boolean(identitiesUnlocked);
   launcherWindow.setMinimumSize(680, 600);
   launcherWindow.setMaximumSize(1100, 980);
   launcherWindow.setSize(820, 720, true);
@@ -2795,6 +2816,8 @@ async function showSettingsInLauncher() {
   launcherWindow.focus();
   return launcherWindow;
 }
+
+async function openSettingsWindow() { return showSettingsInLauncher({ section: 'general', identitiesUnlocked: false }); }
 
 async function leaveSettingsView() {
   if (!launcherWindow || launcherWindow.isDestroyed()) return false;
@@ -2811,7 +2834,7 @@ async function leaveSettingsView() {
 async function openProtectedSettingsWindow() {
   try {
     await promptWursterAdministrationPresence();
-    return showSettingsInLauncher();
+    return showSettingsInLauncher({ section: 'identities', identitiesUnlocked: true });
   } catch (error) {
     if (launcherWindow && !launcherWindow.isDestroyed()) {
       await dialog.showMessageBox(launcherWindow, {
@@ -2920,6 +2943,14 @@ ipcMain.handle('wurster:launcher:choose', async (event) => {
 ipcMain.handle('wurster:launcher:open', async (event, filePath) => {
   assertLauncherSender(event);
   return openFromLauncher(String(filePath ?? ''));
+});
+ipcMain.handle('wurster:launcher:settings', async (event) => {
+  assertLauncherSender(event);
+  return Boolean(await openSettingsWindow());
+});
+ipcMain.handle('wurster:launcher:version', async (event) => {
+  assertLauncherSender(event);
+  return app.getVersion();
 });
 ipcMain.handle('wurster:launcher:identities', async (event) => {
   assertLauncherSender(event);
@@ -3081,6 +3112,8 @@ function openLauncherWindow({ show = true, loadHome = true } = {}) {
     frame: false,
     hasShadow: true,
     resizable: false,
+    maximizable: false,
+    fullscreenable: false,
     backgroundColor: '#00000000',
     icon: WURSTER_ICON,
     show: false,
@@ -3180,7 +3213,7 @@ function installApplicationMenu() {
       submenu: [
         { role: 'about' },
         { type: 'separator' },
-        { label: 'Settings…', accelerator: 'CommandOrControl+,', click: () => void openProtectedSettingsWindow() },
+        { label: 'Settings…', accelerator: 'CommandOrControl+,', click: () => void openSettingsWindow() },
         { type: 'separator' },
         { role: 'services' },
         { type: 'separator' },
@@ -3207,7 +3240,7 @@ function installApplicationMenu() {
     { label: 'Reload Wurst', accelerator: 'CommandOrControl+R', click: () => currentWindow?.webContents.reload() }
   ] });
   template.push({ label: 'Window', submenu: [{ role: 'minimize' }, { role: 'zoom' }, ...(process.platform === 'darwin' ? [{ role: 'front' }] : [])] });
-  if (process.platform !== 'darwin') template.push({ label: 'Wurster', submenu: [{ label: 'Settings…', accelerator: 'CommandOrControl+,', click: () => void openProtectedSettingsWindow() }] });
+  if (process.platform !== 'darwin') template.push({ label: 'Wurster', submenu: [{ label: 'Settings…', accelerator: 'CommandOrControl+,', click: () => void openSettingsWindow() }] });
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
