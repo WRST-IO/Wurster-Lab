@@ -35,6 +35,7 @@ import { createPigletEmbedRuntime } from './piglet-embed-runtime.mjs';
 import { bindPigletPigFsPersistence } from './piglet-pigfs-runtime.mjs';
 import { createTrustedSurfaceRuntime } from './trusted-surface-runtime.mjs';
 import { createDesktopPigstyRuntime } from './pigsty-runtime.mjs';
+import { createDesktopDevToolsRuntime, isWurstDevToolsShortcut } from './devtools-runtime.mjs';
 import { cspFor, networkRequestAllowed, parseHttpRange, partitionFor, responseFor, safeRequestPath } from './web-sandbox-runtime.mjs';
 import {
   SEALED_APP_INDEX_PATH,
@@ -115,6 +116,8 @@ let currentFile = null;
 let currentWindow = null;
 let currentContext = null;
 const runtimeContextByWebContents = new Map();
+let lastFocusedRuntimeWebContentsId = null;
+const devToolsRuntime = createDesktopDevToolsRuntime({ BrowserWindow });
 let launcherWindow = null;
 let launcherReturnMode = 'launcher';
 let launcherView = 'launcher';
@@ -1433,22 +1436,32 @@ ipcMain.handle('wurster:auth:totp', async (event, code) => {
 });
 
 async function clearCurrentContext() {
-  if (currentContext) pigLinkRuntime.closeContext(currentContext);
-  if (currentContext) await pigletRuntime.closeContext(currentContext);
-  if (currentWindow?.webContents) unbindRuntimeContext(currentWindow.webContents);
+  const context = currentContext;
+  if (!context) return;
+
+  // Claim the context before any asynchronous teardown. `closed` and
+  // `before-quit` may both request cleanup during the same shutdown turn;
+  // only the first caller owns this context.
+  currentContext = null;
+  context.closing = true;
+
+  pigLinkRuntime.closeContext(context);
+  await pigletRuntime.closeContext(context);
+  if (currentWindow && !currentWindow.isDestroyed()) {
+    const renderer = currentWindow.webContents;
+    if (renderer && !renderer.isDestroyed()) unbindRuntimeContext(renderer);
+  }
 
   destroyAllAuthSurfaces();
   destroyAllIdentitySurfaces();
-  if (currentContext?.pigFsHygieneTimer) clearTimeout(currentContext.pigFsHygieneTimer);
-  if (currentContext?.applicationSessionTimer) clearTimeout(currentContext.applicationSessionTimer);
-  if (currentContext?.filesystemIdentityTimer) clearTimeout(currentContext.filesystemIdentityTimer);
-  if (currentContext?.runtimeBinding) unlockSessions.revokeBinding(currentContext.runtimeBinding);
-  if (currentContext) currentContext.closing = true;
-  if (currentContext?.pigFsStore?.closeFile) await currentContext.pigFsStore.closeFile().catch(() => {});
-  else if (currentContext?.pigFsStore?.close) await currentContext.pigFsStore.close().catch(() => {});
-  if (currentContext?.applicationProtectionHandle) await protectionClient.destroy(currentContext.applicationProtectionHandle);
-  if (currentContext?.reader) await currentContext.reader.close().catch(() => {});
-  currentContext = null;
+  if (context.pigFsHygieneTimer) clearTimeout(context.pigFsHygieneTimer);
+  if (context.applicationSessionTimer) clearTimeout(context.applicationSessionTimer);
+  if (context.filesystemIdentityTimer) clearTimeout(context.filesystemIdentityTimer);
+  if (context.runtimeBinding) unlockSessions.revokeBinding(context.runtimeBinding);
+  if (context.pigFsStore?.closeFile) await context.pigFsStore.closeFile().catch(() => {});
+  else if (context.pigFsStore?.close) await context.pigFsStore.close().catch(() => {});
+  if (context.applicationProtectionHandle) await protectionClient.destroy(context.applicationProtectionHandle);
+  if (context.reader) await context.reader.close().catch(() => {});
 }
 
 function metadataPackage(context) {
@@ -1456,11 +1469,29 @@ function metadataPackage(context) {
 }
 
 function bindRuntimeContext(webContents, context) {
-  runtimeContextByWebContents.set(webContents.id, context);
+  const webContentsId = webContents.id;
+  runtimeContextByWebContents.set(webContentsId, context);
+  lastFocusedRuntimeWebContentsId = webContentsId;
+  webContents.on('focus', () => {
+    if (runtimeContextByWebContents.has(webContentsId)) lastFocusedRuntimeWebContentsId = webContentsId;
+  });
+  webContents.on('before-input-event', (event, input) => {
+    if (!runtimeContextByWebContents.has(webContentsId) || !isWurstDevToolsShortcut(input)) return;
+    event.preventDefault();
+    lastFocusedRuntimeWebContentsId = webContentsId;
+    void toggleWurstDevTools();
+  });
+  webContents.once('destroyed', () => unbindRuntimeContextById(webContentsId));
+}
+
+function unbindRuntimeContextById(webContentsId) {
+  if (!Number.isInteger(webContentsId)) return;
+  runtimeContextByWebContents.delete(webContentsId);
+  if (lastFocusedRuntimeWebContentsId === webContentsId) lastFocusedRuntimeWebContentsId = null;
 }
 
 function unbindRuntimeContext(webContents) {
-  if (webContents) runtimeContextByWebContents.delete(webContents.id);
+  if (webContents) unbindRuntimeContextById(webContents.id);
 }
 
 function assertWurstSender(event) {
@@ -3065,26 +3096,50 @@ function openLauncherWindow({ show = true } = {}) {
 
 function inspectedWurstWebContents() {
   const focused = electronWebContents.getFocusedWebContents?.();
-  if (focused && !focused.isDestroyed() && runtimeContextByWebContents.has(focused.id)) return focused;
-  if (currentWindow && !currentWindow.isDestroyed() && runtimeContextByWebContents.has(currentWindow.webContents.id)) return currentWindow.webContents;
+  if (focused && !focused.isDestroyed() && runtimeContextByWebContents.has(focused.id)) {
+    lastFocusedRuntimeWebContentsId = focused.id;
+    return focused;
+  }
+
+  if (Number.isInteger(lastFocusedRuntimeWebContentsId)) {
+    const recent = electronWebContents.fromId(lastFocusedRuntimeWebContentsId);
+    if (recent && !recent.isDestroyed() && runtimeContextByWebContents.has(recent.id)) return recent;
+    lastFocusedRuntimeWebContentsId = null;
+  }
+
+  if (currentWindow && !currentWindow.isDestroyed()) {
+    const renderer = currentWindow.webContents;
+    if (renderer && !renderer.isDestroyed() && runtimeContextByWebContents.has(renderer.id)) return renderer;
+  }
+
+  for (const webContentsId of [...runtimeContextByWebContents.keys()].reverse()) {
+    const renderer = electronWebContents.fromId(webContentsId);
+    if (renderer && !renderer.isDestroyed()) return renderer;
+    unbindRuntimeContextById(webContentsId);
+  }
   return null;
 }
 
 function closeDetachedDevTools() {
-  for (const webContentsId of runtimeContextByWebContents.keys()) {
-    const inspected = electronWebContents.fromId(webContentsId);
-    try { if (inspected && !inspected.isDestroyed() && inspected.isDevToolsOpened()) inspected.closeDevTools(); } catch {}
-  }
+  devToolsRuntime.close();
 }
 
-function openDetachedWurstDevTools() {
+async function toggleWurstDevTools() {
   const inspected = inspectedWurstWebContents();
-  if (!inspected) return;
-  if (inspected.isDevToolsOpened()) {
-    inspected.closeDevTools();
-    return;
+  if (!inspected) {
+    dialog.showErrorBox('Wurst Developer Tools', 'No active Wurst renderer is available to inspect.');
+    return false;
   }
-  inspected.openDevTools({ mode: 'detach', activate: true });
+  const context = runtimeContextByWebContents.get(inspected.id);
+  const name = context?.manifest?.name ? String(context.manifest.name) : 'Wurst';
+  try {
+    await devToolsRuntime.toggle(inspected, { title: `${name} Developer Tools` });
+    return true;
+  } catch (error) {
+    console.error('[Wurster DevTools]', error);
+    dialog.showErrorBox('Wurst Developer Tools', error?.message || String(error));
+    return false;
+  }
 }
 
 async function openWurstFromMenu() {
@@ -3134,8 +3189,7 @@ function installApplicationMenu() {
       label: 'Toggle Wurst Developer Tools',
       accelerator: process.platform === 'darwin' ? 'Alt+Command+I' : 'Ctrl+Shift+I',
       click: () => {
-        if (!currentWindow || currentWindow.isDestroyed()) return;
-        openDetachedWurstDevTools();
+        void toggleWurstDevTools();
       }
     },
     { label: 'Reload Wurst', accelerator: 'CommandOrControl+R', click: () => currentWindow?.webContents.reload() }
@@ -3240,18 +3294,24 @@ async function loadPackage(filePath) {
         webviewTag: false
       }
     });
+    const newWindowWebContents = newWindow.webContents;
+    const newWindowWebContentsId = newWindowWebContents.id;
     currentWindow = newWindow;
-    bindRuntimeContext(newWindow.webContents, context);
+    bindRuntimeContext(newWindowWebContents, context);
     if (launcherWindow && !launcherWindow.isDestroyed()) launcherWindow.hide();
 
     newWindow.setMenuBarVisibility(false);
-    newWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-    newWindow.webContents.on('will-navigate', (event, url) => {
+    newWindowWebContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    newWindowWebContents.on('will-navigate', (event, url) => {
       if (!url.startsWith('wurst://app/')) event.preventDefault();
     });
-    newWindow.once('ready-to-show', () => newWindow.show());
+    newWindow.once('ready-to-show', () => {
+      if (!newWindow.isDestroyed()) newWindow.show();
+    });
     newWindow.on('closed', () => {
-      unbindRuntimeContext(newWindow.webContents);
+      // BrowserWindow.webContents throws after the native window has been
+      // destroyed. Use the id captured while the renderer was alive.
+      unbindRuntimeContextById(newWindowWebContentsId);
       if (currentWindow !== newWindow) return;
       closeDetachedDevTools();
       currentWindow = null;
@@ -3264,7 +3324,7 @@ async function loadPackage(filePath) {
 
     if (fullySealedApplication(manifest)) {
       context.bootstrapWindow = newWindow;
-      context.bootstrapWebContents = newWindow.webContents;
+      context.bootstrapWebContents = newWindowWebContents;
       const bootstrapHtml = await fs.readFile(SEALED_BOOTSTRAP_HTML, 'utf8');
       await newWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(bootstrapHtml)}`);
     } else {

@@ -75,9 +75,6 @@ for (const relative of ['runtime/desktop/src/launcher.html', 'runtime/desktop/sr
 }
 const desktopMain = await fs.readFile(path.join(root, 'runtime/desktop/src/main.mjs'), 'utf8');
 assert.match(desktopMain, /publisherCertificate: signerMaterial\?\.certificate/, 'GUI-signed Wursts must carry a stored WRST.IO publisher certificate');
-assert.match(desktopMain, /electronWebContents\.getFocusedWebContents/);
-assert.match(desktopMain, /openDevTools\(\{ mode: 'detach', activate: true \}\)/);
-assert.doesNotMatch(desktopMain, /setDevToolsWebContents/);
 assert.match(desktopMain, /\/v1\/email\/challenge/);
 assert.match(await fs.readFile(path.join(root, 'runtime/desktop/src/launcher.html'), 'utf8'), /Verify with WRST\.IO/);
 assert.match(await fs.readFile(path.join(root, 'runtime/desktop/src/settings.html'), 'utf8'), /oink@wrst\.io/);

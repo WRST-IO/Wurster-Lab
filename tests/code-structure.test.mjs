@@ -26,6 +26,7 @@ const pigletPigFsRuntime = await text('runtime/desktop/src/piglet-pigfs-runtime.
 const trustedSurfaceRuntime = await text('runtime/desktop/src/trusted-surface-runtime.mjs');
 const piglinkRuntime = await text('runtime/desktop/src/piglink-runtime.mjs');
 const pigstyRuntime = await text('runtime/desktop/src/pigsty-runtime.mjs');
+const devToolsRuntime = await text('runtime/desktop/src/devtools-runtime.mjs');
 const webSandboxRuntime = await text('runtime/desktop/src/web-sandbox-runtime.mjs');
 const webSourceRuntime = await text('runtime/web/src/wurst-source.mjs');
 const webTrustRuntime = await text('runtime/web/src/trust-runtime.mjs');
@@ -53,6 +54,7 @@ for (const [name, source] of [
   ['trusted-surface-runtime', trustedSurfaceRuntime],
   ['piglink-runtime', piglinkRuntime],
   ['pigsty-runtime', pigstyRuntime],
+  ['devtools-runtime', devToolsRuntime],
   ['web-sandbox-runtime', webSandboxRuntime],
   ['web-source-runtime', webSourceRuntime],
   ['web-trust-runtime', webTrustRuntime],
@@ -70,6 +72,19 @@ assert.doesNotMatch(main, /ipcMain\.(?:handle|on)\(['"]wurst:pig(?:let|link|sty)
 assert.doesNotMatch(main, /from ['"]@wurster\/pigsty['"]/, 'desktop main must not own the Pigsty engine implementation');
 assert.doesNotMatch(main, /from ['"]@wurster\/piglink['"]/, 'desktop main must not own PigLink validation');
 assert.doesNotMatch(main, /createPigletSurfaceManager|piglet-surface-runtime|pigletSurface/, 'Piglet application UI must not use native WebContentsView surfaces');
+assert.match(main, /createDesktopDevToolsRuntime/, 'Desktop must route Wurst debugging through the dedicated DevTools controller');
+assert.doesNotMatch(main, /\.openDevTools\(/, 'Desktop main must not own Electron DevTools window creation directly');
+assert.match(devToolsRuntime, /setDevToolsWebContents\(devToolsWindow\.webContents\)/, 'Wurster must explicitly own the DevTools host WebContents instead of relying on Electron detached-window state');
+assert.match(devToolsRuntime, /waitForEvent\(target, ['\"]devtools-opened['\"], timeoutMs\)/, 'DevTools opening must wait for Electron to confirm the inspector actually opened');
+assert.match(devToolsRuntime, /Could not open Wurst Developer Tools:/, 'DevTools opening must have a visible failure path instead of silently doing nothing');
+assert.match(devToolsRuntime, /closeForeignDevTools/, 'DevTools runtime must recover stale Electron-managed DevTools state before opening an owned inspector');
+assert.match(main, /lastFocusedRuntimeWebContentsId/, 'Desktop must remember the last debuggable Wurst target when focus moves into the DevTools window');
+assert.match(main, /before-input-event[\s\S]*?isWurstDevToolsShortcut/, 'Wurst DevTools shortcut must be captured in the Main process before renderer/menu handling');
+const closedHandler = main.match(/newWindow\.on\('closed', \(\) => \{[\s\S]*?\n    \}\);/)?.[0] ?? '';
+assert.match(closedHandler, /unbindRuntimeContextById\(newWindowWebContentsId\)/, 'Desktop must unbind a closed Wurst renderer by the webContents id captured before destruction');
+assert.doesNotMatch(closedHandler, /newWindow\.webContents/, 'Desktop must never dereference BrowserWindow.webContents from the closed event');
+assert.match(main, /async function clearCurrentContext\(\) \{\s*const context = currentContext;\s*if \(!context\) return;[\s\S]*?currentContext = null;[\s\S]*?await pigletRuntime\.closeContext\(context\)/, 'Desktop context teardown must claim the context before asynchronous cleanup so closed/before-quit cannot destroy it twice');
+assert.match(main, /newWindow\.once\('ready-to-show', \(\) => \{\s*if \(!newWindow\.isDestroyed\(\)\) newWindow\.show\(\);\s*\}\);/, 'Desktop must not show a Wurst window after it has already been destroyed');
 assert.match(main, /allowServiceWorkers:\s*true/, 'wurst: must permit the Wurster-owned embed host service worker');
 assert.match(main, /process\.resourcesPath, 'web-runtime'/, 'packaged Desktop must load the shared Wurster Web embed runtime from extraResources');
 assert.match(main, /\.\.\/\.\.\/web\/dist/, 'Desktop development must use the same built browser runtime contract as packaged Wurster');
