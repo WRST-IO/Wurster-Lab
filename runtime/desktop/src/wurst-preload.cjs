@@ -250,7 +250,7 @@ contextBridge.exposeInMainWorld('wurstEmbedRuntime', Object.freeze({
   subscribeSession: (handle, callback) => {
     const key = String(handle ?? '');
     if (typeof callback !== 'function') throw new TypeError('Wurst session subscriber must be a function');
-    if (!embedSessions.get(key)?.id) throw new Error('Wurst session is unavailable');
+    if (!embedSessions.get(key)?.id) return null;
     const id = `ews-${nextEmbedSubscriptionId++}`;
     embedSessionSubscriptions.set(id, { handle: key, callback });
     return id;

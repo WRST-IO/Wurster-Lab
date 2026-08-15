@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.32.7 - Desktop Piglet Session Bridge Repair
+
+- Fixed `<wurst-embed>` lifecycle ordering so a newly opened Desktop Piglet attachment is no longer immediately closed by frame teardown before session subscriptions are installed.
+- Kept stale/replaced embed loads leak-free by closing superseded providers explicitly while preserving the current provider until normal teardown.
+- Made Desktop session-event subscription optional at both the preload bridge and shared embed provider boundary; missing session events no longer prevent an isolated Child Wurst from rendering.
+- Added an executable embed lifecycle regression covering `builtin:` isolated startup, attachment lifetime and the non-fatal session-subscription fallback.
+- Bumped Wurster runtime/workspace release metadata to 0.32.7 for a clean update-lane follow-up to the successful 0.32.6 release.
+
 ## 0.32.6 - Release Build Repair
 
 - Fixed the macOS DMG window configuration for electron-builder 26.x by using `dmg.window.width` / `height` instead of the invalid nested `dmg.window.size` object.

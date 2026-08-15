@@ -1,7 +1,7 @@
 {
   "id": "io.wrst.wurster-lab",
   "name": "Wurster Lab",
-  "version": "0.32.6",
+  "version": "0.32.7",
   "type": "app",
   "entry": "index.html",
   "outputName": "WursterLab",

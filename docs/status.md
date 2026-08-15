@@ -6,9 +6,9 @@ order: 1
 ---
 # Current status
 
-Wurster 0.32.6 is pre-1.0 but intended for real integration work. Presence of code is not the same as a stable contract; this page is the short maturity map.
+Wurster 0.32.7 is pre-1.0 but intended for real integration work. Presence of code is not the same as a stable contract; this page is the short maturity map.
 
-| Area | 0.32.6 status | Current boundary |
+| Area | 0.32.7 status | Current boundary |
 | --- | --- | --- |
 | Windows Desktop | release lane | shared Electron runtime |
 | macOS arm64/x64 | release lane | signed/notarized workflow |
@@ -27,7 +27,7 @@ Packaged Wurster Desktop builds on macOS and Windows check the public WRST-IO/Wu
 
 Automatic updates are a local Wurster setting and can be disabled under **Settings → Updates** to intentionally remain on an older runtime. Development/unpackaged runs never auto-update, and a failed update check falls back to normal startup instead of blocking Wurster.
 
-## Important 0.32.6 limits
+## Important 0.32.7 limits
 
 - Multiple Views and in-runtime machine clients of the same Child share one durable Wurst session and revision-safe PigFS state.
 - A browserless Parent Wurst can use Child Wursts as PigLink subtools without a DOM.

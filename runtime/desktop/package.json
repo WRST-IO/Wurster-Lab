@@ -1,6 +1,6 @@
 {
   "name": "@wurster/desktop",
-  "version": "0.32.6",
+  "version": "0.32.7",
   "private": true,
   "description": "Wurster: a deliberately tiny Electron runtime for .wurst and .wrst mini apps.",
   "type": "module",

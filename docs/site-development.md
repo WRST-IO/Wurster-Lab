@@ -41,8 +41,8 @@ The Pages artifact explicitly includes hidden files. This is required because WR
 Local `npm run dist:mac:arm64` and `npm run dist:mac:x64` builds are useful smoke tests, but `dist/` remains gitignored so installer binaries do not bloat Git history. To publish a runtime version, first make the package version final, then push the matching tag:
 
 ```bash
-git tag v0.32.6
-git push origin v0.32.6
+git tag v0.32.7
+git push origin v0.32.7
 ```
 
 `.github/workflows/release.yml` verifies that the tag exactly matches the root package version, runs the test gate, builds Windows x64 on a Windows runner, Apple Silicon on an arm64 macOS runner and Intel macOS on an Intel runner, then publishes a GitHub Release with SHA-256 checksums. Only after the release workflow succeeds does the separate Pages workflow deploy wrst.io from that release run's exact commit. The Runtime page derives the repository from GitHub Actions and links directly to these versioned assets.

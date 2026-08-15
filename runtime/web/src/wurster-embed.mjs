@@ -66,8 +66,13 @@ class RuntimeBridgeProvider {
   }
   subscribeSession(listener) {
     if (!this.session?.id || !this.bridge.subscribeSession) return null;
-    const id = this.bridge.subscribeSession(this.handle, listener);
-    return () => { try { this.bridge.unsubscribeSession?.(id); } catch {} };
+    try {
+      const id = this.bridge.subscribeSession(this.handle, listener);
+      if (!id) return null;
+      return () => { try { this.bridge.unsubscribeSession?.(id); } catch {} };
+    } catch {
+      return null;
+    }
   }
   async close() { try { await this.bridge.close?.(this.handle); } catch {} }
 }
@@ -161,13 +166,20 @@ export class WurstEmbedElement extends HTMLElement {
         await provider.close?.();
         throw new Error('Parent Wurst delegation requires <wurst-embed> to run inside a Wurst runtime');
       }
-      if (generation !== this._generation) return this;
+      if (generation !== this._generation) {
+        await provider.close?.();
+        return this;
+      }
+      this._teardownFrame();
       this._provider = provider;
       await this._start(provider, generation);
       resolveReady?.(this);
       return this;
     } catch (error) {
-      if (generation === this._generation) this._fail(error);
+      if (generation === this._generation) {
+        this._teardownFrame();
+        this._fail(error);
+      }
       rejectReady?.(error);
       throw error;
     }
@@ -191,7 +203,6 @@ export class WurstEmbedElement extends HTMLElement {
   }
   async open(input) { return this.load(input); }
   async _start(provider, generation = ++this._generation) {
-    this._teardownFrame();
     const frame = document.createElement('iframe');
     frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-modals allow-downloads allow-top-navigation-by-user-activation');
     frame.setAttribute('referrerpolicy', 'no-referrer');
@@ -300,11 +311,13 @@ export class WurstEmbedElement extends HTMLElement {
     this.dispatchEvent(new CustomEvent('wurst-error', { detail: { error: error?.message || String(error) }, bubbles: true }));
   }
   _teardownFrame() {
+    const provider = this._provider;
+    this._provider = null;
     for (const pending of this._childPending.values()) pending.reject(new Error('Embedded Wurst closed'));
     this._childPending.clear();
     this._unsubscribeParentPigLink?.(); this._unsubscribeParentPigLink = null;
     this._unsubscribeSession?.(); this._unsubscribeSession = null;
-    this._port?.close?.(); this._port = null; this._frame?.remove(); this._frame = null; void this._provider?.close?.();
+    this._port?.close?.(); this._port = null; this._frame?.remove(); this._frame = null; void provider?.close?.();
   }
   disconnectedCallback() { this._generation += 1; this._teardownFrame(); }
 }
