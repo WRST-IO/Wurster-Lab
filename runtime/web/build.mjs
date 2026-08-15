@@ -9,28 +9,34 @@ const dist = path.join(here, 'dist');
 await fs.rm(dist, { recursive: true, force: true });
 await fs.mkdir(dist, { recursive: true });
 
-const coreSource = await fs.readFile(path.join(src, 'wurster-web.mjs'), 'utf8');
-await fs.writeFile(path.join(dist, 'wurster.js'), coreSource);
-console.log('✓ runtime/web/dist/wurster.js');
-
-let transform;
+let build;
 try {
-  ({ transform } = await import('esbuild'));
+  ({ build } = await import('esbuild'));
 } catch {
-  throw new Error('Wurster Web minification requires the workspace esbuild toolchain; run npm install at the repository root first');
+  throw new Error('Wurster Web build requires the workspace esbuild toolchain; run npm install at the repository root first');
 }
-const minified = await transform(coreSource, {
-  loader: 'js',
-  format: 'esm',
-  target: 'es2022',
-  minify: true,
-  legalComments: 'none'
-});
-await fs.writeFile(path.join(dist, 'wurster.min.js'), minified.code);
-console.log('✓ runtime/web/dist/wurster.min.js');
+
+async function buildCore(outfile, minify) {
+  await build({
+    entryPoints: [path.join(src, 'wurster-web.mjs')],
+    outfile: path.join(dist, outfile),
+    bundle: true,
+    platform: 'browser',
+    format: 'esm',
+    target: 'es2022',
+    minify,
+    legalComments: 'none',
+    logLevel: 'silent'
+  });
+  console.log(`✓ runtime/web/dist/${outfile}`);
+}
+
+await buildCore('wurster.js', false);
+await buildCore('wurster.min.js', true);
 
 const outputs = [
   ['wurster-sw.js', 'wurster-sw.js'],
+  ['wurster-embed.mjs', 'wurster-embed.mjs'],
   ['wurster-embed.mjs', 'wurster-embed.js'],
   ['wurster-embed-host.html', 'wurster-embed-host.html'],
   ['trust-data.mjs', 'trust-data.mjs']

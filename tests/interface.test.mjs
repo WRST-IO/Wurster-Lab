@@ -6,7 +6,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { buildWurst } from '../packages/meatgrinder/src/index.js';
 import { SIGNATURE_PATH, createPackageSignature, createPublisherKeyBundle, decodeWurst, descriptorsFromPackage, encodeWurst, verifyPackageSignature } from '../packages/format/src/index.js';
-import { describePigLink, invokePigLinkAction, runPigLinkTests } from '../packages/headless/src/index.js';
+import { describePigLink, describePigLinkSource, invokePigLinkAction, invokePigLinkActionSource, runPigLinkTests } from '../packages/headless/src/index.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -181,6 +181,10 @@ PigLink.define({
 
   const described = await describePigLink(output);
   assert.deepEqual(Object.keys(described.piglink.actions).sort(), ['math.add', 'pig.echo', 'pigsty.build', 'pigsty.edgeBuild', 'pigsty.status']);
+  const sourceBytes = await fs.readFile(output);
+  const sourceDescriptor = await describePigLinkSource(sourceBytes);
+  assert.equal(sourceDescriptor.info.id, described.info.id, 'headless PigLink must open directly from Wurst bytes/range sources');
+  assert.deepEqual((await invokePigLinkActionSource(sourceBytes, 'math.add', { a: 20, b: 22 })).result, { sum: 42 });
 
   const added = await invokePigLinkAction(output, 'math.add', { a: 19, b: 23 });
   assert.deepEqual(added.result, { sum: 42 });

@@ -6,78 +6,51 @@ order: 1
 ---
 # Wurster Runtime
 
-Wurster is deliberately quieter than the applications it runs.
+Wurster opens and mediates Wursts. The application runs in a sandboxed web environment with Node integration disabled; Host filesystem, network and privileged features are reached only through Wurster-owned brokers.
 
-Launching Wurster itself shows a compact frameless launcher. Drop a `.wurst`, `.wrst` or Undercover PNG, click the drop target, open the Meat Locker, or flip the card to MeatGrinder. Opening a Wurst directly from Finder or Explorer skips the launcher and goes straight to the application.
+## Portable state
 
-Wurster can also inspect identity without opening the application. **File → Verify Wurst Identity…** reads and verifies the package in Wurster-owned UI. The Windows installer additionally registers **Verify Wurst Identity** only for the `.wurst` and `.wrst` file types; the verification-only launch path never executes the Wurst entry point.
+A Wurst that declares PigFS receives `wurst.pigfs`. Paths such as `/workspace`, `/private` and `/derived` are Wurst paths, never Host paths. PigFS provides durable state, transactions, snapshots, stable object IDs and optional realm protection.
 
-When that Wurst window closes, Wurster exits. It does not reopen its launcher and ask what you would like to eat next.
+`wurst.snapshot.export()` writes the current committed Wurst through trusted Wurster save UI. Uncommitted transactions are not included.
 
-The runtime hosts Wurst code in a sandboxed web renderer with Node integration disabled. Filesystem, network and privileged runtime features are mediated by Wurster rather than exposed as Node APIs.
+## Views, sessions and Piglets
 
-## Developer tools
+Desktop and Web present Wursts with the same element:
 
-The desktop runtime opens Wurst Developer Tools in a dedicated top-level window. They inspect the Wurst renderer only. Trusted Wurster Auth surfaces do not expose developer tools to the Wurst.
+```html
+<wurst-embed src="/workspace/apps/Editor.wurst"></wurst-embed>
+```
 
-## Meat Locker
+Inside a running Wurst this is a Piglet relationship. `<wurst-embed>` is only a human View: layout belongs to ordinary HTML/CSS.
 
-Wurster can keep local Meat Identities. A Meat Identity is a name, emoji and portable Meatphrase protected by the local runtime.
+Opening the same PigFS-held Child in multiple Views does not clone its durable world. Views share one runtime Wurst session and Child PigFS revision while their DOM/tab/cursor state stays local. `wurst.piglet.running()` reports the active Child sessions and View/Machine attachment counts.
 
-Identity administration lives inside the Wurster launcher. Before the Meat Locker is shown, Wurster asks the operating system for local user presence where the runtime has an adapter. macOS uses Touch ID when available. The 0.31.0 Windows adapter asks Windows Security/Hello and is still being validated on real Windows machines before 1.0. This protects Wurster's local copy only and never changes the portable Wurst.
-
-A Wurst still remains unlockable by entering its Meatphrase manually on another conforming runtime.
-
-## Portable storage and snapshots
-
-A Wurst that declares writable user data receives `wurst.pigfs`, an application-owned filesystem rooted at `/data`. Wurster mediates all reads and writes; Wurst JavaScript never receives a host filesystem path.
-
-`wurst.pigfs.capabilities()` tells the app whether the current source is readable, writable and persistent. This lets the same app tolerate a local writable Wurst and a future remote/read-only Wurst source without pretending the original remote object can be modified.
-
-PigFS media is exposed through `wurst.pigfs.url()`, which returns an opaque runtime URL suitable for normal `<img>`, `<audio>` and `<video>` elements. Wurst code never depends on the physical URL scheme; Desktop, Web and future native runtimes map the logical PigFS path to their own safe resource surface.
-
-Local raw Wursts can compact stale append-only history in the background. Applications may request this with `wurst.pigfs.compact()`, while Wurster also performs conservative hygiene when reclaimable data becomes substantial. The visible Wurst renderer is not reloaded during the file swap.
-
-`wurst.snapshot.export()` opens trusted Wurster save UI and streams the currently committed virtual WRST representation to a standalone `.wurst` file. The application chooses when to offer a snapshot, but Wurster chooses the destination with the user. Pending, uncommitted PigFS transactions are not part of the snapshot.
-
-
-## Piglet child surfaces
-
-Desktop and Web use the same `<wurst-embed src="…">` element for Wurst presentation. Inside a running Wurst, an embed becomes a Piglet relationship. Wurster implements the element with a sandboxed runtime host and byte-range source; applications never manage native child-view geometry.
-
-Parents can discover immutable built-ins and valid `.wurst` / `.wrst` files stored anywhere in readable PigFS realms with `wurst.piglet.children()`. `wurst.piglet.install(name, bytes, { path })` is a convenience for drag-and-drop shells: it validates the child and stores the exact supplied bytes as an ordinary PigFS file. The child's own package signature is never replaced by the parent publisher identity.
-
-Managed children currently support open/move/resize/focus/close. Sealed child auth and nested child-PigFS write-back are intentionally still fail-closed/follow-up work.
-
-## Runtime capability availability
-
-A Wurst can ask what this particular runtime can actually provide:
+A `piglink.headless: true` Child also exposes the machine path:
 
 ```js
-const status = await wurst.capabilities.query("camera");
-const all = await wurst.capabilities.list();
+const tool = await wurst.piglet.connect('/workspace/tools/Tool.wurst');
+const result = await tool.piglink.invoke('run', input);
+await tool.close();
 ```
 
-A declared capability may be `available` or `unsupported`; an undeclared capability reports `undeclared`. Unsupported platform features do not prevent the Wurst from opening. The application chooses its fallback UX.
+`wurst.piglet.invoke(ref, action, input)` is the one-shot form. Machine commits and View commits share the same session revision; stale full-snapshot writers fail with `WURST_SESSION_CONFLICT`.
 
-## User-selected host files
+## Parent cooperation
 
-Desktop Wurster supports two explicit red-risk capabilities for tools that must exchange ordinary host files without receiving arbitrary filesystem access:
+Normal Parent↔Child PigLink is cheap. Broader Parent authority is explicit:
 
-```json
-{
-  "capabilities": {
-    "files.open": true,
-    "files.save": true
-  }
-}
+```html
+<wurst-embed src="FileExplorer.wurst" parent-pigfs="read-write"></wurst-embed>
+<wurst-embed src="ProgramManager.wurst" parent-piglets="manage"></wurst-embed>
 ```
 
-A Wurst with `files.open` may call `wurst.files.open(...)`. Wurster always owns the open dialog and returns only the single file the user selected. `files.save` similarly opens a Wurster-owned save dialog and writes only to the destination chosen by the user. The Wurst never receives a reusable host directory capability or unrestricted path access. Both capabilities are RED and therefore require a valid package signature on Desktop.
+Those services live under `wurst.parent`. They do not expose Host files, Wurster Auth/Identity secrets, shell/process/environment or generic Parent capabilities. `<wurst-embed isolated>` removes the managed Parent relationship for sensitive Children.
 
-`WursterLab.wurst` uses this narrow bridge to import operator files and emit a local production workspace while its operator material stays inside a personal sealed PigFS realm.
+## Host-facing capabilities
 
+Runtime availability is queryable through `wurst.capabilities`. Host file exchange remains narrow and user-mediated through declared `files.open` / `files.save`; the Wurst never receives a reusable Host directory capability.
 
-## Developer Tools
+## Trusted UI
 
-`View → Toggle Wurst Developer Tools` opens Electron's native detached DevTools for the currently focused Wurst renderer. If a managed Piglet surface has focus, its DOM, console and network activity are inspected; otherwise the top-level Wurst is inspected. Wurster does not host DevTools in a separate custom inspector WebContents.
+Auth, verified identity presentation and other security-sensitive surfaces remain Wurster-owned. Developer Tools inspect application web content, not Wurster-held secrets.

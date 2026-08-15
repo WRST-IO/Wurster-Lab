@@ -6,99 +6,78 @@ order: 3
 ---
 # Piglet
 
-Piglet is composition: a Wurst running inside another Wurst while remaining its own Wurst.
+Piglet is composition: one Wurst used inside another while both remain independently identified Wursts.
 
-A Piglet is not a package format and not an Electron view. The universal UI contract is the same element Wurster Web already uses everywhere:
-
-```html
-<wurst-embed src="./media/example.wurst"></wurst-embed>
-```
-
-Outside a Wurst this embeds a Wurst. Inside a running Wurst it creates a Piglet relationship. The element behaves like normal HTML: CSS sizing, Grid/Flexbox, scrolling, clipping, transforms and border radii belong to the parent document. Wurster may use an internal sandboxed iframe, but that is runtime implementation detail.
-
-## Source rules
-
-Inside a Wurst, `src` can refer to ordinary immutable package content or PigFS:
+A Piglet is **not** a package format and `<wurst-embed>` is **not** the Piglet. It is the universal human View path:
 
 ```html
-<wurst-embed src="./media/tool.wurst"></wurst-embed>
-<wurst-embed src="/workspace/apps/tool.wurst"></wurst-embed>
+<wurst-embed src="/workspace/apps/FileExplorer.wurst"></wurst-embed>
 ```
 
-Built-in MeatGrinder children remain discoverable with `wurst.piglet.children()` and can be embedded through their runtime URL when needed. Runtime-installed children are normal `.wurst` / `.wrst` files in PigFS.
+Outside a Wurst this embeds a Wurst. Inside a running Wurst the same element establishes a Piglet relationship. Layout remains ordinary HTML/CSS; Wurster owns loading, verification, session coordination and persistence.
 
-## Identity never merges
+## One Wurst, many Views
 
-Nesting never republishes the child as the parent.
-
-```text
-WhiteHouse.wurst     signed by WhiteHouse.gov
-└── JoeBiden.wurst   signed by JoeBiden.com
-```
-
-MeatGrinder preserves the exact child bytes. The parent signature covers those exact bytes as parent content; the child signature continues to authenticate the child's own immutable package. Mutable child PigFS state may grow later without changing the child's immutable publisher identity.
-
-## Runtime installation
-
-A dropped Wurst is stored as an ordinary PigFS file:
-
-```js
-await wurst.piglet.install('MyApp.wurst', bytes, {
-  path: '/workspace/apps/MyApp.wurst'
-});
-```
-
-Discovery is filesystem-based. A filename ending in `.wurst` is only returned as a runnable Piglet after it parses as a valid Wurst.
-
-## Lazy startup and persistence
-
-Piglet sources are byte-range sources. Opening an embed does not require buffering the complete child first. Wurster reads metadata and requested resources in slices.
-
-When a child has writable PigFS, its mutations persist back to the parent-held `.wurst` file. Runtime-installed children update that file directly. Writable built-in children materialize a mutable runtime copy in an ordinary parent PigFS realm so the immutable bytes covered by the parent signature remain unchanged.
-
-Write-back is conflict checked. If the parent-held file changes independently while the child is running, Wurster raises `WURST_PIGLET_CONFLICT` rather than silently choosing a winner.
-
-## Parent-granted runtime access
-
-Piglets are isolated by default. A child cannot see its parent Wurst merely because it is embedded. The parent may explicitly delegate selected runtime services on the `<wurst-embed>` element. The first delegation surface is Parent PigFS:
+Two embeds of the same PigFS-held Child are two Views onto one durable Wurst world:
 
 ```html
-<wurst-embed
-  src="/workspace/apps/FileExplorer.wurst"
-  parent-pigfs="read-write">
-</wurst-embed>
+<wurst-embed src="/workspace/apps/FileExplorer.wurst"></wurst-embed>
+<wurst-embed src="/workspace/apps/FileExplorer.wurst"></wurst-embed>
 ```
 
-The child keeps its own `wurst.pigfs`. Delegated parent storage is separate and explicit:
+Each View may keep different tab, selection, scroll or unsaved DOM state. Once a PigFS change is committed, it belongs to the Wurst. Other Views receive `wurst-session-changed`; a stale full-snapshot writer gets `WURST_SESSION_CONFLICT` until refreshed.
+
+`wurst.piglet.running()` reports active Child sessions plus View/Machine attachment counts. Session ids are runtime coordination handles, never second Wurst identities or portable state.
+
+## Machine access
+
+A Child that declares `piglink.headless: true` can run without a visible View:
 
 ```js
-await wurst.parent.pigfs.list('/');
-await wurst.parent.pigfs.write('/workspace-note.txt', 'OINK');
+const packer = await wurst.piglet.connect('/workspace/tools/TexturePacker.wurst');
+const result = await packer.piglink.invoke('textures.pack', input);
+await packer.close();
 ```
 
-`parent-pigfs="read"` exposes read operations only. `parent-pigfs="read-write"` additionally allows mutation. Without the attribute `wurst.parent` is `null`. A grant never means Host filesystem access and never bypasses PigFS governance or encryption: a locked parent Realm remains locked, and a child does not inherit keys for unrelated Wursts. The parent can delegate only the runtime authority it already possesses.
-
-This is intentionally a parent-service capability boundary rather than a merged filesystem. A WurstOS-style FileExplorer can therefore operate on WurstOS PigFS while still keeping its own package identity and private PigFS state. Future parent services can extend the same explicit grant model without turning Piglet into ambient authority.
-
-## Runtime API
-
-Piglet's JavaScript API manages files and discovery, not screen geometry:
+For one call:
 
 ```js
-await wurst.piglet.children();
-await wurst.piglet.inspect(ref);
-await wurst.piglet.install(name, bytes, options);
-await wurst.piglet.remove(ref);
+const result = await wurst.piglet.invoke(ref, 'textures.pack', input);
 ```
 
-Application presentation is `<wurst-embed>`. There is no public `setBounds`, native surface or Desktop-only open API.
+On Desktop/Web this machine attachment joins the same durable Child session as visible Views. The browserless harness can also use built-in or PigFS-held Child Wursts as machine subtools without extracting them to Host files.
 
-## Trust UI
+## Identity and source
 
-Application content is web-native. Trusted runtime UI is different.
+Nesting never republishes a Child as the Parent. The exact immutable Child package, publisher signature and identity remain its own. Mutable Child PigFS may change later without changing that immutable publisher identity.
 
-`<wurster-auth>` and verified Wurster Identity presentation may use runtime-owned trusted surfaces because the application must not be able to forge them. Piglet application UI itself never requires `WebContentsView`.
+Children may come from immutable Parent content, built-ins or ordinary `.wurst` / `.wrst` files in readable Parent PigFS. `wurst.piglet.install(...)` validates supplied bytes and stores them as an ordinary PigFS file.
 
-## Remaining work
+## Cooperation
 
-The largest remaining Piglet pieces are direct Parent↔Child PigLink handles beyond the scoped Parent PigFS bridge, suspend/resume semantics, tree-level resource budgets, crash/recovery states, finer path-scoped delegation and complete nested-Piglet stress testing.
+When the Parent declares PigLink, Parent↔Child Actions/Events are available by default. Broader Parent authority is explicit:
+
+```html
+<wurst-embed src="FileExplorer.wurst" parent-pigfs="read-write"></wurst-embed>
+<wurst-embed src="ProgramManager.wurst" parent-piglets="manage"></wurst-embed>
+```
+
+The Child sees these under `wurst.parent.pigfs` and `wurst.parent.piglets`. A Parent can delegate only authority it actually has. There is no inherit-everything switch, and none of this implies Host filesystem, shell/process/environment or Wurster-secret access.
+
+For a stricter compartment:
+
+```html
+<wurst-embed src="SensitiveTool.wurst" isolated></wurst-embed>
+```
+
+`isolated` removes Wurster-managed Parent PigLink and Parent services. It is an optional relationship mode, not Piglet's default philosophy.
+
+## Persistence and conflicts
+
+Child sources are range-readable. Writable Child PigFS persists back to the Parent-held Wurst with conflict checking. Built-in writable Children materialize a mutable copy in Parent PigFS while the immutable built-in bytes covered by the Parent signature remain unchanged.
+
+If the underlying Child Wurst changes independently, Wurster fails instead of silently choosing a winner. Session-level stale writes use `WURST_SESSION_CONFLICT`; backing-file conflicts use `WURST_PIGLET_CONFLICT`.
+
+## Remaining 0.32.3 work
+
+The largest open gap is an external broker that lets a separate CLI/MCP process discover and attach to a Desktop/Web-owned Wurst session already running elsewhere. The generic CLI Child-subtool path also still needs full writable nested-Child PigFS and Parent-service parity. Path-scoped delegation, lifecycle/revoke, recovery and deep nesting remain pre-1.0 work.

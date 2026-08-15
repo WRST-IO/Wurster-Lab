@@ -85,7 +85,10 @@ export function createDesktopPigLinkRuntime({
     if (!spec) return;
     try {
       if (spec.payload) validateJsonValue(payload, spec.payload, '$event');
-      context.lastPigLinkEvent = { name, payload: structuredClone(payload), at: Date.now() };
+      const clean = structuredClone(payload ?? null);
+      context.lastPigLinkEvent = { name, payload: clean, at: Date.now() };
+      const webContents = getWebContents(context);
+      if (webContents && !webContents.isDestroyed?.()) webContents.send('wurst:piglink:event-accepted', { name, payload: clean });
     } catch {
       // Invalid events never cross the runtime boundary.
     }

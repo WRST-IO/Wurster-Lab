@@ -7,42 +7,28 @@ permalink: /docs/
 ---
 # Wurster
 
-Wurst is a portable application format for small web apps, tools, widgets and delightfully unnecessary software.
+**Wurst is a portable software format for useful everyday tools, workflows and applications, from a tiny utility to a complete working environment.**
 
-A Wurst contains normal web technology: HTML, CSS, JavaScript, media and optional mutable user data. Wurster is the runtime that opens it. MeatGrinder is the tool that turns a project folder into one portable file.
+A Wurst can contain normal HTML, CSS, JavaScript, media, PigFS data, PigLink behavior and other Wursts. MeatGrinder turns a project folder into one portable `.wurst`; Wurster runs it without handing that software the user's computer.
 
 ```text
-web project
-    ↓
-MeatGrinder
-    ↓
-my-app.wurst
-    ↓
-Wurster
+project → MeatGrinder → my-tool.wurst → Wurster
 ```
 
-The happy path is intentionally boring. Drop a browser-ready project folder into MeatGrinder and press **Start MeatGrinder**. If the folder contains `index.html`, no manifest is required.
+A browser-ready folder with `index.html` is enough for the simple case. Add `wurst.json` only when the application needs PigFS, PigLink, protection, runtime capabilities or special presentation.
 
-A `wurst.json` file only becomes useful when a Wurst needs special behavior such as a frameless window, transparent background, mutable PigFS data, protected application content or runtime capabilities.
+## The five sentences to remember
 
-## Four ideas to remember
+1. **A Wurst is universal.** Host-specific implementation details belong to Wurster.
+2. **Wurst ↔ Host is the hard security boundary.** Host FS, shell, processes and Wurster secrets are never ambient.
+3. **PigFS stores, PigLink connects, Piglet composes, Pigsty computes.**
+4. **Everything has an end. Only Wurst has two.** Human Views and machine clients can address the same durable Wurst world.
+5. **`<wurst-embed>` is only a View.** Inside another Wurst it creates a Piglet relationship; it is not the Piglet itself.
 
-**A Wurst is universal.** A valid Wurst must be usable by every conforming Wurster runtime. Platform features such as Touch ID or a system keystore may protect a local Wurster Meat Locker, but they never become a requirement of the Wurst file itself.
+## Where to go next
 
-**Wursts are served in slices.** WRST v7 is a binary random-access container. Runtimes can read metadata first, fetch only the resource slices they need, and append transactional PigFS writes without rebuilding the immutable application base.
-
-**User secrets and app secrets are different.** A Meatphrase belongs to user-owned mutable data. A WurstKey protects developer-owned sealed application content. They are deliberately separate.
-
-**Everything has an end. Only Wurst has two.** A Wurst may expose a visible UI on one side and PigLink on the other. The same declared Actions already serve UI and headless/tooling paths; brokered links between separate running Wursts are the next communication layer.
-
-## Four runtime pillars
-
-**PigFS stores.** It is the portable filesystem inside a Wurst: normal paths, mutable state, realms, transactions, snapshots and stable objects.
-
-**PigLink connects.** Wursts expose declared behavior to other Wursts, tools and automation without turning the DOM into an API.
-
-**Piglet composes.** `<wurst-embed>` embeds a Wurst everywhere. Inside a running Wurst the embedded Wurst becomes a Piglet while keeping its own identity and PigFS.
-
-**Pigsty computes.** A Wurst can build and transform PigFS inside an isolated compute stall. In normal v0.32 Desktop releases the native Edge/WASIX engine is still coming soon, so Pigsty does not block Windows/macOS/Web releases.
-
-For exact release maturity, see [Current status](status.md). Next: [Getting Started](getting-started.md).
+- [Getting Started](getting-started.md) - build and open a Wurst.
+- [Current status](status.md) - what 0.32.3 actually supports.
+- [PigFS](pigfs.md), [PigLink](piglink.md), [Piglet](piglet.md), [Pigsty](pigsty.md) - the four runtime pillars.
+- [Security Model](security-model.md) - the Host fence and internal cooperation.
+- [Universal Runtime Law](universal-runtime.md) - what every conforming Wurster must preserve.

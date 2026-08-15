@@ -65,6 +65,13 @@ export async function inspectPigletSource(source, metadata = {}) {
         format: reader.manifest?.pigfs?.format ?? null,
         writable: reader.manifest?.pigfs?.writable === true
       },
+      capabilities: structuredClone(reader.manifest?.capabilities ?? {}),
+      piglink: reader.manifest?.piglink ? {
+        format: reader.manifest.piglink.format ?? null,
+        headless: reader.manifest.piglink.headless === true,
+        actions: Object.keys(reader.manifest.piglink.actions ?? {}),
+        events: Object.keys(reader.manifest.piglink.events ?? {})
+      } : null,
       protection: {
         application: reader.manifest?.application?.protection ?? 'public',
         sealed: reader.manifest?.application?.protection === 'sealed' || reader.entries().some((entry) => Boolean(entry.encryption))

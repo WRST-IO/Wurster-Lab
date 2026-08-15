@@ -35,6 +35,7 @@ export function createPigletStorageAdapter({
     return {
       size: stat.size,
       path: publicPath(target),
+      objectId: stat.objectId ?? null,
       async read(offset, length) {
         if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length) || offset < 0 || length < 0 || offset + length > stat.size) throw new Error('Invalid stored Piglet range');
         const result = await context.reader.pigFsReadRange(target, offset, length, options);
@@ -83,6 +84,7 @@ export function createPigletStorageAdapter({
           label: null,
           source: 'pigfs',
           path: storedPath,
+          objectId: source.objectId ?? null,
           mutable: true
         }));
       } catch {
@@ -123,6 +125,7 @@ export function createPigletStorageAdapter({
     }
     await refreshContext(context);
     scheduleHygiene(context);
+    const installed = await openSource(context, destination);
     return {
       ...inspected,
       ref: `pigfs:${destination}`,
@@ -130,6 +133,7 @@ export function createPigletStorageAdapter({
       label: inspected.application?.name ?? path.basename(destination),
       source: 'pigfs',
       path: destination,
+      objectId: installed.objectId ?? null,
       mutable: true
     };
   }

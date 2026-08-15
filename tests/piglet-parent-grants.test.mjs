@@ -18,23 +18,59 @@ const runtime = createPigletEmbedRuntime({
     return { method, args };
   }
 });
-const context = { id: 'parent-runtime' };
-const descriptor = { ref: 'builtin:child', source: 'builtin', application: { id: 'io.wrst.child' }, data: { writable: false } };
+const context = {
+  id: 'parent-runtime',
+  manifest: {
+    id: 'io.wrst.parent', name: 'Parent Wurst', version: '1.0.0',
+    piglink: { format: 'wurst/piglink-1', actions: { ping: { input: { type: 'object' } } }, events: {} }
+  }
+};
+const descriptor = {
+  ref: 'builtin:child', source: 'builtin', application: { id: 'io.wrst.child' }, data: { writable: false },
+  capabilities: { network: ['https://api.example.com/'] }
+};
 
-const isolated = await runtime.open(context, descriptor, source);
-assert.equal(isolated.parent, null);
-await assert.rejects(() => runtime.invoke(context, isolated.handle, 'pigfs.list', ['/']), /not delegated/i);
+// PigLink is the cooperative default for a normal embedded child.
+const cooperative = await runtime.open(context, descriptor, source);
+const cooperativeSecondView = await runtime.open(context, descriptor, source);
+assert.equal(cooperative.parent.piglink.access, 'connect');
+assert.equal(cooperative.parent.pigfs, null);
+assert.equal(cooperative.parent.piglets, null);
+assert.equal(cooperative.session.id, cooperativeSecondView.session.id);
+assert.equal(runtime.list(context)[0].views, 2);
+assert.deepEqual(cooperative.parent.application, { id: 'io.wrst.parent', name: 'Parent Wurst', version: '1.0.0' });
+assert.deepEqual(await runtime.invoke(context, cooperative.handle, 'piglink.describe', []), { method: 'piglink.describe', args: [] });
+await assert.rejects(() => runtime.invoke(context, cooperative.handle, 'pigfs.list', ['/']), /not delegated/i);
+await assert.rejects(() => runtime.open(context, descriptor, source, { parent: { pigfs: 'read' } }), (error) => error?.code === 'WURST_SESSION_RELATIONSHIP_CONFLICT');
+runtime.close(context, cooperative.handle);
+assert.equal(runtime.list(context)[0].views, 1);
+runtime.close(context, cooperativeSecondView.handle);
+assert.equal(runtime.list(context).length, 0);
 
-const readOnly = await runtime.open(context, descriptor, source, { parentPigFs: 'read' });
-assert.deepEqual(readOnly.parent, { pigfs: { access: 'read' } });
+const readOnly = await runtime.open(context, descriptor, source, { parent: { pigfs: 'read' } });
+assert.equal(readOnly.parent.pigfs.access, 'read');
+assert.equal(readOnly.composition.level, 'notice');
+assert.equal(readOnly.composition.hostSecretsDelegated, false);
+assert.ok(readOnly.composition.reasons.some((item) => item.code === 'parent-pigfs-to-network'));
 assert.deepEqual(await runtime.invoke(context, readOnly.handle, 'pigfs.list', ['/']), { method: 'pigfs.list', args: ['/'] });
 await assert.rejects(() => runtime.invoke(context, readOnly.handle, 'pigfs.write', ['/hello.txt', 'OINK']), /read-only/i);
+runtime.close(context, readOnly.handle);
 
-const readWrite = await runtime.open(context, descriptor, source, { parentPigFs: 'read-write' });
-assert.deepEqual(await runtime.invoke(context, readWrite.handle, 'pigfs.write', ['/hello.txt', 'OINK']), { method: 'pigfs.write', args: ['/hello.txt', 'OINK'] });
-await assert.rejects(() => runtime.invoke(context, readWrite.handle, 'pigfs.compact', []), /Unsupported delegated parent operation/);
-await assert.rejects(() => runtime.open(context, descriptor, source, { parentPigFs: 'admin' }), /read or read-write/);
+const manage = await runtime.open(context, descriptor, source, { parent: { pigfs: 'read-write', piglets: 'manage' } });
+assert.equal(manage.parent.piglets.access, 'manage');
+assert.deepEqual(await runtime.invoke(context, manage.handle, 'piglet.children', []), { method: 'piglet.children', args: [] });
+assert.deepEqual(await runtime.invoke(context, manage.handle, 'piglet.install', ['Tool.wurst', new Uint8Array([1, 2, 3]), {}]), { method: 'piglet.install', args: ['Tool.wurst', new Uint8Array([1, 2, 3]), {}] });
+runtime.close(context, manage.handle);
 
-assert.deepEqual(calls.map((item) => item.method), ['pigfs.list', 'pigfs.write']);
+const isolated = await runtime.open(context, descriptor, source, { parent: { isolated: true } });
+assert.equal(isolated.parent.isolated, true);
+assert.equal(isolated.parent.piglink, null);
+await assert.rejects(() => runtime.invoke(context, isolated.handle, 'piglink.describe', []), /unavailable/i);
+runtime.close(context, isolated.handle);
+await assert.rejects(() => runtime.open(context, descriptor, source, { parent: { isolated: true, pigfs: 'read' } }), /isolated/i);
+await assert.rejects(() => runtime.open(context, descriptor, source, { parent: { piglets: 'admin' } }), /read.*manage/i);
+
+assert.deepEqual(calls.map((item) => item.method), ['piglink.describe', 'pigfs.list', 'piglet.children', 'piglet.install']);
+assert.equal(runtime.list(context).length, 0);
 runtime.closeContext(context);
-console.log('✓ Piglet parent grants are explicit, read/write scoped and never expose undelegated Parent PigFS access');
+console.log('✓ Piglet relationships default to PigLink cooperation, delegate data/management explicitly and keep strict isolation opt-in');

@@ -8,6 +8,123 @@ const events = [];
 const registry = createActionRegistry(workerData.declaration, {
   emit: (name, payload) => events.push({ name, payload })
 });
+const servicePending = new Map();
+let serviceSeq = 1;
+
+parentPort.on('message', (message = {}) => {
+  if (message.type !== 'service-result') return;
+  const pending = servicePending.get(String(message.id ?? ''));
+  if (!pending) return;
+  servicePending.delete(String(message.id ?? ''));
+  if (message.ok) pending.resolve(message.result);
+  else {
+    const error = new Error(message.error || 'Wurst runtime service failed');
+    if (message.code) error.code = message.code;
+    pending.reject(error);
+  }
+});
+
+function callService(method, args = []) {
+  const id = `svc-${serviceSeq++}`;
+  return new Promise((resolve, reject) => {
+    servicePending.set(id, { resolve, reject });
+    parentPort.postMessage({ type: 'service-call', id, method, args });
+  });
+}
+
+function pigFsApi(prefix = 'pigfs') {
+  return Object.freeze({
+    capabilities: () => callService(`${prefix}.capabilities`),
+    realms: () => callService(`${prefix}.realms`),
+    usage: (realm = null) => callService(`${prefix}.usage`, [realm]),
+    stat: (path) => callService(`${prefix}.stat`, [path]),
+    list: (path = '/') => callService(`${prefix}.list`, [path]),
+    read: (path, options = {}) => callService(`${prefix}.read`, [path, options]),
+    write: (path, data, options = {}) => callService(`${prefix}.write`, [path, data, options]),
+    mkdir: (path, options = {}) => callService(`${prefix}.mkdir`, [path, options]),
+    remove: (path, options = {}) => callService(`${prefix}.remove`, [path, options]),
+    rename: (from, to, options = {}) => callService(`${prefix}.rename`, [from, to, options])
+  });
+}
+
+function parentApi(spec) {
+  if (!spec) return null;
+  const out = {};
+  if (spec.piglink) out.piglink = Object.freeze({
+    describe: () => callService('parent.piglink.describe'),
+    invoke: (name, input = {}) => callService('parent.piglink.invoke', [String(name ?? ''), input])
+  });
+  if (spec.pigfs) out.pigfs = pigFsApi('parent.pigfs');
+  if (spec.piglets) out.piglets = Object.freeze({
+    children: () => callService('parent.piglets.children'),
+    inspect: (ref) => callService('parent.piglets.inspect', [ref]),
+    install: (name, data, options = {}) => callService('parent.piglets.install', [name, data, options]),
+    remove: (ref) => callService('parent.piglets.remove', [ref])
+  });
+  return Object.freeze(out);
+}
+
+function pigletApi() {
+  return Object.freeze({
+    running: () => callService('piglet.running'),
+    inspect: (ref) => callService('piglet.inspect', [String(ref ?? '')]),
+    connect: async (ref, options = {}) => {
+      const opened = await callService('piglet.machineConnect', [String(ref ?? ''), options]);
+      const handle = String(opened?.handle ?? '');
+      if (!handle) throw new Error('Wurster did not return a headless Piglet attachment');
+      let closed = false;
+      const listeners = new Map();
+      const dispatchEvents = (items = []) => {
+        for (const event of items) {
+          const name = String(event?.name ?? '');
+          const payload = structuredClone(event?.payload ?? null);
+          for (const key of [name, '*']) {
+            for (const listener of listeners.get(key) ?? []) {
+              try { listener(payload, name); } catch {}
+            }
+          }
+        }
+      };
+      return Object.freeze({
+        descriptor: structuredClone(opened.descriptor ?? null),
+        session: structuredClone(opened.session ?? null),
+        piglink: Object.freeze({
+          describe: () => callService('piglet.machineDescribe', [handle]),
+          invoke: async (name, input = {}, invokeOptions = {}) => {
+            if (closed) throw new Error('Wurst machine connection is closed');
+            const result = await callService('piglet.machineInvoke', [handle, String(name ?? ''), input, invokeOptions]);
+            dispatchEvents(result?.events ?? []);
+            return result?.result ?? null;
+          },
+          on: (name, listener) => {
+            if (typeof listener !== 'function') throw new TypeError('PigLink event listener must be a function');
+            const eventName = String(name ?? '*');
+            const set = listeners.get(eventName) ?? new Set();
+            set.add(listener);
+            listeners.set(eventName, set);
+            return () => { set.delete(listener); if (!set.size) listeners.delete(eventName); };
+          }
+        }),
+        close: async () => {
+          if (closed) return false;
+          closed = true;
+          return callService('piglet.machineClose', [handle]);
+        }
+      });
+    },
+    invoke: async (ref, name, input = {}, options = {}) => {
+      const child = await callService('piglet.machineConnect', [String(ref ?? ''), options]);
+      const handle = String(child?.handle ?? '');
+      if (!handle) throw new Error('Wurster did not return a headless Piglet attachment');
+      try {
+        const result = await callService('piglet.machineInvoke', [handle, String(name ?? ''), input, options]);
+        return result?.result ?? null;
+      } finally {
+        await callService('piglet.machineClose', [handle]).catch(() => {});
+      }
+    }
+  });
+}
 
 const safeConsole = Object.freeze({
   log: (...args) => events.push({ name: 'console.log', payload: args.map(String) }),
@@ -17,6 +134,9 @@ const safeConsole = Object.freeze({
 
 const wurst = Object.freeze({
   info: () => JSON.parse(JSON.stringify(workerData.info)),
+  parent: parentApi(workerData.services?.parent ?? null),
+  ...(workerData.services?.pigfs ? { pigfs: pigFsApi('pigfs') } : {}),
+  ...(workerData.services?.piglet ? { piglet: pigletApi() } : {}),
   crypto: Object.freeze({
     generateMeatphrase: (count = 12) => generateMeatphrase(Number(count)),
     generateWurstKey: () => generateWurstKey()
@@ -57,49 +177,21 @@ const wurst = Object.freeze({
     },
     run: (request = {}) => {
       const engine = request?.engine ?? process.env.WURSTER_PIGSTY_ENGINE;
-      if (engine === 'edge-wasix') {
-        throw new Error('Pigsty Edge/WASIX currently runs declared builds; use wurst.pigsty.build(name, { engine: "edge-wasix" })');
-      }
+      if (engine === 'edge-wasix') throw new Error('Pigsty Edge/WASIX currently runs declared builds; use wurst.pigsty.build(name, { engine: "edge-wasix" })');
       if (engine && engine !== 'worker') throw new Error(`Unknown Pigsty engine: ${engine}`);
       const includeApp = request?.includeApp !== false;
-      return runPigstyScript({
-        policy: workerData.pigsty,
-        script: String(request?.script ?? ''),
-        workspace: { ...(includeApp ? workerData.appWorkspace ?? {} : {}), ...(request?.workspace ?? {}) },
-        args: request?.args ?? {},
-        timeoutMs: request?.timeoutMs
-      });
+      return runPigstyScript({ policy: workerData.pigsty, script: String(request?.script ?? ''), workspace: { ...(includeApp ? workerData.appWorkspace ?? {} : {}), ...(request?.workspace ?? {}) }, args: request?.args ?? {}, timeoutMs: request?.timeoutMs });
     },
     build: async (name = 'default', request = {}) => {
       const includeApp = request?.includeApp !== false;
       const workspace = { ...(includeApp ? workerData.appWorkspace ?? {} : {}), ...(request?.workspace ?? {}) };
       const engine = request?.engine ?? process.env.WURSTER_PIGSTY_ENGINE;
-      if (engine === 'edge-wasix') {
-        return runPigstyEngineBuild({
-          policy: workerData.pigsty,
-          build: String(name ?? 'default'),
-          workspace,
-          toolchain: request?.toolchain ?? null,
-          tmp: request?.tmp ?? {},
-          args: request?.args ?? {},
-          network: request?.network === true,
-          timeoutMs: request?.timeoutMs,
-          engine: await createResolvedEdgeWasixPigstyEngine()
-        });
-      }
+      if (engine === 'edge-wasix') return runPigstyEngineBuild({ policy: workerData.pigsty, build: String(name ?? 'default'), workspace, toolchain: request?.toolchain ?? null, tmp: request?.tmp ?? {}, args: request?.args ?? {}, network: request?.network === true, timeoutMs: request?.timeoutMs, engine: await createResolvedEdgeWasixPigstyEngine() });
       if (engine && engine !== 'worker') throw new Error(`Unknown Pigsty engine: ${engine}`);
-      return runPigstyBuild({
-        policy: workerData.pigsty,
-        build: String(name ?? 'default'),
-        workspace,
-        args: request?.args ?? {},
-        timeoutMs: request?.timeoutMs
-      });
+      return runPigstyBuild({ policy: workerData.pigsty, build: String(name ?? 'default'), workspace, args: request?.args ?? {}, timeoutMs: request?.timeoutMs });
     }
   }),
-  piglink: Object.freeze({
-    emit: (name, payload) => registry.emit(name, payload)
-  })
+  piglink: Object.freeze({ emit: (name, payload) => registry.emit(name, payload) })
 });
 
 const context = vm.createContext({
@@ -118,16 +210,13 @@ const context = vm.createContext({
   structuredClone,
   setTimeout,
   clearTimeout
-}, {
-  name: `PigLink: ${workerData.info?.name ?? 'unnamed'}`,
-  codeGeneration: { strings: false, wasm: false }
-});
+}, { name: `PigLink: ${workerData.info?.name ?? 'unnamed'}`, codeGeneration: { strings: false, wasm: false } });
 
 try {
   const script = new vm.Script(workerData.source, { filename: workerData.entry, displayErrors: true });
   script.runInContext(context, { timeout: Math.min(workerData.timeoutMs, 5_000) });
   const result = await registry.invoke(workerData.action, workerData.input, { wurst });
-  parentPort.postMessage({ ok: true, result, events });
+  parentPort.postMessage({ type: 'result', ok: true, result, events });
 } catch (error) {
-  parentPort.postMessage({ ok: false, error: error?.stack || error?.message || String(error), events });
+  parentPort.postMessage({ type: 'result', ok: false, error: error?.stack || error?.message || String(error), events });
 }

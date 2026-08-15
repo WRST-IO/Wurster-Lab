@@ -10,10 +10,12 @@ import { WursterWeb, MessagePortWurstSource } from './wurster.min.js';
 const stage = document.querySelector('#stage');
 const boot = document.querySelector('#boot');
 let session = null;
+let unsubscribePigLink = null;
 addEventListener('message', async (event) => {
   if (event.data?.type !== 'wurster-embed-init' || !event.ports?.[0]) return;
   const port = event.ports[0]; port.start?.();
   try {
+    unsubscribePigLink?.(); unsubscribePigLink = null;
     await session?.close?.();
     const source = new MessagePortWurstSource(port, Number(event.data.size), { kind: event.data.sourceKind || 'embed' });
     const base = new URL('./', import.meta.url);
@@ -34,6 +36,38 @@ addEventListener('message', async (event) => {
         if (!pending) return;
         pendingParent.delete(m.id);
         m.ok ? pending.resolve(m.result) : pending.reject(new Error(m.error || 'Parent Wurst operation failed'));
+        return;
+      }
+      if (m?.type === 'wurster-embed-parent-piglink-event') {
+        session?.deliverParentPigLinkEvent?.(String(m.name || ''), m.payload ?? null);
+        return;
+      }
+      if (m?.type === 'wurster-embed-session-changed') {
+        void (async () => {
+          try {
+            const result = await session?.refreshEmbeddedSource?.({
+              size: Number(m.size),
+              session: m.session || null
+            });
+            port.postMessage({ type: 'wurster-embed-session-refreshed', result });
+          } catch (error) {
+            port.postMessage({ type: 'wurster-embed-session-refresh-failed', error: error?.message || String(error), code: error?.code || null });
+          }
+        })();
+        return;
+      }
+      if (m?.type === 'wurster-embed-child-call') {
+        void (async () => {
+          try {
+            let result;
+            if (m.method === 'piglink.describe') result = session?.describePigLink?.() ?? null;
+            else if (m.method === 'piglink.invoke') result = await session?.invokePigLink?.(m.args?.[0], m.args?.[1] ?? {});
+            else throw new Error(`Unsupported embedded child operation: ${m.method}`);
+            port.postMessage({ type: 'wurster-embed-child-result', id: m.id, ok: true, result });
+          } catch (error) {
+            port.postMessage({ type: 'wurster-embed-child-result', id: m.id, ok: false, error: error?.message || String(error) });
+          }
+        })();
       }
     };
     port.addEventListener('message', onBridgeResult);
@@ -49,6 +83,7 @@ addEventListener('message', async (event) => {
         return result;
       } : null,
       parent: event.data.parent || null,
+      externalSession: event.data.session || null,
       parentInvoke: event.data.parent ? async (method, args = []) => {
         const id = `parent-${requestSeq++}`;
         const result = new Promise((resolve, reject) => pendingParent.set(id, { resolve, reject }));
@@ -56,6 +91,9 @@ addEventListener('message', async (event) => {
         return result;
       } : null
     });
+    unsubscribePigLink = session.onPigLinkEvent?.((name, payload) => {
+      port.postMessage({ type: 'wurster-embed-child-event', name, payload });
+    }) || null;
     boot.hidden = true;
     await session.mount(stage);
     port.postMessage({ type: 'wurster-embed-ready', detail: { manifest: session.reader.manifest, signature: session.signature, version: WursterWeb.version } });

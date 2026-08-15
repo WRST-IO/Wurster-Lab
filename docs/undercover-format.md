@@ -8,7 +8,7 @@ order: 2
 
 Undercover Wurst is the PNG carrier mode for Wurst.
 
-The canonical mini-app container remains WRST. A PNG carrier is only an outer transport layer:
+The canonical Wurst container remains WRST. A PNG carrier is only an outer transport layer:
 
 ```text
 valid PNG image

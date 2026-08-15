@@ -1,4 +1,11 @@
-import { TRUSTED_AUTHORITIES, TRUST_BUNDLE } from './trust-data.mjs';
+import { validateJsonValue } from '@wurster/piglink';
+import { WurstSessionRegistry, analyzePigletAuthorityComposition, assertPigletParentMethod, normalizePigletRelationship } from '@wurster/piglet';
+import { BlobWurstSource, HttpWurstSource, MessagePortWurstSource, sourceFrom } from './wurst-source.mjs';
+import { verifyPublisherCertificateWeb, verifyTrustBundleWeb } from './trust-runtime.mjs';
+import { mimeFor, normalizeCapabilityDeclaration, parseRange } from './web-runtime-util.mjs';
+import { mountWebMachineSession } from './piglet-machine-runtime.mjs';
+export { BlobWurstSource, HttpWurstSource, MessagePortWurstSource } from './wurst-source.mjs';
+export { verifyPublisherCertificateWeb, verifyTrustBundleWeb } from './trust-runtime.mjs';
 const WRST_MAGIC = new Uint8Array([0x57, 0x52, 0x53, 0x54]);
 const WRST_VERSION = 7;
 const HEADER_SIZE = 24;
@@ -13,7 +20,7 @@ const FS_END_MAGIC = new Uint8Array([0x57, 0x37, 0x52, 0x45]);
 const FS_RECORD = Object.freeze({ DATA: 1, MAP: 2, CATALOG: 3, COMMIT: 4 });
 const SIGNATURE_PATH = '__wurst/signature.json';
 const SEALED_APP_INDEX_PATH = '__wurst/sealed-app/index.json';
-const WURSTER_WEB_VERSION = '0.32.2';
+const WURSTER_WEB_VERSION = '0.32.3';
 const te = new TextEncoder();
 const td = new TextDecoder();
 function bytes(value) {
@@ -128,64 +135,6 @@ function canonicalStringify(value) {
   const keys = Object.keys(value).sort();
   return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalStringify(value[key])}`).join(',')}}`;
 }
-function trustedRootMatchesWeb(root, trustedAuthorities=TRUSTED_AUTHORITIES) {
-  return (trustedAuthorities || []).some((candidate) => candidate?.algorithm === 'ed25519' && candidate.fingerprint === root?.fingerprint && candidate.publicKeySpki === root?.publicKeySpki);
-}
-async function verifyEd25519Web(publicKeySpki, statement, signature) {
-  const der=fromBase64(publicKeySpki);
-  const key=await crypto.subtle.importKey('spki',der,{name:'Ed25519'},false,['verify']);
-  return crypto.subtle.verify({name:'Ed25519'},key,fromBase64(signature),te.encode(canonicalStringify(statement)));
-}
-export async function verifyTrustBundleWeb(bundle=TRUST_BUNDLE, trustedAuthorities=TRUSTED_AUTHORITIES) {
-  try {
-    if(bundle?.format!=='wurst/trust-bundle-1'||bundle.algorithm!=='ed25519')throw new Error('Unsupported Wurst trust bundle');
-    const root=bundle.statement?.root;
-    if(root?.format!=='wurst/authority-root-1')throw new Error('Trust bundle root is missing');
-    if(await sha256Hex(fromBase64(root.publicKeySpki))!==root.fingerprint)throw new Error('Trust bundle root fingerprint mismatch');
-    if(!await verifyEd25519Web(root.publicKeySpki,bundle.statement,bundle.signature))throw new Error('Trust bundle signature is invalid');
-    const trusted=trustedRootMatchesWeb(root, trustedAuthorities);
-    return {status:trusted?'verified':'valid-untrusted',valid:true,trusted,root,statement:bundle.statement};
-  } catch(error) { return {status:'invalid',valid:false,trusted:false,error:error.message}; }
-}
-export async function verifyPublisherCertificateWeb(certificate, now=new Date(), trustedAuthorities=TRUSTED_AUTHORITIES, trustBundle=TRUST_BUNDLE) {
-  try {
-    if(!certificate||certificate.algorithm!=='ed25519'||certificate.format!=='wurst/publisher-certificate-3')throw new Error('Unsupported publisher certificate');
-    const statement=certificate.statement, rawSubject=statement?.subject, issuer=statement?.issuer, chainCert=certificate.issuerCertificate;
-    let claims=[];
-    claims=(statement?.claims||[]).map((claim)=>({type:String(claim?.type||'').toLowerCase(),value:String(claim?.value||''),verification:claim?.verification||{}}));
-    if(!rawSubject?.fingerprint||!rawSubject?.publicKeySpki||!claims.length)throw new Error('Publisher certificate subject or claims are incomplete');
-    for(const claim of claims){
-        if(claim.type==='domain'){if(!claim.value||claim.value.includes('://')||claim.value.includes('/')||claim.value.includes('@'))throw new Error('Publisher certificate domain claim is invalid');claim.value=claim.value.toLowerCase().replace(/\.$/,'');}
-        else if(claim.type==='email'){claim.value=claim.value.trim().toLowerCase();if(!/^\S+@\S+\.\S+$/.test(claim.value))throw new Error('Publisher certificate email claim is invalid');}
-        else throw new Error('Unsupported publisher certificate claim type');
-      }
-    if(issuer?.format!=='wurst/authority-issuer-public-1'||!issuer?.fingerprint||!issuer?.publicKeySpki)throw new Error('Publisher certificate issuer is incomplete');
-    const chain=chainCert?.statement, root=chain?.root, chainIssuer=chain?.issuer;
-    if(chainCert?.format!=='wurst/authority-issuer-certificate-1'||chainCert.algorithm!=='ed25519'||root?.format!=='wurst/authority-root-1'||chainIssuer?.format!=='wurst/authority-issuer-public-1')throw new Error('Authority issuer chain is incomplete');
-    if(root.authority!==chainIssuer.authority||chain?.authority!==root.authority)throw new Error('Authority issuer certificate mismatch');
-    if(await sha256Hex(fromBase64(root.publicKeySpki))!==root.fingerprint)throw new Error('Authority root fingerprint mismatch');
-    if(await sha256Hex(fromBase64(chainIssuer.publicKeySpki))!==chainIssuer.fingerprint)throw new Error('Authority issuer fingerprint mismatch');
-    if(!await verifyEd25519Web(root.publicKeySpki,chain,chainCert.signature))throw new Error('Authority issuer certificate signature is invalid');
-    if(chainIssuer.fingerprint!==issuer.fingerprint||chainIssuer.publicKeySpki!==issuer.publicKeySpki||chainIssuer.issuerId!==issuer.issuerId)throw new Error('Publisher certificate issuer chain mismatch');
-    if(await sha256Hex(fromBase64(rawSubject.publicKeySpki))!==rawSubject.fingerprint)throw new Error('Publisher certificate subject fingerprint mismatch');
-    if(!await verifyEd25519Web(issuer.publicKeySpki,statement,certificate.signature))throw new Error('Publisher certificate signature is invalid');
-    const domainClaim=claims.find(c=>c.type==='domain')?.value,emailClaim=claims.find(c=>c.type==='email')?.value; const subject={...rawSubject,...(domainClaim?{domain:domainClaim}:{}),...(emailClaim?{email:emailClaim}:{})};
-    const t=now instanceof Date?now:new Date(now), time=t.getTime(); if(Number.isNaN(time))throw new Error('Invalid certificate verification time');
-    if(chain.issuedAt&&time<new Date(chain.issuedAt).getTime())return {status:'not-yet-valid',valid:true,trusted:false,subject,claims,issuer,root};
-    if(chain.expiresAt&&time>new Date(chain.expiresAt).getTime())return {status:'expired-issuer',valid:true,trusted:false,subject,claims,issuer,root};
-    if(statement.issuedAt&&time<new Date(statement.issuedAt).getTime())return {status:'not-yet-valid',valid:true,trusted:false,subject,claims,issuer,root};
-    if(statement.expiresAt&&time>new Date(statement.expiresAt).getTime())return {status:'expired',valid:true,trusted:false,subject,claims,issuer,root};
-    const trusted=trustedRootMatchesWeb(root, trustedAuthorities);
-    const bundle=await verifyTrustBundleWeb(trustBundle, trustedAuthorities);
-    if(bundle.valid&&bundle.trusted){
-      const revokedIssuers=new Set((bundle.statement.revokedIssuers||[]).map(v=>String(v).toLowerCase()));
-      const revokedPublishers=new Set((bundle.statement.revokedPublishers||[]).map(v=>String(v).toLowerCase()));
-      if(revokedIssuers.has(String(issuer.fingerprint).toLowerCase()))return {status:'revoked-issuer',valid:true,trusted:false,subject,claims,issuer,root,trustBundle:bundle};
-      if(revokedPublishers.has(String(subject.fingerprint).toLowerCase()))return {status:'revoked-publisher',valid:true,trusted:false,subject,claims,issuer,root,trustBundle:bundle};
-    }
-    return {status:trusted?'verified':'valid-untrusted',valid:true,trusted,subject,claims,issuer,root,trustBundle:bundle};
-  } catch(error) { return {status:'invalid',valid:false,trusted:false,error:error.message}; }
-}
 function normalizeWurstPath(value) {
   const normalized = String(value).replaceAll('\\', '/').replace(/^\/+/, '');
   if (!normalized || normalized.includes('\0')) throw new Error(`Invalid Wurst path: ${value}`);
@@ -229,100 +178,6 @@ function mountedPublicPigFsPath(internalPath, realms) {
   const mount = normalizePublicPigFsPath(realm.mount || `/${realm.id}`);
   return parsed.path ? `${mount}/${parsed.path}` : mount;
 }
-function parseRange(value, total) {
-  const text = String(value || '').trim();
-  const match = text.match(/^bytes=(\d*)-(\d*)$/i);
-  if (!match || (!match[1] && !match[2]) || total < 0) return null;
-  let start;
-  let end;
-  if (!match[1]) {
-    const suffix = Number(match[2]);
-    if (!Number.isSafeInteger(suffix) || suffix <= 0 || total === 0) return null;
-    start = Math.max(0, total - suffix);
-    end = total - 1;
-  } else {
-    start = Number(match[1]);
-    end = match[2] ? Number(match[2]) : total - 1;
-  }
-  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= total || end < start) return null;
-  end = Math.min(end, total - 1);
-  return { offset: start, length: end - start + 1, end };
-}
-function mimeFor(path) {
-  const ext = String(path).toLowerCase().split('.').pop();
-  return ({html:'text/html; charset=utf-8',htm:'text/html; charset=utf-8',css:'text/css; charset=utf-8',js:'text/javascript; charset=utf-8',mjs:'text/javascript; charset=utf-8',json:'application/json; charset=utf-8',txt:'text/plain; charset=utf-8',svg:'image/svg+xml',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',gif:'image/gif',wav:'audio/wav',mp3:'audio/mpeg',ogg:'audio/ogg',mp4:'video/mp4',webm:'video/webm',wasm:'application/wasm'})[ext] || 'application/octet-stream';
-}
-function normalizeCapabilityDeclaration(input) {
-  if (input == null) return {};
-  if (Array.isArray(input)) return Object.fromEntries(input.map((name) => [String(name), true]));
-  if (typeof input !== 'object') return {};
-  return input;
-}
-export class BlobWurstSource {
-  constructor(blob) { this.blob = blob instanceof Blob ? blob : new Blob([blob]); this.size = this.blob.size; this.kind = 'blob'; }
-  async read(position, length) {
-    if (!Number.isSafeInteger(position) || !Number.isSafeInteger(length) || position < 0 || length < 0 || position + length > this.size) throw new Error('Invalid Wurst byte range');
-    return new Uint8Array(await this.blob.slice(position, position + length).arrayBuffer());
-  }
-}
-
-export class MessagePortWurstSource {
-  constructor(port, size, { kind = 'embed' } = {}) {
-    if (!port?.postMessage) throw new TypeError('MessagePortWurstSource requires a MessagePort');
-    if (!Number.isSafeInteger(Number(size)) || Number(size) < 0) throw new Error('Invalid embedded Wurst size');
-    this.port = port; this.size = Number(size); this.kind = kind; this.seq = 1; this.pending = new Map();
-    this._onMessage = (event) => { const m = event.data; if (m?.type !== 'wurster-source-result') return; const pending = this.pending.get(m.id); if (!pending) return; this.pending.delete(m.id); m.ok ? pending.resolve(new Uint8Array(m.data)) : pending.reject(new Error(m.error || 'Embedded Wurst source failed')); };
-    port.addEventListener?.('message', this._onMessage); port.start?.();
-  }
-  async read(position, length) {
-    if (!Number.isSafeInteger(position) || !Number.isSafeInteger(length) || position < 0 || length < 0 || position + length > this.size) throw new Error('Invalid embedded Wurst byte range');
-    if (length === 0) return new Uint8Array(0);
-    const id = `r${this.seq++}`;
-    const result = new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }));
-    this.port.postMessage({ type: 'wurster-source-read', id, position, length });
-    return result;
-  }
-  close() { this.port.removeEventListener?.('message', this._onMessage); for (const pending of this.pending.values()) pending.reject(new Error('Embedded Wurst source closed')); this.pending.clear(); }
-}
-
-export class HttpWurstSource {
-  static async open(url, fetchImpl = globalThis.fetch) {
-    if (typeof fetchImpl !== 'function') throw new Error('fetch() is required for HTTP Wursts');
-    const target = new URL(String(url), globalThis.location?.href);
-    const first = await fetchImpl(target, { headers: { Range: 'bytes=0-0', 'Accept-Encoding': 'identity' } });
-    if (first.status !== 206) throw new Error('Remote server does not provide byte-range Wurst access');
-    const match = String(first.headers.get('content-range') || '').match(/^bytes\s+0-0\/(\d+)$/i);
-    if (!match) throw new Error('Remote server returned an invalid Wurst Content-Range');
-    const size = Number(match[1]);
-    const etag = first.headers.get('etag');
-    const lastModified = first.headers.get('last-modified');
-    await first.arrayBuffer();
-    return new HttpWurstSource(target.toString(), size, { fetchImpl, etag: etag && !/^W\//i.test(etag) ? etag : null, lastModified });
-  }
-  constructor(url, size, { fetchImpl, etag, lastModified }) { this.url=url; this.size=size; this.fetchImpl=fetchImpl; this.etag=etag; this.lastModified=lastModified; this.kind='http'; }
-  async read(position, length) {
-    if (!Number.isSafeInteger(position) || !Number.isSafeInteger(length) || position < 0 || length < 0 || position + length > this.size) throw new Error('Invalid remote Wurst range');
-    if (length === 0) return new Uint8Array(0);
-    const headers = { Range: `bytes=${position}-${position + length - 1}`, 'Accept-Encoding': 'identity' };
-    if (this.etag) headers['If-Range'] = this.etag; else if (this.lastModified) headers['If-Range'] = this.lastModified;
-    const response = await this.fetchImpl(this.url, { headers });
-    if (response.status !== 206) throw new Error('Remote Wurst changed or stopped serving byte ranges');
-    const got = String(response.headers.get('content-range') || '').match(/^bytes\s+(\d+)-(\d+)\/(\d+)$/i);
-    if (!got || Number(got[1]) !== position || Number(got[2]) !== position + length - 1 || Number(got[3]) !== this.size) throw new Error('Remote Wurst range does not match the pinned representation');
-    if (this.etag && response.headers.get('etag') && response.headers.get('etag') !== this.etag) throw new Error('Remote Wurst ETag changed while streaming');
-    const out = new Uint8Array(await response.arrayBuffer());
-    if (out.byteLength !== length) throw new Error('Remote Wurst range was truncated');
-    return out;
-  }
-}
-
-async function sourceFrom(input) {
-  if (typeof input === 'string' || input instanceof URL) return HttpWurstSource.open(input);
-  if (input instanceof Blob || input instanceof ArrayBuffer || input instanceof Uint8Array || ArrayBuffer.isView(input)) return new BlobWurstSource(input);
-  if (input?.read && Number.isSafeInteger(input.size)) return input;
-  throw new TypeError('Wurster Web expects a Wurst URL, File, Blob, ArrayBuffer, Uint8Array or byte-range source');
-}
-
 async function readFsRecord(source, recordStart) {
   const header = await source.read(recordStart, FS_RECORD_HEADER);
   if (!matches(header, FS_MAGIC)) throw new Error('Invalid PigFS record header');
@@ -484,7 +339,7 @@ export class WurstWebReader {
 }
 
 function entryName(path){return path.split('/').at(-1)||'data';}
-function directoryEntry(path, now=Date.now(), revision=1) { return {path,name:entryName(path),type:'directory',size:0,mime:null,createdAt:now,modifiedAt:now,revision}; }
+function directoryEntry(path, now=Date.now(), revision=1) { return {objectId:crypto.randomUUID(),path,name:entryName(path),type:'directory',size:0,mime:null,createdAt:now,modifiedAt:now,revision}; }
 
 class MemoryChunkStore {
   constructor(sessionId){this.sessionId=sessionId;this.items=new Map();}
@@ -536,7 +391,7 @@ export class WurstWebPigFsOverlay {
   async write(path,data,{mime='application/octet-stream'}={}){const tx=await this.beginWrite(path,{mime});try{const blob=data instanceof Blob?data:new Blob([bytes(data)],{type:mime});for(let offset=0,index=0;offset<blob.size||(blob.size===0&&index===0);offset+=FS_CHUNK,index+=1){const chunk=new Uint8Array(await blob.slice(offset,Math.min(blob.size,offset+FS_CHUNK)).arrayBuffer());await this.writeChunk(tx.id,chunk);if(blob.size===0)break;}return await this.commitWrite(tx.id);}catch(error){await this.abortWrite(tx.id).catch(()=>{});throw error;}}
   async beginWrite(path,{mime='application/octet-stream'}={}){const resolved=this._resolve(path,{allowRoot:false}),target=resolved.target;this._assertOrdinaryWritable(resolved.publicPath);const id=`${this.sessionId}-tx-${this.nextSession++}-${crypto.randomUUID?.()||Math.random().toString(36).slice(2)}`;this.sessions.set(id,{path:target,mime,sizes:[],size:0});return {id,chunkSize:FS_CHUNK};}
   async writeChunk(id,data){const s=this.sessions.get(String(id));if(!s)throw new Error('Unknown PigFS write session');const b=bytes(data);if(b.byteLength>FS_CHUNK)throw new Error('PigFS chunk exceeds 4 MiB');const index=s.sizes.length;await this.store.put(String(id),index,b);s.sizes.push(b.byteLength);s.size+=b.byteLength;return {bytes:b.byteLength,total:s.size};}
-  async commitWrite(id){const key=String(id),s=this.sessions.get(key);if(!s)throw new Error('Unknown PigFS write session');this._assertOrdinaryWritable(this._public(s.path));this.sessions.delete(key);const target=s.path,merged=await this.merged(),prev=merged.get(target),now=Date.now();await this._ensureParents(target,now);const previousOwn=this.overlay.get(target);const source=storageDescriptor(key,s.sizes);const entry={path:target,realm:target.split('/')[1],name:entryName(target),type:'file',size:s.size,mime:s.mime||prev?.mime||'application/octet-stream',createdAt:prev?.createdAt||now,modifiedAt:now,revision:(prev?.revision||0)+1,mapPages:[]};this.overlay.set(target,{entry,source});if(previousOwn?.source?.kind==='store'&&previousOwn.source.storageId!==key)await this.store.deleteStorage(previousOwn.source.storageId).catch(()=>{});return {...entry,path:this._public(target)};}
+  async commitWrite(id){const key=String(id),s=this.sessions.get(key);if(!s)throw new Error('Unknown PigFS write session');this._assertOrdinaryWritable(this._public(s.path));this.sessions.delete(key);const target=s.path,merged=await this.merged(),prev=merged.get(target),now=Date.now();await this._ensureParents(target,now);const previousOwn=this.overlay.get(target);const source=storageDescriptor(key,s.sizes);const entry={objectId:prev?.objectId||crypto.randomUUID(),path:target,realm:target.split('/')[1],name:entryName(target),type:'file',size:s.size,mime:s.mime||prev?.mime||'application/octet-stream',createdAt:prev?.createdAt||now,modifiedAt:now,revision:(prev?.revision||0)+1,mapPages:[]};this.overlay.set(target,{entry,source});if(previousOwn?.source?.kind==='store'&&previousOwn.source.storageId!==key)await this.store.deleteStorage(previousOwn.source.storageId).catch(()=>{});return {...entry,path:this._public(target)};}
   async abortWrite(id){const key=String(id),existed=this.sessions.delete(key);await this.store.deleteStorage(key).catch(()=>{});return existed;}
   async _dropStorage(item){if(item?.source?.kind==='store')await this.store.deleteStorage(item.source.storageId).catch(()=>{});}
   async remove(path,{recursive=false}={}){const resolved=this._resolve(path,{allowRoot:false}),target=resolved.target;const {parsed}=this._assertOrdinaryWritable(resolved.publicPath);if(!parsed.path)throw new Error('Cannot remove a PigFS realm');const merged=await this.merged(),e=merged.get(target);if(!e)return false;if(e.type==='directory'){const children=[...merged.keys()].filter((p)=>p.startsWith(`${target}/`));if(children.length&&!recursive)throw new Error('PigFS directory is not empty');for(const p of children){await this._dropStorage(this.overlay.get(p));this.overlay.set(p,null);}}await this._dropStorage(this.overlay.get(target));this.overlay.set(target,null);return true;}
@@ -584,28 +439,35 @@ function injectBootstrap(html,session){
   const network=Array.isArray(session.reader.manifest?.capabilities?.network)?session.reader.manifest.capabilities.network:[];
   const hostOrigin=location.origin;
   const csp=`default-src ${hostOrigin} data: blob:; script-src ${hostOrigin} 'unsafe-inline' blob:; style-src ${hostOrigin} 'unsafe-inline' blob:; img-src ${hostOrigin} data: blob: ${network.join(' ')}; media-src ${hostOrigin} data: blob: ${network.join(' ')}; font-src ${hostOrigin} data: blob:; connect-src ${hostOrigin} ${network.join(' ')}; object-src 'none'; frame-src ${hostOrigin}; base-uri 'none';`;
-  const config={sessionId:session.id,root:session._virtualBase(),origin:location.origin,wurstId:session.reader.manifest?.id||null,piglinkEntry:session.reader.manifest?.piglink?.entry||null,parent:session.options.parent||null,embedModuleUrl:new URL('./wurster-embed.js',import.meta.url).toString()};
+  const config={sessionId:session.id,root:session._virtualBase(),origin:location.origin,wurstId:session.reader.manifest?.id||null,piglinkEntry:session.reader.manifest?.piglink?.entry||null,piglink:session.reader.manifest?.piglink||null,parent:session.options.parent||null,embedModuleUrl:new URL('./wurster-embed.js',import.meta.url).toString()};
   const script=`<meta http-equiv="Content-Security-Policy" content="${csp.replaceAll('"','&quot;')}"><script>(${frameBootstrap.toString()})(${JSON.stringify(config)})<\/script>`;
   return /<head[\s>]/i.test(html)?html.replace(/<head([^>]*)>/i,`<head$1>${script}`):`${script}${html}`;
 }
 function frameBootstrap(config){
-  const pending=new Map();let seq=1;const handlers=new Map();let piglinkReadyResolve;const piglinkReady=new Promise(r=>piglinkReadyResolve=r);
+  const pending=new Map();let seq=1;const handlers=new Map();const parentPigLinkListeners=new Map();const embedRelationships=new Map();const embedSessions=new Map();const embedParentPigLinkSubscriptions=new Map();const embedSessionSubscriptions=new Map();const machineClients=new Map();let nextEmbedSubscriptionId=1;let piglinkReadyResolve;const piglinkReady=new Promise(r=>piglinkReadyResolve=r);
   function call(method,...args){const id=`${config.sessionId}:${seq++}`;return new Promise((resolve,reject)=>{pending.set(id,{resolve,reject});parent.postMessage({__wurster:1,sessionId:config.sessionId,id,method,args},'*');});}
-  addEventListener('message',(event)=>{const m=event.data;if(!m?.__wursterReply||m.sessionId!==config.sessionId)return;const p=pending.get(m.id);if(!p)return;pending.delete(m.id);m.ok?p.resolve(m.result):p.reject(new Error(m.error||'Wurster Web operation failed'));});
+  addEventListener('message',async(event)=>{const m=event.data;if(m?.__wursterReply&&m.sessionId===config.sessionId){const p=pending.get(m.id);if(!p)return;pending.delete(m.id);m.ok?p.resolve(m.result):p.reject(new Error(m.error||'Wurster Web operation failed'));return;}if(m?.__wursterSessionChanged&&m.sessionId===config.sessionId){try{dispatchEvent(new CustomEvent('wurst-session-changed',{detail:{session:structuredClone(m.session??null)}}));}catch{}return;}if(m?.__wursterPigletSessionChanged&&m.sessionId===config.sessionId){const sid=String(m.session?.id||'');if(sid){for(const sub of embedSessionSubscriptions.values()){if(embedSessions.get(sub.handle)?.id!==sid)continue;embedSessions.set(sub.handle,structuredClone(m.session));try{sub.callback({writer:String(m.writer||''),session:structuredClone(m.session),size:Number(m.size||0)});}catch{}}}return;}if(m?.__wursterPigletMachineEvent&&m.sessionId===config.sessionId){const sid=String(m.childSessionId||'');const name=String(m.name||''),payload=structuredClone(m.payload??null);for(const client of machineClients.values()){if(client.sessionId!==sid)continue;for(const key of [name,'*'])for(const listener of client.listeners.get(key)||[]){try{listener(payload,name);}catch{}}}return;}if(m?.__wursterParentPigLinkEvent&&m.sessionId===config.sessionId){const name=String(m.name||''),payload=structuredClone(m.payload??null);for(const key of [name,'*'])for(const listener of parentPigLinkListeners.get(key)||[]){try{listener(payload,name);}catch{}}return;}if(m?.__wursterPigLinkEventAccepted&&m.sessionId===config.sessionId){const name=String(m.name||''),payload=structuredClone(m.payload??null);for(const sub of embedParentPigLinkSubscriptions.values()){if(!embedRelationships.get(sub.handle)?.piglink)continue;try{sub.callback(name,payload);}catch{}}return;}if(m?.__wursterPigLinkInvoke&&m.sessionId===config.sessionId){const id=String(m.id||'');try{await piglinkReady;const name=String(m.name||''),fn=handlers.get(name);if(!fn)throw new Error(`Wurst action is declared but not registered: ${name}`);const result=await fn(structuredClone(m.input??{}));parent.postMessage({__wursterPigLinkResult:1,sessionId:config.sessionId,id,ok:true,result:structuredClone(result==null?null:result)},'*');}catch(error){parent.postMessage({__wursterPigLinkResult:1,sessionId:config.sessionId,id,ok:false,error:error?.message||String(error)},'*');}}});
   window.PigLink=Object.freeze({define(def={}){for(const [name,fn] of Object.entries(def.actions||{})){if(typeof fn!=='function')throw new Error(`PigLink action must be a function: ${name}`);handlers.set(name,fn);}return true;}});
   const dataUrl=(path)=>{const v=String(path??'').replaceAll('\\','/').replace(/^\/+/, '').replace(/^data\//,'');if(!v||v.split('/').some(p=>!p||p==='.'||p==='..'))throw new TypeError('Invalid PigFS media path');return `${config.root}/pigfs/${v.split('/').map(encodeURIComponent).join('/')}`;};
-  const parentPigFs=config.parent?.pigfs?Object.freeze({capabilities:()=>call('parent.pigfs.capabilities'),realms:()=>call('parent.pigfs.realms'),stat:(p)=>call('parent.pigfs.stat',p),list:(p='/')=>call('parent.pigfs.list',p),read:(p,o={})=>call('parent.pigfs.read',p,{offset:Number(o.offset||0),length:o.length==null?null:Number(o.length)}),write:(p,d,o={})=>call('parent.pigfs.write',p,d,o),beginWrite:(p,o={})=>call('parent.pigfs.beginWrite',p,o),writeChunk:(id,d)=>call('parent.pigfs.writeChunk',id,d),commitWrite:(id)=>call('parent.pigfs.commitWrite',id),abortWrite:(id)=>call('parent.pigfs.abortWrite',id),remove:(p,o={})=>call('parent.pigfs.remove',p,o),mkdir:(p,o={})=>call('parent.pigfs.mkdir',p,o),rename:(a,b)=>call('parent.pigfs.rename',a,b)}):null;
+  const parentPigFs=config.parent?.pigfs?Object.freeze({capabilities:()=>call('parent.pigfs.capabilities'),realms:()=>call('parent.pigfs.realms'),usage:()=>call('parent.pigfs.usage'),stat:(p)=>call('parent.pigfs.stat',p),list:(p='/')=>call('parent.pigfs.list',p),read:async(p,o={})=>{const result=await call('parent.pigfs.read',p,{offset:Number(o.offset||0),length:o.length==null?null:Number(o.length)});return result?.data??result;},write:(p,d,o={})=>call('parent.pigfs.write',p,d,o),beginWrite:(p,o={})=>call('parent.pigfs.beginWrite',p,o),writeChunk:(id,d)=>call('parent.pigfs.writeChunk',id,d),commitWrite:(id)=>call('parent.pigfs.commitWrite',id),abortWrite:(id)=>call('parent.pigfs.abortWrite',id),remove:(p,o={})=>call('parent.pigfs.remove',p,o),mkdir:(p,o={})=>call('parent.pigfs.mkdir',p,o),rename:(a,b)=>call('parent.pigfs.rename',a,b)}):null;
+  const parentPigLink=config.parent?.piglink?Object.freeze({describe:()=>call('parent.piglink.describe'),invoke:(name,input={})=>call('parent.piglink.invoke',String(name||''),input),on:(name,listener)=>{const eventName=String(name??'*');if(typeof listener!=='function')throw new TypeError('Parent PigLink event listener must be a function');const set=parentPigLinkListeners.get(eventName)||new Set();set.add(listener);parentPigLinkListeners.set(eventName,set);return()=>{set.delete(listener);if(!set.size)parentPigLinkListeners.delete(eventName);};}}):null;
+  const parentPiglets=config.parent?.piglets?Object.freeze({children:()=>call('parent.piglet.children'),inspect:(ref)=>call('parent.piglet.inspect',String(ref||'')),install:(name,data,options={})=>call('parent.piglet.install',String(name||'Piglet.wurst'),data,options),remove:(ref)=>call('parent.piglet.remove',String(ref||''))}):null;
+  const parentRuntime=config.parent?Object.freeze({
+    info:()=>Promise.resolve(structuredClone(config.parent.application||null)),
+    relationship:()=>Promise.resolve(structuredClone({format:config.parent.format,isolated:Boolean(config.parent.isolated),piglink:config.parent.piglink||null,pigfs:config.parent.pigfs||null,piglets:config.parent.piglets||null})),
+    pigfs:parentPigFs,piglink:parentPigLink,piglets:parentPiglets
+  }):null;
   window.wurst=Object.freeze({
     info:()=>call('info'),capabilities:Object.freeze({query:(n)=>call('capabilities.query',String(n||'')),list:()=>call('capabilities.list')}),
-    parent:config.parent?Object.freeze({pigfs:parentPigFs}):null,
+    parent:parentRuntime,
     auth:Object.freeze({status:(purpose='identity')=>call('auth.status',String(purpose||'identity')),onResult:()=>true}),identity:Object.freeze({session:()=>Promise.resolve(null)}),window:Object.freeze({close:()=>call('window.close'),minimize:()=>call('window.minimize')}),snapshot:Object.freeze({export:()=>call('snapshot.export')}),
     piglink:Object.freeze({ready:()=>piglinkReady.then(()=>Boolean(config.piglinkEntry)),describe:()=>call('piglink.describe'),invoke:async(name,input={})=>{await piglinkReady;const fn=handlers.get(String(name));if(!fn)throw new Error(`Wurst action is not registered: ${name}`);return fn(structuredClone(input));},emit:(name,payload=null)=>{parent.postMessage({__wursterEvent:1,sessionId:config.sessionId,name,payload},'*');return true;}}),
-    piglet:Object.freeze({children:()=>call('piglet.children'),url:(id)=>call('piglet.url',String(id||''))}),
+    piglet:Object.freeze({children:()=>call('piglet.children'),running:()=>call('piglet.running'),connect:async(ref,options={})=>{const opened=await call('piglet.machineConnect',String(ref||''),options);const handle=String(opened?.handle||'');if(!handle)throw new Error('Wurster did not return a machine attachment');let closed=false;const client={sessionId:String(opened?.session?.id||''),listeners:new Map()};machineClients.set(handle,client);return Object.freeze({descriptor:structuredClone(opened.descriptor||null),session:structuredClone(opened.session||null),piglink:Object.freeze({describe:()=>call('piglet.machineDescribe',handle),invoke:async(name,input={},invokeOptions={})=>{if(closed)throw new Error('Wurst machine connection is closed');const result=await call('piglet.machineInvoke',handle,String(name||''),input,invokeOptions);return result?.result??null;},on:(name,listener)=>{if(typeof listener!=='function')throw new TypeError('PigLink event listener must be a function');const eventName=String(name??'*'),set=client.listeners.get(eventName)||new Set();set.add(listener);client.listeners.set(eventName,set);return()=>{set.delete(listener);if(!set.size)client.listeners.delete(eventName);};}}),close:async()=>{if(closed)return false;closed=true;machineClients.delete(handle);return call('piglet.machineClose',handle);}});},invoke:async(ref,name,input={},options={})=>{const opened=await call('piglet.machineConnect',String(ref||''),options),handle=String(opened?.handle||'');if(!handle)throw new Error('Wurster did not return a machine attachment');try{const result=await call('piglet.machineInvoke',handle,String(name||''),input,options);return result?.result??null;}finally{await call('piglet.machineClose',handle).catch(()=>{});}},inspect:(ref)=>call('piglet.inspect',String(ref||'')),install:(name,data,options={})=>call('piglet.install',String(name||'Piglet.wurst'),data,options),remove:(ref)=>call('piglet.remove',String(ref||''))}),
     pigsty:Object.freeze({status:()=>call('pigsty.status'),run:(request={})=>call('pigsty.run',request),build:(name='default',request={})=>call('pigsty.build',String(name||'default'),request)}),
     pigfs:Object.freeze({capabilities:()=>call('pigfs.capabilities'),realms:()=>call('pigfs.realms'),usage:()=>call('pigfs.usage'),compact:()=>call('pigfs.compact'),url:dataUrl,stat:(p)=>call('pigfs.stat',p),list:(p='/')=>call('pigfs.list',p),read:(p,o={})=>call('pigfs.read',p,{offset:Number(o.offset||0),length:o.length==null?null:Number(o.length)}),write:(p,d,o={})=>call('pigfs.write',p,d,o),beginWrite:(p,o={})=>call('pigfs.beginWrite',p,o),writeChunk:(id,d)=>call('pigfs.writeChunk',id,d),commitWrite:(id)=>call('pigfs.commitWrite',id),abortWrite:(id)=>call('pigfs.abortWrite',id),remove:(p,o={})=>call('pigfs.remove',p,o),mkdir:(p,o={})=>call('pigfs.mkdir',p,o),rename:(a,b)=>call('pigfs.rename',a,b)})
   });
   function normalizeEmbedSource(raw){const value=String(raw??'').trim();if(!value)throw new TypeError('<wurst-embed> requires a src');if(value.startsWith('builtin:')||value.startsWith('pigfs:'))return value;if(value.startsWith('/'))return `pigfs:${value}`;return new URL(value,document.baseURI).href;}
-  window.wurstEmbedRuntime=Object.freeze({open:async(src,options={})=>{const normalized=normalizeEmbedSource(src);if(/^https?:/i.test(normalized)&&!normalized.startsWith(config.root))return null;return call('piglet.embedOpen',normalized,options);},read:(handle,offset,length)=>call('piglet.embedRead',String(handle||''),Number(offset),Number(length)),persist:(handle,data)=>call('piglet.embedPersist',String(handle||''),data),invoke:(handle,method,args=[])=>call('piglet.embedInvoke',String(handle||''),String(method||''),Array.isArray(args)?args:[]),close:(handle)=>call('piglet.embedClose',String(handle||''))});
+  window.wurstEmbedRuntime=Object.freeze({open:async(src,options={})=>{const normalized=normalizeEmbedSource(src);if(/^https?:/i.test(normalized)&&!normalized.startsWith(config.root))return null;const opened=await call('piglet.embedOpen',normalized,options);if(opened?.handle){const key=String(opened.handle);embedRelationships.set(key,structuredClone(opened.parent??null));embedSessions.set(key,structuredClone(opened.session??null));}return opened;},read:(handle,offset,length)=>call('piglet.embedRead',String(handle||''),Number(offset),Number(length)),persist:async(handle,data)=>{const key=String(handle||'');const result=await call('piglet.embedPersist',key,data);if(result?.session)embedSessions.set(key,structuredClone(result.session));return result;},refresh:async(handle)=>{const key=String(handle||'');const result=await call('piglet.embedRefresh',key);if(result?.session)embedSessions.set(key,structuredClone(result.session));return result;},invoke:(handle,method,args=[])=>call('piglet.embedInvoke',String(handle||''),String(method||''),Array.isArray(args)?args:[]),subscribeParentPigLink:(handle,callback)=>{const key=String(handle||'');if(typeof callback!=='function')throw new TypeError('Parent PigLink event subscriber must be a function');if(!embedRelationships.get(key)?.piglink)throw new Error('Parent PigLink is unavailable to this Piglet');const id=`epl-${nextEmbedSubscriptionId++}`;embedParentPigLinkSubscriptions.set(id,{handle:key,callback});return id;},unsubscribeParentPigLink:(id)=>embedParentPigLinkSubscriptions.delete(String(id||'')),subscribeSession:(handle,callback)=>{const key=String(handle||'');if(typeof callback!=='function')throw new TypeError('Wurst session subscriber must be a function');if(!embedSessions.get(key)?.id)throw new Error('Wurst session is unavailable');const id=`ews-${nextEmbedSubscriptionId++}`;embedSessionSubscriptions.set(id,{handle:key,callback});return id;},unsubscribeSession:(id)=>embedSessionSubscriptions.delete(String(id||'')),close:async(handle)=>{const key=String(handle||'');for(const[id,sub]of embedParentPigLinkSubscriptions)if(sub.handle===key)embedParentPigLinkSubscriptions.delete(id);for(const[id,sub]of embedSessionSubscriptions)if(sub.handle===key)embedSessionSubscriptions.delete(id);embedRelationships.delete(key);embedSessions.delete(key);return call('piglet.embedClose',key);}});
   class WursterAuth extends HTMLElement{connectedCallback(){if(this.shadowRoot)return;const root=this.attachShadow({mode:'closed'}),wrap=document.createElement('div');wrap.style.cssText='font:600 13px system-ui;display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid rgba(80,50,60,.22);border-radius:14px;background:#fff8f6;color:#523f46;box-sizing:border-box;min-height:48px';const b=document.createElement('button');b.type='button';const type=String(this.getAttribute('type')||'identity').toLowerCase(),purpose=this.getAttribute('purpose')||(type==='wurstkey'?'application':'identity');b.textContent=type==='wurstkey'?'🔑 Unlock with Wurster Web':'🐷 Open Wurster Runtime';b.style.cssText='font:inherit;border:0;border-radius:999px;padding:8px 12px;background:#5d4650;color:white;cursor:pointer';b.addEventListener('click',async()=>{if(type==='wurstkey'){try{await call('auth.present',{type,purpose,target:this.getAttribute('target')||null,session:this.getAttribute('session')||'60m'});this.dispatchEvent(new CustomEvent('wurster-auth-success',{bubbles:true,composed:true,detail:{purpose:'application',runtime:'web'}}));}catch(error){this.dispatchEvent(new CustomEvent('wurster-auth-error',{bubbles:true,composed:true,detail:{error:error.message}}));}return;}const request=(crypto.randomUUID?.()||Math.random().toString(36).slice(2)),duration=this.getAttribute('session')||'60m';const params=new URLSearchParams({origin:config.origin,purpose,request,duration});if(config.wurstId)params.set('wurst',config.wurstId);const a=document.createElement('a');a.href=`wurster://auth?${params}`;a.target='_top';a.click();});wrap.append(b);const note=document.createElement('span');note.textContent=type==='wurstkey'?'Wurster opens the key prompt outside the Wurst DOM':'Authenticate with the trusted local runtime';wrap.append(note);root.append(wrap);}}
   customElements.define('wurster-auth',WursterAuth);
   addEventListener('DOMContentLoaded',async()=>{try{if(config.embedModuleUrl&&!customElements.get('wurst-embed')){const e=document.createElement('script');e.type='module';e.src=config.embedModuleUrl;document.head.append(e);}if(config.piglinkEntry){const s=document.createElement('script');s.src=`${config.root}/piglink/entry.js`;s.onload=()=>piglinkReadyResolve();s.onerror=()=>piglinkReadyResolve();document.head.append(s);}else piglinkReadyResolve();}catch{piglinkReadyResolve();}},{once:true});
@@ -623,12 +485,18 @@ export class WursterWebSession {
     this.id = options.sessionId || `w${crypto.randomUUID?.().replaceAll('-', '') || Math.random().toString(36).slice(2)}`;
     this.fs = new WurstWebPigFsOverlay(reader, { sessionId: this.id });
     this.options = options;
+    this.externalSession = options.externalSession ? structuredClone(options.externalSession) : null;
     this.frame = null;
     this.applicationKey = null;
     this._sealedMap = null;
     this._mountTarget = null;
     this._authOverlay = null;
     this._embedSources = new Map();
+    this._embedSessions = new WurstSessionRegistry();
+    this._embedWorlds = new Map();
+    this._pigLinkPending = new Map();
+    this._pigLinkListeners = new Set();
+    this._pigLinkSeq = 1;
     this.signature = null;
     this._boundMessage = (e) => this._onFrameMessage(e);
     this._boundSw = (e) => this._onSwMessage(e);
@@ -712,6 +580,34 @@ export class WursterWebSession {
     const pathname = new URL(configured, location.origin).pathname.replace(/\/+$/, '') || '';
     return `${location.origin}${pathname}/__wurster/${this.id}`.replace(/([^:]\/)\/+/g, '$1');
   }
+  async refreshEmbeddedSource({ size, session = null } = {}) {
+    const source = this.reader?.source;
+    if (!source?.resize) throw new Error('This Wurst session source cannot be refreshed in place');
+    if (this.fs?.sessions?.size || this.fs?.overlay?.size) {
+      const error = new Error('This Wurst view has uncommitted PigFS state and cannot rebase automatically');
+      error.code = 'WURST_SESSION_CONFLICT';
+      throw error;
+    }
+    const previousId = this.reader.manifest?.id ?? null;
+    await this.fs.dispose().catch(() => {});
+    source.resize(Number(size));
+    const reader = await WurstWebReader.open(source);
+    if ((reader.manifest?.id ?? null) !== previousId) throw new Error('Wurst identity changed while refreshing the shared session');
+    const signature = await reader.verifySignature();
+    if (signature.status === 'invalid') throw new Error(`Wurst signature became invalid while refreshing the shared session: ${signature.error || 'verification failed'}`);
+    this.reader = reader;
+    this.signature = signature;
+    this.fs = new WurstWebPigFsOverlay(reader, { sessionId: this.id });
+    this.externalSession = session ? structuredClone(session) : this.externalSession;
+    if (this.frame?.contentWindow) {
+      this.frame.contentWindow.postMessage({
+        __wursterSessionChanged: 1,
+        sessionId: this.id,
+        session: this.externalSession ? structuredClone(this.externalSession) : null
+      }, '*');
+    }
+    return { ok: true, session: this.externalSession, size: source.size };
+  }
   async mount(container) {
     if (typeof document === 'undefined' || !navigator.serviceWorker) throw new Error('Wurster Web mount requires a browser with Service Worker support');
     const target = typeof container === 'string' ? document.querySelector(container) : container;
@@ -748,6 +644,8 @@ export class WursterWebSession {
     this.frame = frame;
     await loaded;
   }
+  async mountMachine() { return mountWebMachineSession(this); }
+
   async _presentApplicationUnlock({ resumeMount = false } = {}) {
     if (this.applicationUnlocked()) { if (resumeMount && !this.frame) await this._mountFrame(); return true; }
     if (!this._mountTarget) throw new Error('Wurster Web has no mount surface for authentication');
@@ -781,11 +679,13 @@ export class WursterWebSession {
     return promise;
   }
   async close() {
-    removeEventListener('message', this._boundMessage);
-    navigator.serviceWorker?.removeEventListener('message', this._boundSw);
+    globalThis.removeEventListener?.('message', this._boundMessage);
+    globalThis.navigator?.serviceWorker?.removeEventListener('message', this._boundSw);
     this._authOverlay?.reject?.(new Error('Wurster Web session closed'));
     this._authOverlay?.element?.remove(); this._authOverlay = null;
     this.frame?.remove(); this.frame = null;
+    for (const pending of this._pigLinkPending.values()) { clearTimeout(pending.timer); pending.reject(new Error('Wurst closed before PigLink action completed')); }
+    this._pigLinkPending.clear(); this._pigLinkListeners.clear();
     this.reader.source?.close?.();
     await this.fs.dispose().catch(() => {});
   }
@@ -808,6 +708,11 @@ export class WursterWebSession {
   }
   async _serve({ scope, path, method = 'GET', range }) {
     let data, mime, total; const head = String(method).toUpperCase() === 'HEAD';
+    if (scope === 'machine') {
+      const html = injectBootstrap('<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>', this);
+      const body = te.encode(html);
+      return { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': String(body.byteLength), 'Cache-Control': 'no-store' }, body: head ? null : body.buffer };
+    }
     if (scope === 'app' || scope === 'piglink' || scope === 'piglet') {
       let resource;
       if (scope === 'piglink') {
@@ -842,12 +747,53 @@ export class WursterWebSession {
     return { status: 404, headers: { 'Content-Type': 'text/plain' }, body: head ? null : te.encode('Not found').buffer };
   }
   async _onFrameMessage(event) {
-    const m = event.data; if (!m?.__wurster || m.sessionId !== this.id || event.source !== this.frame?.contentWindow) return;
+    const m = event.data; if (m?.sessionId !== this.id || event.source !== this.frame?.contentWindow) return;
+    if (m?.__wursterPigLinkResult) {
+      const pending = this._pigLinkPending.get(String(m.id || '')); if (!pending) return;
+      this._pigLinkPending.delete(String(m.id || '')); clearTimeout(pending.timer);
+      if(!m.ok){pending.reject(new Error(m.error || `Wurst action failed: ${pending.name}`));return;}
+      try{const result=structuredClone(m.result??null);if(pending.spec?.output)validateJsonValue(result,pending.spec.output,'$output');pending.resolve(result);}catch(error){pending.reject(error);}
+      return;
+    }
+    if (m?.__wursterEvent) {
+      const name = String(m.name || ''), spec = this.reader.manifest?.piglink?.events?.[name];
+      if (!spec) return;
+      const payload = structuredClone(m.payload ?? null);
+      try{if(spec.payload)validateJsonValue(payload,spec.payload,'$event');}catch{return;}
+      for (const listener of [...this._pigLinkListeners]) { try { listener(name, payload); } catch {} }
+      this.frame?.contentWindow?.postMessage({ __wursterPigLinkEventAccepted: 1, sessionId: this.id, name, payload }, '*');
+      return;
+    }
+    if (!m?.__wurster) return;
     try { const result = await this._invoke(m.method, m.args || []); event.source.postMessage({ __wursterReply: 1, sessionId: this.id, id: m.id, ok: true, result }, '*'); }
     catch (error) { event.source.postMessage({ __wursterReply: 1, sessionId: this.id, id: m.id, ok: false, error: error.message }, '*'); }
   }
+  deliverParentPigLinkEvent(rawName, payload = null) {
+    if (!this.options.parent?.piglink) return false;
+    const name = String(rawName ?? '');
+    if (!name || !this.frame?.contentWindow) return false;
+    this.frame.contentWindow.postMessage({ __wursterParentPigLinkEvent: 1, sessionId: this.id, name, payload: structuredClone(payload ?? null) }, '*');
+    return true;
+  }
+  describePigLink() { return structuredClone(this.reader.manifest?.piglink ?? null); }
+  onPigLinkEvent(listener) {
+    if (typeof listener !== 'function') throw new TypeError('PigLink event listener must be a function');
+    this._pigLinkListeners.add(listener); return () => this._pigLinkListeners.delete(listener);
+  }
+  async invokePigLink(rawName, input = {}) {
+    const name = String(rawName ?? ''), spec = this.reader.manifest?.piglink?.actions?.[name];
+    if (!spec) throw new Error(`Unknown Wurst action: ${name}`);
+    validateJsonValue(input,spec.input,'$input');
+    if (!this.frame?.contentWindow) throw new Error('Wurst renderer is not available');
+    const id = `web-pl-${this._pigLinkSeq++}`, timeoutMs = Math.min(Number(spec.timeoutMs ?? 5000), 60000);
+    return await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { this._pigLinkPending.delete(id); reject(new Error(`Wurst action exceeded ${timeoutMs} ms: ${name}`)); }, timeoutMs);
+      this._pigLinkPending.set(id, { name, spec, resolve, reject, timer });
+      this.frame.contentWindow.postMessage({ __wursterPigLinkInvoke: 1, sessionId: this.id, id, name, input: structuredClone(input ?? {}) }, '*');
+    });
+  }
   async _invoke(method, args) {
-    if(String(method).startsWith('parent.pigfs.')){const grant=this.options.parent?.pigfs;if(!grant||typeof this.options.parentInvoke!=='function')throw new Error('Parent PigFS access was not delegated to this Wurst');const childMethod=String(method).slice(7),write=childMethod==='pigfs.write'||childMethod==='pigfs.beginWrite'||childMethod==='pigfs.writeChunk'||childMethod==='pigfs.commitWrite'||childMethod==='pigfs.abortWrite'||childMethod==='pigfs.remove'||childMethod==='pigfs.mkdir'||childMethod==='pigfs.rename';if(write&&grant.access!=='read-write')throw new Error('Parent PigFS grant is read-only');return this.options.parentInvoke(childMethod,args);}
+    if(String(method).startsWith('parent.')){const childMethod=String(method).slice(7);if(typeof this.options.parentInvoke!=='function')throw new Error('Parent runtime services are unavailable');assertPigletParentMethod(this.options.parent,childMethod);return this.options.parentInvoke(childMethod,args);}
     switch (method) {
       case 'info': return { manifest: this.reader.manifest, source: this.reader.source.kind, format: 'wurst/7', webRuntime: WURSTER_WEB_VERSION, signature: this.signature };
       case 'auth.status': {
@@ -864,11 +810,19 @@ export class WursterWebSession {
       case 'pigfs.remove': { const result = await this.fs.remove(args[0], args[1] || {}); await this._persistPigFs(); return result; } case 'pigfs.mkdir': { const result = await this.fs.mkdir(args[0], args[1] || {}); await this._persistPigFs(); return result; } case 'pigfs.rename': { const result = await this.fs.rename(args[0], args[1]); await this._persistPigFs(); return result; }
       case 'snapshot.export': { const blob = await this.fs.snapshotBlob(); this.downloadSnapshot(blob); return { ok: true, size: blob.size }; }
       case 'piglink.describe': return this.reader.manifest.piglink || null;
-      case 'piglet.children': return this.piglets();
-      case 'piglet.url': return this.pigletUrl(args[0]);
+      case 'piglet.children': return this.pigletDescriptors();
+      case 'piglet.running': return this._runningPiglets();
+      case 'piglet.machineConnect': return this._openEmbedSource(args[0],{...(args[1]||{}),kind:'machine'});
+      case 'piglet.machineDescribe': return this._describeMachine(args[0]);
+      case 'piglet.machineInvoke': return this._invokeMachine(args[0],args[1],args[2]||{},args[3]||{});
+      case 'piglet.machineClose': return this._closeEmbedSource(args[0]);
+      case 'piglet.inspect': return this.inspectPiglet(args[0]);
+      case 'piglet.install': return this.installPiglet(args[0],args[1],args[2]||{});
+      case 'piglet.remove': return this.removePiglet(args[0]);
       case 'piglet.embedOpen': return this._openEmbedSource(args[0],args[1]||{});
       case 'piglet.embedRead': return this._readEmbedSource(args[0],args[1],args[2]);
       case 'piglet.embedPersist': return this._persistEmbedSource(args[0],args[1]);
+      case 'piglet.embedRefresh': return this._refreshEmbedSource(args[0]);
       case 'piglet.embedInvoke': return this._invokeEmbedParent(args[0],args[1],args[2]||[]);
       case 'piglet.embedClose': return this._closeEmbedSource(args[0]);
       case 'pigsty.status': return this.pigstyStatus();
@@ -878,12 +832,78 @@ export class WursterWebSession {
       default: throw new Error(`Unsupported Wurster Web bridge method: ${method}`);
     }
   }
-  async _openEmbedSource(rawRef,options={}){const ref=String(rawRef??'').trim();if(!ref)throw new Error('Embedded Wurst source is required');const access=String(options?.parentPigFs||'').trim().toLowerCase();if(access&&!['read','read-write'].includes(access))throw new TypeError('parentPigFs must be read or read-write');const parent=access?{pigfs:{access}}:null;let source=null,path=null,writable=false;if(ref.startsWith('pigfs:')){path=ref.slice(6)||'/';const stat=await this.fs.stat(path);if(!stat||stat.type!=='file')throw new Error(`Embedded PigFS Wurst not found: ${path}`);source={size:stat.size,read:async(offset,length)=>this.fs.read(path,{offset,length})};writable=Boolean(this.reader.manifest?.pigfs?.writable);}else if(ref.startsWith('builtin:')){const {entry}=this.pigletEntry(ref.slice(8));source={size:entry.encryption?.plainLength??entry.length,read:(offset,length)=>this._readImmutable(entry,offset,length)};}else{const href=new URL(ref,location.origin).toString(),appBase=`${this._virtualBase()}/app/`,pigletBase=`${this._virtualBase()}/piglet/`,pigfsBase=`${this._virtualBase()}/pigfs/`;if(href.startsWith(pigletBase)){const id=decodeURIComponent(new URL(href).pathname.split('/').at(-1)).replace(/\.wurst$/i,'');const {entry}=this.pigletEntry(id);source={size:entry.encryption?.plainLength??entry.length,read:(offset,length)=>this._readImmutable(entry,offset,length)};}else if(href.startsWith(pigfsBase)){path='/'+new URL(href).pathname.split('/pigfs/')[1].split('/').map(decodeURIComponent).join('/');const stat=await this.fs.stat(path);if(!stat||stat.type!=='file')throw new Error(`Embedded PigFS Wurst not found: ${path}`);source={size:stat.size,read:async(offset,length)=>this.fs.read(path,{offset,length})};writable=Boolean(this.reader.manifest?.pigfs?.writable);}else if(href.startsWith(appBase)){const logical=new URL(href).pathname.split('/app/')[1].split('/').map(decodeURIComponent).join('/');const resource=await this._applicationResource(logical);if(!resource)throw new Error(`Embedded Wurst resource is unavailable: ${logical}`);const entry=resource.entry;source={size:entry.encryption?.plainLength??entry.length,read:(offset,length)=>this._readImmutable(entry,offset,length)};}else return null;}const handle=`web-embed-${crypto.randomUUID?.()||Math.random().toString(36).slice(2)}`;this._embedSources.set(handle,{handle,source,path,writable,parent});return {handle,size:source.size,writable,parent,descriptor:null};}
-  _requireEmbedSource(rawHandle){const handle=String(rawHandle??''),item=this._embedSources.get(handle);if(!item)throw new Error('Unknown Wurst embed handle');return item;}
-  async _readEmbedSource(handle,offset,length){const item=this._requireEmbedSource(handle),start=Number(offset),size=Number(length);if(!Number.isSafeInteger(start)||!Number.isSafeInteger(size)||start<0||size<0||start+size>item.source.size)throw new Error('Invalid Wurst embed byte range');return item.source.read(start,size);}
-  async _persistEmbedSource(handle,value){const item=this._requireEmbedSource(handle);if(!item.path||!item.writable)throw new Error('This embedded Wurst is not writable');const bytes=value instanceof Uint8Array?value:new Uint8Array(value),result=await this.fs.write(item.path,bytes,{mime:'application/vnd.wrst.wurst'});await this._persistPigFs();const stat=await this.fs.stat(item.path);item.source={size:stat.size,read:async(offset,length)=>this.fs.read(item.path,{offset,length})};return {ok:true,path:item.path,size:bytes.byteLength,result};}
-  async _invokeEmbedParent(handle,method,args=[]){const item=this._requireEmbedSource(handle);if(!item.parent?.pigfs)throw new Error('Parent PigFS access was not delegated to this Piglet');const name=String(method??''),write=name==='pigfs.write'||name==='pigfs.beginWrite'||name==='pigfs.writeChunk'||name==='pigfs.commitWrite'||name==='pigfs.abortWrite'||name==='pigfs.remove'||name==='pigfs.mkdir'||name==='pigfs.rename';if(write&&item.parent.pigfs.access!=='read-write')throw new Error('Parent PigFS grant is read-only');return this._invoke(name,Array.isArray(args)?args:[]);}
-  _closeEmbedSource(handle){return this._embedSources.delete(String(handle??''));}
+  async _openEmbedSource(rawRef,options={}) {
+    const ref=String(rawRef??'').trim();if(!ref)throw new Error('Embedded Wurst source is required');const relationship=normalizePigletRelationship(options?.parent||{}, {parentPigLink:Boolean(this.reader.manifest?.piglink),parentPigFs:this.reader.manifest?.pigfs?(this.reader.manifest.pigfs.writable===true?'read-write':'read'):null,parentPiglets:this.reader.manifest?.pigfs?.writable===true?'manage':'read'}),parent={...relationship,application:{id:this.reader.manifest?.id??null,name:this.reader.manifest?.name??null,version:this.reader.manifest?.version??null}};
+    let source=null,path=null,writable=false,locator=ref;
+    if(ref.startsWith('pigfs:')){path=ref.slice(6)||'/';const stat=await this.fs.stat(path);if(!stat||stat.type!=='file')throw new Error(`Embedded PigFS Wurst not found: ${path}`);source={size:stat.size,read:async(offset,length)=>this.fs.read(path,{offset,length})};writable=Boolean(this.reader.manifest?.pigfs?.writable);locator=stat.objectId?`pigfs://object/${stat.objectId}`:`pigfs:${path}`;}
+    else if(ref.startsWith('builtin:')){const {entry}=this.pigletEntry(ref.slice(8));source={size:entry.encryption?.plainLength??entry.length,read:(offset,length)=>this._readImmutable(entry,offset,length)};locator=`builtin:${ref.slice(8)}`;}
+    else {const href=new URL(ref,location.origin).toString(),appBase=`${this._virtualBase()}/app/`,pigletBase=`${this._virtualBase()}/piglet/`,pigfsBase=`${this._virtualBase()}/pigfs/`;if(href.startsWith(pigletBase)){const id=decodeURIComponent(new URL(href).pathname.split('/').at(-1)).replace(/\.wurst$/i,'');const {entry}=this.pigletEntry(id);source={size:entry.encryption?.plainLength??entry.length,read:(offset,length)=>this._readImmutable(entry,offset,length)};locator=`builtin:${id}`;}else if(href.startsWith(pigfsBase)){path='/'+new URL(href).pathname.split('/pigfs/')[1].split('/').map(decodeURIComponent).join('/');const stat=await this.fs.stat(path);if(!stat||stat.type!=='file')throw new Error(`Embedded PigFS Wurst not found: ${path}`);source={size:stat.size,read:async(offset,length)=>this.fs.read(path,{offset,length})};writable=Boolean(this.reader.manifest?.pigfs?.writable);locator=stat.objectId?`pigfs://object/${stat.objectId}`:`pigfs:${path}`;}else if(href.startsWith(appBase)){const logical=new URL(href).pathname.split('/app/')[1].split('/').map(decodeURIComponent).join('/');const resource=await this._applicationResource(logical);if(!resource)throw new Error(`Embedded Wurst resource is unavailable: ${logical}`);const entry=resource.entry;source={size:entry.encryption?.plainLength??entry.length,read:(offset,length)=>this._readImmutable(entry,offset,length)};locator=`resource:${logical}`;}else return null;}
+    const childReader=await WurstWebReader.open(source),composition=analyzePigletAuthorityComposition(parent,childReader.manifest),descriptor={application:{id:childReader.manifest?.id??null,name:childReader.manifest?.name??null,version:childReader.manifest?.version??null},capabilities:structuredClone(childReader.manifest?.capabilities||{}),piglink:childReader.manifest?.piglink?{headless:childReader.manifest.piglink.headless===true,actions:Object.keys(childReader.manifest.piglink.actions||{}),events:Object.keys(childReader.manifest.piglink.events||{})}:null};
+    if(options?.kind==='machine'&&!descriptor.piglink?.headless)throw new Error('This Wurst does not declare a headless PigLink end');
+    const attached=this._embedSessions.attach(this.id,locator,{kind:options?.kind==='machine'?'machine':'view',relationship:parent,metadata:{...descriptor.application,ref,locator,path,size:source.size}});let world=this._embedWorlds.get(attached.session.id);if(attached.created){world={source,path,writable,parent,composition,descriptor,locator};this._embedWorlds.set(attached.session.id,world);}else if(path&&world){world.path=path;world.source=source;}const handle=attached.attachment.id;this._embedSources.set(handle,{sessionId:attached.session.id});return {handle,size:world.source.size,writable:world.writable,parent:world.parent,composition:world.composition,session:this._embedSessions.describeByAttachment(handle),descriptor:world.descriptor};
+  }
+  _requireEmbedSource(rawHandle){const handle=String(rawHandle??''),item=this._embedSources.get(handle);if(!item)throw new Error('Unknown Wurst embed handle');const attachment=this._embedSessions.requireAttachment(handle),world=this._embedWorlds.get(attachment.session.id);if(!world)throw new Error('Unknown Wurst embed session');return {handle,attachment,world};}
+  async _readEmbedSource(handle,offset,length){const {world}=this._requireEmbedSource(handle),start=Number(offset),size=Number(length);if(!Number.isSafeInteger(start)||!Number.isSafeInteger(size)||start<0||size<0||start+size>world.source.size)throw new Error('Invalid Wurst embed byte range');return world.source.read(start,size);}
+  async _persistEmbedSource(handle,value){const {world}=this._requireEmbedSource(handle);this._embedSessions.requireFresh(handle);if(!world.path||!world.writable)throw new Error('This embedded Wurst is not writable');const data=value instanceof Uint8Array?value:new Uint8Array(value),result=await this.fs.write(world.path,data,{mime:'application/vnd.wrst.wurst'});await this._persistPigFs();const stat=await this.fs.stat(world.path);world.source={size:stat.size,read:async(offset,length)=>this.fs.read(world.path,{offset,length})};const session=this._embedSessions.bump(handle,{metadata:{...world.descriptor.application,ref:`pigfs:${world.path}`,locator:world.locator,path:world.path,size:stat.size}});this.frame?.contentWindow?.postMessage({__wursterPigletSessionChanged:1,sessionId:this.id,writer:String(handle),session,size:stat.size},'*');return {ok:true,path:world.path,size:data.byteLength,result,revision:session.revision,session};}
+  async _invokeEmbedParent(handle,method,args=[]){const {world}=this._requireEmbedSource(handle),name=String(method??'');assertPigletParentMethod(world.parent,name);const safeArgs=Array.isArray(args)?args:[];if(name==='piglink.describe')return this.describePigLink();if(name==='piglink.invoke')return this.invokePigLink(safeArgs[0],safeArgs[1]??{});return this._invoke(name,safeArgs);}
+  async _describeMachine(handle){const {attachment,world}=this._requireEmbedSource(handle);if(attachment.kind!=='machine')throw new Error('Wurst session attachment is not a machine client');const reader=await WurstWebReader.open(world.source);try{return {info:{id:reader.manifest?.id??null,name:reader.manifest?.name??null,version:reader.manifest?.version??null,format:reader.manifest?.format??null},piglink:structuredClone(reader.manifest?.piglink??null)};}finally{await reader.close?.();}}
+  async _invokeMachine(handle,name,input={},options={}){const key=String(handle??''),{attachment,world}=this._requireEmbedSource(key);if(attachment.kind!=='machine')throw new Error('Wurst session attachment is not a machine client');this._embedSessions.refresh(key);const machine=await WursterWebSession.open(world.source,{sessionId:`machine-${crypto.randomUUID?.()||Math.random().toString(36).slice(2)}`,serviceWorkerUrl:this.options.serviceWorkerUrl||'/wurster-sw.js',serviceWorkerScope:this.options.serviceWorkerScope||'/',parent:world.parent,externalSession:this._embedSessions.describeByAttachment(key),persistSnapshot:world.writable?async(blob)=>this._persistEmbedSource(key,new Uint8Array(await blob.arrayBuffer())):null,parentInvoke:world.parent?async(method,args=[])=>this._invokeEmbedParent(key,method,args):null});const events=[];const stop=machine.onPigLinkEvent((eventName,payload)=>events.push({name:eventName,payload:structuredClone(payload??null)}));try{await machine.mountMachine();const result=await machine.invokePigLink(String(name??''),input??{}),session=this._embedSessions.describeByAttachment(key);for(const event of events)this.frame?.contentWindow?.postMessage({__wursterPigletMachineEvent:1,sessionId:this.id,childSessionId:session.id,name:event.name,payload:event.payload},'*');return {result,events,session};}finally{stop();await machine.close();}}
+  _refreshEmbedSource(handle){const {world}=this._requireEmbedSource(handle),refreshed=this._embedSessions.refresh(String(handle??''));return {size:world.source.size,session:refreshed.session};}
+  _runningPiglets(){return this._embedSessions.list(this.id);}
+  _closeEmbedSource(handle){const key=String(handle??'');this._requireEmbedSource(key);this._embedSources.delete(key);const released=this._embedSessions.release(key);if(released.closed)this._embedWorlds.delete(released.session.id);return true;}
+  async _inspectPigletSource(source,metadata={}) {
+    const reader=await WurstWebReader.open(source),signature=await reader.verifySignature();
+    return {...metadata,bytes:source.size,application:{id:reader.manifest?.id??null,name:reader.manifest?.name??null,version:reader.manifest?.version??null},data:{format:reader.manifest?.pigfs?.format??null,writable:reader.manifest?.pigfs?.writable===true},capabilities:structuredClone(reader.manifest?.capabilities||{}),piglink:reader.manifest?.piglink?{format:reader.manifest.piglink.format??null,headless:reader.manifest.piglink.headless===true,actions:Object.keys(reader.manifest.piglink.actions||{}),events:Object.keys(reader.manifest.piglink.events||{})}:null,protection:{application:reader.manifest?.application?.protection??'public',sealed:reader.manifest?.application?.protection==='sealed'||[...reader.entries.values()].some((entry)=>Boolean(entry.encryption))},signature:{status:signature.status,publisher:signature.publisher??null,error:signature.error??null}};
+  }
+  async _pigFsWurstSource(path) {
+    const stat=await this.fs.stat(path); if(!stat||stat.type!=='file')throw new Error(`PigFS Wurst not found: ${path}`);
+    return {size:stat.size,read:async(offset,length)=>this.fs.read(path,{offset,length})};
+  }
+  async _discoverPigFsPiglets() {
+    const out=[],seen=new Set(),queue=[];
+    for(const realm of this.fs.realms()) if(realm?.mount&&!seen.has(realm.mount)){seen.add(realm.mount);queue.push(realm.mount);}
+    let visited=0;
+    while(queue.length&&visited<2048){const dir=queue.shift();let entries=[];try{entries=await this.fs.list(dir);}catch{continue;}for(const entry of entries){if(++visited>2048)break;const path=String(entry.path||'');if(entry.type==='directory'){if(!seen.has(path)){seen.add(path);queue.push(path);}continue;}if(entry.type!=='file'||!/\.(wurst|wrst)$/i.test(path))continue;try{const source=await this._pigFsWurstSource(path);out.push(await this._inspectPigletSource(source,{ref:`pigfs:${path}`,id:path,label:null,source:'pigfs',path,mutable:true}));}catch{}}
+    }
+    return out;
+  }
+  async pigletDescriptors() {
+    const builtins=[];
+    for(const child of this.piglets()){try{builtins.push(await this.inspectPiglet(`builtin:${child.id}`));}catch{builtins.push({...child,ref:`builtin:${child.id}`,source:'builtin',mutable:false});}}
+    return [...builtins,...await this._discoverPigFsPiglets()];
+  }
+  async inspectPiglet(rawRef) {
+    const ref=String(rawRef??'');
+    if(ref.startsWith('pigfs:')||ref.startsWith('/')){const path=ref.startsWith('pigfs:')?ref.slice(6):ref,source=await this._pigFsWurstSource(path);return this._inspectPigletSource(source,{ref:`pigfs:${path}`,id:path,label:null,source:'pigfs',path,mutable:true});}
+    const id=ref.startsWith('builtin:')?ref.slice(8):ref,{child,entry}=this.pigletEntry(id),source={size:entry.encryption?.plainLength??entry.length,read:(offset,length)=>this._readImmutable(entry,offset,length)};
+    return this._inspectPigletSource(source,{...structuredClone(child),ref:`builtin:${child.id}`,source:'builtin',mutable:false});
+  }
+  async installPiglet(rawName,value,options={}) {
+    if(!this.reader.manifest?.pigfs?.writable)throw new Error('This Wurst PigFS is not writable');
+    const data=value instanceof Uint8Array?value:value instanceof ArrayBuffer?new Uint8Array(value):ArrayBuffer.isView(value)?new Uint8Array(value.buffer,value.byteOffset,value.byteLength):null;
+    if(!data?.byteLength)throw new TypeError('wurst.piglet.install expects Wurst bytes');
+    if(data.byteLength>512*1024*1024)throw new Error('Piglet installation exceeds the 512 MiB runtime import limit');
+    const probe=await WurstWebReader.open(data),signature=await probe.verifySignature();
+    if(signature.status==='invalid')throw new Error(`Piglet signature is invalid: ${signature.error||'verification failed'}`);
+    const clean=String(rawName||'Piglet.wurst').replaceAll('\\','/').split('/').at(-1).replace(/[^A-Za-z0-9._ -]/g,'_');
+    if(!/\.(wurst|wrst)$/i.test(clean))throw new Error('Piglet filename must end in .wurst or .wrst');
+    let path=String(options.path||'').trim();
+    if(!path){
+      const realms=this.fs.realms();
+      const realm=realms.find((item)=>item?.mount&&item.protection==='public'&&(!item.governance||item.governance==='ordinary'))||realms.find((item)=>item?.mount&&item.protection==='public');
+      if(!realm)throw new Error('No writable public PigFS realm is available for Piglet installation');
+      const dir=`${String(realm.mount).replace(/\/$/,'')}/piglets`;
+      await this.fs.mkdir(dir,{recursive:true});
+      path=`${dir}/${clean}`;
+    }
+    if(!path.startsWith('/'))path=`/${path}`;
+    await this.fs.write(path,data,{mime:'application/vnd.wrst.wurst'});
+    await this._persistPigFs();
+    return this.inspectPiglet(`pigfs:${path}`);
+  }
+  async removePiglet(rawRef) {
+    const ref=String(rawRef??'');if(!ref.startsWith('pigfs:')&&!ref.startsWith('/'))throw new Error('Built-in Piglets are immutable package content and cannot be removed at runtime');const path=ref.startsWith('pigfs:')?ref.slice(6):ref;const removed=await this.fs.remove(path);await this._persistPigFs();return removed;
+  }
   piglets() {
     return structuredClone(this.reader.manifest?.piglet?.children ?? []);
   }
@@ -894,24 +914,6 @@ export class WursterWebSession {
     const entry = this.reader.entry(child.entry);
     if (!entry || entry.scope !== 'piglet' || entry.encryption) throw new Error(`Piglet child is unavailable: ${key}`);
     return { child, entry };
-  }
-  pigletUrl(id) {
-    const { child } = this.pigletEntry(id);
-    return `${this._virtualBase()}/piglet/${encodeURIComponent(child.id)}.wurst`;
-  }
-  async pigletBytes(id) {
-    const { child, entry } = this.pigletEntry(id);
-    const data = await this._readImmutable(entry, 0, entry.length);
-    const digest = await sha256Hex(data);
-    if (digest !== child.sha256) throw new Error(`Piglet child failed integrity check: ${child.id}`);
-    return data;
-  }
-  async openPiglet(id, options = {}) {
-    const data = await this.pigletBytes(id);
-    return WursterWebSession.open(new Blob([data]), {
-      ...options,
-      sessionId: options.sessionId || `${this.id}-piglet-${String(id).replace(/[^a-z0-9_-]+/gi, '-')}`
-    });
   }
   pigstyStatus() {
     const declared = this.reader.manifest?.pigsty ?? null;

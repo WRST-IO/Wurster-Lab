@@ -9,6 +9,8 @@ const ROOT = path.resolve(HERE, '..');
 const PUBLIC_MODULES = new Map([
   ['@wurster/format', path.join(ROOT, 'packages/format/src/index.js')],
   ['@wurster/piglink', path.join(ROOT, 'packages/interface/src/index.js')],
+  ['@wurster/piglet', path.join(ROOT, 'packages/piglet/src/index.js')],
+  ['@wurster/headless', path.join(ROOT, 'packages/headless/src/index.js')],
   ['@wurster/pigsty', path.join(ROOT, 'packages/pigsty/src/index.js')],
   ['@wurster/session', path.join(ROOT, 'packages/session/src/index.js')]
 ]);
@@ -30,6 +32,7 @@ for (const [specifier, file] of PUBLIC_MODULES) {
 
 const roots = [
   path.join(ROOT, 'runtime/desktop/src'),
+  path.join(ROOT, 'runtime/web/src'),
   path.join(ROOT, 'packages')
 ];
 

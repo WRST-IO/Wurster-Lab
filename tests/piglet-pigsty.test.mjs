@@ -119,13 +119,16 @@ Pigsty.define(async (ctx) => {
 
   const parentSession = await WursterWebSession.open(new Blob([await fs.readFile(parentOutput)]), { sessionId: 'piglet-parent-test' });
   assert.deepEqual(parentSession.piglets().map((item) => item.id), ['child-tool']);
-  assert.match(parentSession.pigletUrl('child-tool'), /\/piglet\/child-tool\.wurst$/);
   const served = await parentSession._serve({ scope: 'piglet', path: 'child-tool.wurst', method: 'GET', range: null });
   assert.equal(served.status, 200);
   assert.equal(sha256(Buffer.from(new Uint8Array(served.body))), child.sha256);
-  const childSession = await parentSession.openPiglet('child-tool');
+  const childEmbed = await parentSession._openEmbedSource('builtin:child-tool', {});
+  const childSource = parentSession._requireEmbedSource(childEmbed.handle).world.source;
+  const childSession = await WursterWebSession.open(childSource, { sessionId: 'piglet-child-test' });
   assert.equal(childSession.reader.manifest.id, 'io.wrst.child-tool');
   assert.match(new TextDecoder().decode(new Uint8Array((await childSession._serve({ scope: 'app', path: 'index.html', method: 'GET', range: null })).body)), /Child Wurst/);
+  await childSession.close();
+  parentSession._closeEmbedSource(childEmbed.handle);
   const pigsty = parentSession.pigstyStatus();
   assert.equal(pigsty.declared, true);
   assert.equal(pigsty.state, 'unavailable');

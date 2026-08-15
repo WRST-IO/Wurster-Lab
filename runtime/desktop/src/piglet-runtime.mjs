@@ -34,15 +34,8 @@ export function openPigletResourceSource(context, rawId) {
   return { child, source };
 }
 
-export async function loadPigletResource(context, rawId) {
-  const { child, source } = openPigletResourceSource(context, rawId);
-  const chunks = [];
-  const chunkSize = 4 * 1024 * 1024;
-  for (let offset = 0; offset < source.size; offset += chunkSize) chunks.push(Buffer.from(await source.read(offset, Math.min(chunkSize, source.size - offset))));
-  return { child, data: Buffer.concat(chunks, source.size) };
-}
 
-export function createDesktopPigletRuntime({ ipcMain, assertWurstSender, assertCapability, storage, embeds }) {
+export function createDesktopPigletRuntime({ ipcMain, assertWurstSender, storage, embeds }) {
   async function resolve(context, rawRef) {
     const ref = String(rawRef ?? '');
     if (ref.startsWith('wurst://app/')) {
@@ -64,10 +57,6 @@ export function createDesktopPigletRuntime({ ipcMain, assertWurstSender, assertC
       descriptor.label = descriptor.application?.name ?? resourcePath.split('/').at(-1);
       return { descriptor, source };
     }
-    if (ref.startsWith('wurst://piglet/')) {
-      const parsed = new URL(ref);
-      return resolve(context, `builtin:${decodeURIComponent(parsed.pathname.replace(/^\/+/, '')).replace(/\.wurst$/i, '')}`);
-    }
     if (ref.startsWith('wurst://pigfs/')) {
       const parsed = new URL(ref);
       return resolve(context, `pigfs:/${decodeURIComponent(parsed.pathname.replace(/^\/+/, ''))}`);
@@ -82,6 +71,7 @@ export function createDesktopPigletRuntime({ ipcMain, assertWurstSender, assertC
         label: null,
         source: 'pigfs',
         path: normalizedPath,
+        objectId: source.objectId ?? null,
         mutable: true
       });
       descriptor.label = descriptor.application?.name ?? descriptor.path.split('/').at(-1);
@@ -111,40 +101,43 @@ export function createDesktopPigletRuntime({ ipcMain, assertWurstSender, assertC
     return [...builtins, ...await storage.discover(context)];
   }
 
-  ipcMain.handle('wurst:piglet:children', async (event) => list(assertWurstSender(event)));
-  ipcMain.handle('wurst:piglet:url', async (event, ref) => {
-    const context = assertWurstSender(event);
-    const resolved = await resolve(context, ref);
-    if (resolved.descriptor.source === 'builtin') return `wurst://piglet/${encodeURIComponent(resolved.descriptor.id)}.wurst`;
-    const clean = String(resolved.descriptor.path || '').replace(/^\/+/, '');
-    return `wurst://pigfs/${clean.split('/').map(encodeURIComponent).join('/')}`;
-  });
-  ipcMain.handle('wurst:piglet:inspect', async (event, ref) => (await resolve(assertWurstSender(event), ref)).descriptor);
-  ipcMain.handle('wurst:piglet:install', async (event, name, payload, options = {}) => {
-    const context = assertWurstSender(event);
-    assertCapability(context, 'piglet');
+  async function install(context, name, payload, options = {}) {
     return storage.install(context, normalizePigletBytes(payload), { ...options, name });
-  });
-  ipcMain.handle('wurst:piglet:remove', async (event, ref) => {
-    const context = assertWurstSender(event);
-    assertCapability(context, 'piglet');
+  }
+
+  async function remove(context, ref) {
     const descriptor = (await resolve(context, ref)).descriptor;
     if (descriptor.source !== 'pigfs') throw new Error('Built-in Piglets are immutable package content and cannot be removed at runtime');
     return storage.remove(context, descriptor.ref);
+  }
+
+  ipcMain.handle('wurst:piglet:children', async (event) => list(assertWurstSender(event)));
+  ipcMain.handle('wurst:piglet:inspect', async (event, ref) => (await resolve(assertWurstSender(event), ref)).descriptor);
+  ipcMain.handle('wurst:piglet:install', async (event, name, payload, options = {}) => install(assertWurstSender(event), name, payload, options));
+  ipcMain.handle('wurst:piglet:remove', async (event, ref) => remove(assertWurstSender(event), ref));
+  ipcMain.handle('wurst:piglet:running', async (event) => embeds.list(assertWurstSender(event)));
+  ipcMain.handle('wurst:piglet:machine-connect', async (event, ref, options = {}) => {
+    const context = assertWurstSender(event);
+    const { descriptor, source } = await resolve(context, ref);
+    if (!descriptor.piglink?.headless) throw new Error('This Wurst does not declare a headless PigLink end');
+    return embeds.open(context, descriptor, source, { ...options, kind: 'machine' });
   });
+  ipcMain.handle('wurst:piglet:machine-describe', async (event, handle) => embeds.machineDescribe(assertWurstSender(event), handle));
+  ipcMain.handle('wurst:piglet:machine-invoke', async (event, handle, name, input = {}, options = {}) => embeds.machineInvoke(assertWurstSender(event), handle, name, input, options));
+  ipcMain.handle('wurst:piglet:machine-close', async (event, handle) => embeds.close(assertWurstSender(event), handle));
   ipcMain.handle('wurst:piglet:embed-open', async (event, ref, options = {}) => {
     const context = assertWurstSender(event);
-    assertCapability(context, 'piglet');
     const { descriptor, source } = await resolve(context, ref);
     return embeds.open(context, descriptor, source, options);
   });
   ipcMain.handle('wurst:piglet:embed-read', async (event, handle, offset, length) => embeds.read(assertWurstSender(event), handle, offset, length));
   ipcMain.handle('wurst:piglet:embed-persist', async (event, handle, payload) => embeds.persist(assertWurstSender(event), handle, payload));
+  ipcMain.handle('wurst:piglet:embed-refresh', async (event, handle) => embeds.refresh(assertWurstSender(event), handle));
   ipcMain.handle('wurst:piglet:embed-invoke', async (event, handle, method, args = []) => embeds.invoke(assertWurstSender(event), handle, method, args));
   ipcMain.handle('wurst:piglet:embed-close', async (event, handle) => embeds.close(assertWurstSender(event), handle));
 
 
-  return { resolve, list, closeContext: embeds.closeContext };
+  return { resolve, list, running: embeds.list, install, remove, closeContext: embeds.closeContext };
 }
 
 export function registerDesktopPigletRuntime(options) {

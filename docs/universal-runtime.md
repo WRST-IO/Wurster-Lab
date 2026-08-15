@@ -4,61 +4,34 @@ group: Runtime & Format
 groupOrder: 2
 order: 2
 ---
-
-# Universal Wurst Law 🌭🌍
+# Universal Wurst law
 
 A valid Wurst is the same Wurst on every conforming Wurster runtime.
 
-Windows, macOS, Linux, iOS, Android and future runtimes may use completely different implementation technology. They must agree on the Wurst format, the portable runtime API and its security boundaries.
-
 > Same Wurst semantics, not the same runtime implementation.
 
-## Baseline and optional capabilities
+Desktop may use Electron, iOS may use WKWebView and another runtime may use something entirely different. The portable contract must still agree on WRST, PigFS, PigLink, Piglet relationships, protection and capability semantics.
 
-The conforming baseline is the part every Wurster must understand: the WRST container, normal application HTML/CSS/JavaScript, immutable resource integrity, PigFS semantics, package signatures and the portable Wurster API baseline.
+## Baseline versus optional capability
 
-Capabilities are different. A Wurst may declare an optional ability that a particular runtime cannot provide.
+A runtime must understand the portable contract even when a host feature is unavailable. A camera or local-network feature may report `unsupported`; the Wurst should still open and choose its fallback UX.
 
-That does **not** make the Wurst invalid and does not stop the rest of the application from running.
+Host-specific facilities such as Touch ID, Windows Hello, Secure Enclave or a keystore are Wurster implementation details. They never become requirements encoded into the Wurst.
 
-```js
-const lan = await wurst.capabilities.query("network.local");
+## Two ends, one Wurst
 
-if (lan.state === "unsupported") {
-  // Explain the platform limitation or offer another workflow.
-}
+Human and machine access are two ways into the same portable world:
+
+```text
+human View → Wurst ← PigLink machine client
 ```
 
-Current runtime states are intentionally small:
+`<wurst-embed>` attaches a human View. `wurst.piglet.connect()` attaches a machine end for a Child that declares `piglink.headless: true`. Desktop/Web can attach both to one durable session; the browserless harness can use Child Wursts as subtools.
 
-- `available` — declared by the Wurst and implemented by this runtime.
-- `unsupported` — declared by the Wurst but unavailable in this runtime.
-- `undeclared` — the Wurst did not request it.
+The remaining parity gap is cross-process transport: an external CLI/MCP cannot yet join a session already owned by another Wurster process.
 
-Permission-specific states such as user denial can be added as capability brokers become interactive.
+## Security law
 
-## Platform details belong to Wurster
+Portability never means Host access. Wurst code receives portable, mediated behavior, not raw Host FS/process/shell/environment APIs or Wurster-held secrets.
 
-A Wurst does not request Apple Keychain, Windows Hello, Secure Enclave, Android Keystore or a particular browser implementation.
-
-The Wurst asks for portable behavior. The Wurster decides how its platform implements that behavior.
-
-For example, the desktop Wurster may use Electron because controlling Chromium sessions, request boundaries and isolated renderer surfaces is useful. A future iOS Wurster may use WKWebView and native Swift brokers. Android may use the system WebView. Those choices do not alter the Wurst.
-
-## Portable failure is part of portability
-
-A mini-app is allowed to discover that something is not available and remain useful.
-
-A local-model client can run everywhere while explaining that a runtime without local-network access cannot reach the user's Ollama server. A camera tool can still show its imported files on a platform where live camera access is unavailable.
-
-Conformance therefore means understanding the request and denying or marking unavailable what cannot be supplied, not refusing to open the whole Wurst.
-
-## Pigsty follows the same law
-
-Pigsty may exist on Desktop before it exists on mobile or Web. That does not split the Wurst format.
-
-A Wurst can display and edit its data everywhere while enabling source builds only where Pigsty is available. Built output remains ordinary Wurst content or PigFS state with provenance. The absence of Pigsty disables the build operation, not the Wurst.
-
-## Portable secrets
-
-The same rule applies to cryptography. Meatphrase is the universal recovery/unlock route for user-owned sealed content. Local hardware or OS security may make a particular Wurster more comfortable or safer, but never becomes a requirement embedded in the Wurst file.
+Pigsty follows the same law. A Wurst may remain useful where Pigsty is unavailable; missing compute disables the operation, not the Wurst.

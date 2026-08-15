@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.32.3 - Cooperative Wurst Sessions and Machine Ends
+
+- Recentered Wurst security on the hard Wurst↔Host boundary. Parent/Child cooperation is intentionally cheap inside the Wurst world while Host filesystem, process, shell, environment and Wurster secrets remain non-ambient and runtime-mediated.
+- Added runtime-neutral Piglet relationship/session contracts, bidirectional Parent↔Child PigLink, explicit Parent PigFS and Parent Piglet management delegation, optional `isolated` relationships and authority-composition metadata.
+- Made `<wurst-embed>` a View onto a Child Wurst rather than a native Desktop child surface. Multiple Views of the same PigFS-held Child share one durable Wurst session and revision-safe Child PigFS while ephemeral UI state remains View-local.
+- Added the DOM-free machine end: `wurst.piglet.connect()` / `invoke()` run `piglink.headless: true` Child Wursts without creating a View. Desktop/Web machine attachments share the same Child session, PigFS persistence and PigLink Events as visible Views.
+- Upgraded the browserless headless harness so a Parent Wurst can mutate its own durable PigFS and use built-in or PigFS-held Child Wursts as machine subtools without extracting them to Host files.
+- Kept the remaining two-ends gap explicit: an external CLI/MCP process cannot yet attach across process boundaries to a Desktop/Web-owned Wurst session already running elsewhere; generic nested CLI Child write/delegation parity is also still incomplete.
+- Modularized the Web runtime and build so the published browser runtime and Desktop embed runtime use the same self-contained bundle.
+- Compacted and realigned the documentation around Wurst as a portable software format for useful tools, workflows and applications, with concise status/security/pillar pages and 0.32.3 maturity labels.
+- Bumped Wurster runtime/workspace release metadata to 0.32.3 while leaving protected Authority and separately versioned site packages untouched.
+
 ## 0.32.2 - PigFS Foundation and Universal Piglet Embeds
 
 - Promoted PigFS as the portable filesystem pillar: normal mounted paths, stable object identity, transactions, snapshots, quotas, internal symlinks, watch semantics and retained append-safe/crypto/compaction machinery. The pre-1.0 WurstFS public vocabulary is removed instead of kept as a compatibility layer.

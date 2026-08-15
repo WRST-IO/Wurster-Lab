@@ -6,109 +6,70 @@ order: 1
 ---
 # Security model
 
-Wurster separates trust domains instead of treating "encrypted" or "signed" as one giant switch.
+**Wurst gives software a world of its own without giving it the user's computer.**
 
-## Immutable application integrity
+The primary hard boundary is **Wurst ↔ Host**. Inside the Wurst world, PigFS, PigLink, Piglet and Pigsty are cooperation primitives, not a Zero-Trust microkernel.
 
-The application package is immutable. Publisher signatures use Ed25519 and cover the application resources, manifest, public metadata and declared PigLink code. A package signature answers: **which publisher key signed this application, and are the signed bytes unchanged?**
+> The pigs may share the mud. They may not enter the farmer's house. If two abilities build a ladder over the fence, Wurster notices the ladder.
 
-WRST.IO Authority certificates may bind verified domain/email claims to that publisher key. Verification is offline when the WRST.IO Root is pinned in the runtime.
+## Three rules
 
-## WurstKey: developer-owned application confidentiality
+1. **Host authority is never ambient.** Host FS/process/shell/environment, Wurster Identities, private signing keys, Meatphrases and WurstKeys stay outside application JavaScript.
+2. **Internal authority may be shared deliberately.** Parent↔Child PigLink is cheap; Parent PigFS and Piglet management can be explicitly delegated.
+3. **Authority composition is visible.** Wurster records combinations that create a meaningful Host/network data path instead of pretending each grant exists in isolation.
 
-A WurstKey protects immutable application content selected by the developer.
+Trust-boundary machinery fails closed. Convenience features may degrade; they may not manufacture authority.
 
-- `application.protection: "partial"` leaves the public application shell readable and seals selected application resources.
-- `application.protection: "sealed"` seals the application resource map and protected application content before entry code runs.
+## Host brokers
 
-The WurstKey is not a user identity and is not reused as a mutable-data key.
+Capabilities such as `files.open` / `files.save` are narrow Wurster-owned bridges. The user chooses a file/destination; the Wurst does not receive a reusable Host directory capability.
 
-## PigFS: mutable data
+Parent PigFS is still Wurst storage, not Host storage. Delegating it never exposes `/Users`, `C:\`, `/etc`, Node, shell or environment variables.
 
-Mutable data uses independent PigFS realms.
+Wurster Auth, verified Identity UI, Meatphrases, WurstKeys and private keys are never generic Parent services.
 
-### Ordinary
+## Internal cooperation
 
-No identity, no encryption, no signatures, no retained audit history. This is the default.
-
-### Personal
-
-One Wurster Identity owns an encrypted realm. The realm is intentionally non-shareable and history-free. A random realm key encrypts metadata and payloads and is wrapped for that identity's X25519 public key.
-
-### Shared
-
-Shared realms explicitly opt into Wurster Identity based governance. Ed25519 proves authorized mutations; X25519 wraps sealed realm keys for readers. Read, write and admin are separate capabilities.
-
-`audit: "signed"` is an additional opt-in. Sharing does not automatically imply application-visible detailed history.
-
-## Wurster Identity
-
-A Wurster Identity derives two independent keypairs from its portable Meatphrase:
+A normal Piglet may communicate with its Parent through PigLink. The Parent can additionally delegate:
 
 ```text
-Ed25519  signing / mutation authorization
-X25519   encrypted realm-key delivery
+parent-pigfs="read" | "read-write"
+parent-piglets="read" | "manage"
 ```
 
-The public identity may be exported as `.wurstid`. Public identities are safe to exchange; Meatphrases and private keys are not.
+There is no inherit-all-parent-capabilities switch. `<wurst-embed isolated>` removes the managed Parent relationship when a Child needs a stricter compartment.
 
-A Wurster Identity may carry self-declared display information and optional WRST.IO verified claims. Wurster must visually distinguish the two.
+Identity separation remains mandatory: a Child keeps its own package, publisher signature, PigFS and protection state. Operational isolation is optional.
 
-## Trusted Wurster UI
+## Authority composition
 
-A Wurst can draw convincing HTML. Therefore sensitive trust operations are not trusted merely because they look like Wurster.
+The important question is not whether two Wursts have different identities. It is:
 
-Trusted surfaces such as `<wurster-auth>` and `<wurst-identity>` are rendered by Wurster outside the Wurst renderer. Clicking identity verification opens a Wurster-owned certificate view. Sharing policy changes should follow the same rule.
+> Does this relationship combine authority that nobody granted in this combination?
 
-## Host filesystem boundary
+For example, Parent PigFS read plus Child network access creates a Parent-data-to-network path. Wurster exposes `wurst/authority-composition-1` metadata for such relationships. This is observability-first; it is not an automatic prompt for every internal connection.
 
-Wurst JavaScript does not receive arbitrary host paths or Node filesystem access. `files.open` and `files.save` are narrow user-selected bridges owned by Wurster dialogs.
+## Data protection
 
-PigFS paths are inside the Wurst itself and are not host filesystem permissions.
+- **WurstKey** protects developer-owned immutable application content.
+- **PigFS ordinary Realm** is normal mutable data.
+- **PigFS personal Realm** encrypts data for one Wurster Identity.
+- **PigFS shared Realm** adds explicit governance and wrapped Realm keys.
 
-## Pigsty boundary
+Delegation never bypasses PigFS lock/governance/encryption. If a Parent cannot read a Realm, its Child cannot read it through Parent PigFS either.
 
-Pigsty may provide Node-powered tooling inside a Wurster-controlled Wurst workspace. It is not Node access to the host computer. Host filesystem, shell, processes, network, other Wursts and private keys remain behind explicit Wurster capabilities.
+Publisher signatures authenticate immutable application bytes. Carrying or embedding a Child never makes the Parent its publisher.
 
-Pigsty permission is independent of package signature. A signature identifies a publisher; it does not authorize computation.
+## Pigsty
 
-## Piglet boundary
+Pigsty may compile, install or transform against Wurst-owned files, but it must not become a Host Node/Shell/FS escape hatch or materialize protected plaintext onto uncontrolled Host storage. Native Edge/WASIX production isolation remains unfinished, so Pigsty stays non-blocking and experimental in 0.32.3.
 
-Piglet lets a parent Wurst keep and orchestrate child Wursts. It does not merge trust domains. MeatGrinder preserves built-in child bytes exactly, and runtime installation writes the supplied child bytes unchanged into PigFS. A child keeps its own signature, publisher, realms, WurstKey state, Pigsty permission and PigLink declarations.
+## Current crypto primitives
 
-Managed Desktop children run in separate renderer/runtime contexts. Invalid child signatures fail before execution. Sealed child surfaces currently fail closed until authentication is child-context aware.
-
-Parenthood grants orchestration, not authorship or omnipotence.
-
-## PigLink boundary
-
-PigLink connects behavior, not trust. A link does not transfer capabilities, but it may compose them. Wurster must treat relevant links as security decisions when the resulting data flow is stronger than either side alone.
-
-## Append-safe writes and compaction
-
-Mutable writes append new records before publishing a commit. If the process crashes before commit, the previous committed state remains authoritative.
-
-Append-safe is not permanent retention. Ordinary and personal PigFS storage can be compacted to the current live snapshot, physically removing deleted/replaced data. Compaction writes a separate file, verifies it and only then may replace the old file.
-
-## Multi-user integrity boundary
-
-Readonly is not a promise that a hostile hex editor cannot change bytes. It means an unauthorized changed state cannot validate as an authorized PigFS state.
-
-Confidentiality is stronger: data another identity must not read is actually encrypted.
-
-## Current primitives
-
-- Meatphrase KDF: scrypt
-- publisher/package signing: Ed25519
-- Wurster Identity signing: Ed25519
-- Wurster Identity key agreement: X25519
-- protected application content: chunked AES-256-GCM
-- sealed PigFS realms: AES-256-GCM with per-realm random keys
-- hashes/integrity: SHA-256
-- application WurstKey: 256-bit random key material
+- scrypt for Meatphrase KDF
+- Ed25519 for package/identity signing
+- X25519 for sealed Realm key delivery
+- AES-256-GCM for protected application content and sealed PigFS Realms
+- SHA-256 for hashes/integrity
 
 Wurst does not invent custom ciphers.
-
-## Pre-1.0 rule
-
-Wurster is still under active format development. There are no compatibility bridges for discarded experimental mutable-data or authority models. The current codebase validates the current model only; incompatible pre-release artifacts should be rebuilt.

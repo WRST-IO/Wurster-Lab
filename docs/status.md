@@ -4,52 +4,28 @@ group: Project
 groupOrder: 6
 order: 1
 ---
-
 # Current status
 
-Wurster Lab is pre-1.0 software. Implementation code can exist before a feature is part of the normal release contract, so this page is the canonical short answer for what a current v0.32 runtime is expected to provide.
+Wurster 0.32.3 is pre-1.0 but intended for real integration work. Presence of code is not the same as a stable contract; this page is the short maturity map.
 
-## Release surfaces
-
-| Surface | v0.32 release status | Notes |
+| Area | 0.32.3 status | Current boundary |
 | --- | --- | --- |
-| Windows Desktop | Release lane | Built from the shared Electron runtime. Pigsty native runtime is not bundled by default. |
-| macOS arm64 | Release lane | Signed/notarized release workflow. Pigsty native runtime is not bundled by default. |
-| macOS x64 | Release lane | Separate Intel build/signing lane. Pigsty native runtime is not bundled by default. |
-| Wurster Web | Release lane | Browser runtime and `<wurst-embed>` distribution. |
-| Linux Desktop | Prepared development lane | AppImage build path exists; public release enablement is separate. |
-| iOS / Android | Reserved | No conforming native runtime release yet. |
+| Windows Desktop | release lane | shared Electron runtime |
+| macOS arm64/x64 | release lane | signed/notarized workflow |
+| Wurster Web | release lane | browser runtime and `<wurst-embed>` |
+| Linux Desktop | development lane | build path exists |
+| iOS / Android | reserved | no conforming release yet |
+| **PigFS** | **functional / pre-stable** | files, directories, stable IDs, transactions, snapshots, quotas, symlinks, watches, realms, encryption and compaction |
+| **PigLink** | **functional / pre-stable** | typed Actions/Events across UI, Desktop, Web and headless paths |
+| **Piglet** | **functional / pre-stable** | universal Views, cooperative Parent↔Child links, shared sessions, machine attachments and writable Child PigFS on Desktop/Web |
+| **Pigsty** | **experimental / coming soon** | contracts/adapters exist; native Edge/WASIX runtime is not a normal release dependency |
 
-## PigFS
+## Important 0.32.3 limits
 
-**Active filesystem foundation, still pre-stable.** PigFS replaces the earlier mutable-storage public model. Runtime paths are normal mounted paths such as `/workspace`; storage-internal realm keys are not part of the application path model. The low-level append-safe record, crypto and compaction machinery is retained, while the public filesystem gains stable object identity, transactions, snapshots, quotas, internal symlinks and watch semantics.
+- Multiple Views and in-runtime machine clients of the same Child share one durable Wurst session and revision-safe PigFS state.
+- A browserless Parent Wurst can use Child Wursts as PigLink subtools without a DOM.
+- A separately launched CLI/MCP process **cannot yet attach to a Desktop/Web session already owned by another Wurster process**. That external machine broker is still open work.
+- The generic CLI Child-subtool path does not yet have full writable nested-Child PigFS and Parent-service parity with Desktop/Web.
+- Pigsty's development worker is not the final hostile-code production sandbox.
 
-Desktop and Web converge on the same `wurst.pigfs` vocabulary. The earlier storage API is not retained as a pre-1.0 compatibility layer.
-
-## PigLink
-
-**Functional slice, active in v0.32.** MeatGrinder packages the declared PigLink source and schemas. Desktop, Web/headless-facing paths and the headless harness can invoke Actions, validate JSON contracts and capture Events. UI code can call the same Action contract through `wurst.piglink`.
-
-Still before the first stable PigLink contract: brokered links between separate running Wurst instances, runtime handles, link lifecycle/revocation, streams/resource handles and capability-composition approval.
-
-## Piglet
-
-**Functional composition runtime, active in v0.32 development.** Piglet now uses the universal `<wurst-embed>` element rather than native Desktop child surfaces. The same HTML element embeds a Wurst on an ordinary page and inside another running Wurst; inside a Wurst that relationship is a Piglet.
-
-Child packages remain independently signed and byte-identical. Sources are opened through byte ranges, runtime-installed children are normal PigFS files, and writable child state persists back into the parent-held child Wurst with conflict checking. Desktop no longer exposes Piglet bounds/focus/native-surface APIs.
-
-Piglets are isolated from the parent by default. A parent can explicitly grant read or read-write access to its own PigFS on a specific `<wurst-embed>`; the child receives it under `wurst.parent.pigfs`, never as Host filesystem authority. PigFS governance, lock state and encryption remain enforced.
-
-Still before the first stable Piglet contract: direct brokered Parent↔Child PigLink handles beyond this scoped Parent PigFS bridge, finer path-scoped delegation, suspend/resume, tree-level budgets, crash/recovery states and complete nested-runtime stress coverage.
-
-## Pigsty
-
-**Experimental, coming soon in normal Desktop releases.** The manifest contract, worker development harness, engine-neutral filesystem/change-set contracts, Edge/WASIX adapter, runtime-bundle verifier and native-runtime acquisition tooling remain in the repository and under tests.
-
-The v0.32 Windows/macOS/Web release workflow deliberately does not require or download native Pigsty bundles. Desktop reports a declared Pigsty as `coming-soon` unless a conforming Edge/WASIX runtime is actually available or the development worker is explicitly enabled. This prevents Pigsty's native-runtime work from blocking unrelated Wurster releases.
-
-The worker path is development-only. Enable it explicitly with `WURSTER_PIGSTY_DEV=1` or `WURSTER_PIGSTY_ENGINE=worker`. Native runtime packaging is also opt-in with `WURSTER_BUNDLE_PIGSTY=1`; this is not part of the normal v0.32 release gate yet.
-
-## Structural rule
-
-Large runtime modules are being split before the Piglet/PigLink lifecycle work grows further. `npm test` includes a code-structure regression with temporary line/IPC budgets for known large modules. The budgets are guard rails, not declarations that the remaining large modules are finished refactors.
+Pre-1.0 contracts may still change cleanly. Discarded designs are removed rather than preserved through compatibility shims.

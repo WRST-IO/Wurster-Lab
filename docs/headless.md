@@ -1,131 +1,61 @@
 ---
-title: Headless Development Harness
+title: Headless Wursts
 group: Building Wursts
 groupOrder: 3
 order: 4
 ---
 # Headless Wursts
 
-A headless Wurst runs its declared PigLink without opening the visible UI.
+A Wurst may expose PigLink behavior that works without a visible DOM. This is the machine end of the same portable Wurst, not a second application format.
 
-This is useful for automated tests, build verification, command-line automation and machine control.
+A Child must declare `piglink.headless: true` before `wurst.piglet.connect()` / `invoke()` can use it without a View.
 
 ## Developer harness
 
-Wurster Lab 0.32.2 includes a browserless development harness:
+Wurster Lab 0.32.3 includes a browserless harness for development, CI and automation:
 
 ```bash
 wurster-headless describe app.wurst
 wurster-headless invoke app.wurst math.add --input '{"a":20,"b":22}'
 wurster-headless test app.wurst
+wurster-headless stdio app.wurst
 ```
 
-Machine-readable output is available with `--json`.
+Use `--json` for machine-readable output.
 
-Example:
+The Parent Wurst runs against its real durable PigFS. A headless Action can write PigFS, close, reopen the same `.wurst` and observe the committed data.
 
-```bash
-wurster-headless invoke calculator.wurst math.add \
-  --input '{"a":20,"b":22}' \
-  --json
-```
+## Child Wursts as subtools
 
-returns a JSON result instead of pixels.
-
-## Self-tests
-
-A Wurst may ship small PigLink tests in its manifest:
-
-```json
-{
-  "tests": [
-    {
-      "name": "forty-two",
-      "action": "math.add",
-      "input": { "a": 20, "b": 22 },
-      "expect": { "sum": 42 }
-    }
-  ]
-}
-```
-
-Then:
-
-```bash
-wurster-headless test calculator.wurst
-```
-
-can verify the Action contract without Chromium.
-
-## Security status in 0.32.2
-
-The 0.32.2 command-line harness is for Wursts you are developing or otherwise trust. It uses a disposable Node worker and a restricted JavaScript context so that AI/build tooling can exercise Wurst Actions today, but it is **not** the final production sandbox for hostile third-party code.
-
-## Pigsty Through PigLink
-
-Headless PigLink exposes the same controlled Pigsty surface as Desktop for declared Pigsty Wursts:
+A browserless Parent can use another Wurst directly:
 
 ```js
 PigLink.define({
   actions: {
-    async build() {
-      const status = await wurst.pigsty.status();
-      const result = await wurst.pigsty.build('site');
-      return { state: status.state, artifacts: result.artifacts };
+    async build(input) {
+      await wurst.pigfs.write('/workspace/request.json',
+        new TextEncoder().encode(JSON.stringify(input)));
+
+      return wurst.piglet.invoke(
+        'pigfs:/workspace/tools/TexturePacker.wurst',
+        'textures.pack',
+        input
+      );
     }
   }
 });
 ```
 
-The headless harness seeds Pigsty with the Wurst's public `app` resources and overlays any `workspace` files supplied by the action. The default harness still uses the small `Pigsty.define(...)` worker for development builds. Declared builds can request Edge.js/WASIX explicitly:
+For Events or repeated calls, use `wurst.piglet.connect()`. Children are read from Parent package/PigFS range sources; no `<wurst-embed>` and no Host-file extraction are required.
 
-```js
-const result = await wurst.pigsty.build('site', {
-  engine: 'edge-wasix'
-});
-```
+## Current parity boundary
 
-If the Wurst carries `pigsty-toolchain/node_modules/...`, the headless harness extracts that tree into Pigsty's immutable `/toolchain` mount before invoking Edge. This is the intended offline path for dependencies such as Eleventy, Vite or Vue compiler packages.
+Desktop/Web already let human Views and in-runtime machine clients share one Child Wurst session and writable Child PigFS revision. The browserless harness proves Parent PigFS and Child machine-subtool execution, but its generic nested Child path does not yet have the full writable Child PigFS and Parent-service parity of Desktop/Web.
 
-`WURSTER_PIGSTY_ENGINE=edge-wasix` makes Edge/WASIX the default build engine. The preferred runtime input is a manifest-checked bundle:
+A separate external CLI/MCP process also cannot yet attach to a session already owned by another Desktop/Web Wurster process. That external machine broker is the major remaining two-ends transport gap.
 
-```bash
-WURSTER_EDGE_RUNTIME_DIR=/opt/wurster/runtimes/wurster-edge-runtime-linux-amd64
-WURSTER_EDGE_CACHE_DIR=/tmp/wurster-pigsty-edge-cache
-```
+## Security status
 
-The bundle contains Edge, Wasmer, the Edge/WASIX package and a `manifest.json` that identifies the platform target and required file hashes. Status probes report whether this bundle is configured, whether it is bundled, which target it serves and whether `edge --safe` can actually start. `WURSTER_EDGE_BIN` or `PIGSTY_EDGE_BIN` remain available for local adapter diagnosis, but production harnesses should use the runtime directory.
+The 0.32.3 CLI harness uses a disposable Node worker and restricted JavaScript context. It is useful for developer-controlled Wursts and CI, but it is **not** the final hostile-third-party-code sandbox. A production headless Wurster still needs a real untrusted-code boundary with CPU, memory and capability budgets.
 
-If Edge is selected and unavailable, the build fails explicitly; the harness does not silently fall back to the worker. It still does not expose arbitrary host `fs`, shell or host process access to Wurst code.
-
-A production headless Wurster must execute PigLink code inside a real untrusted-code boundary with explicit CPU, memory and capability budgets. This limitation is deliberately documented rather than hidden behind a heroic pig costume.
-
-Portable PigLink itself does not depend on the development harness. A Web Wurster, desktop Wurster, iOS Wurster or future runtime can provide its own conforming executor.
-
-## Long-running stdio control
-
-For an AI agent or another local process, starting a new JavaScript runtime for every command is unnecessary. The harness therefore also supports JSON-lines over standard input/output:
-
-```bash
-wurster-headless stdio calculator.wurst
-```
-
-Request:
-
-```json
-{"id":1,"method":"piglink.describe"}
-```
-
-Invoke an Action:
-
-```json
-{"id":2,"method":"actions.invoke","params":{"name":"math.add","input":{"a":20,"b":22}}}
-```
-
-Run the Wurst's self-tests:
-
-```json
-{"id":3,"method":"tests.run"}
-```
-
-Every request receives one JSON response with the same `id`. This is deliberately boring. Machines enjoy boring protocols almost as much as pigs enjoy unattended sandwiches.
+Pigsty may be invoked through PigLink, but its worker engine remains development-only and native Edge/WASIX availability is explicit. Requested unavailable engines fail rather than silently falling back.

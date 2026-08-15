@@ -30,6 +30,8 @@ class RuntimeBridgeProvider {
     this.writable = Boolean(opened.writable);
     this.descriptor = opened.descriptor || null;
     this.parent = opened.parent || null;
+    this.composition = opened.composition || null;
+    this.session = opened.session || null;
   }
   async read(position, length) {
     const result = await this.bridge.read(this.handle, position, length);
@@ -37,11 +39,30 @@ class RuntimeBridgeProvider {
   }
   async persist(value) {
     if (!this.writable || !this.bridge.persist) throw new Error('This embedded Wurst is not writable');
-    return this.bridge.persist(this.handle, value);
+    const result = await this.bridge.persist(this.handle, value);
+    if (result?.session) this.session = result.session;
+    return result;
+  }
+  async refresh() {
+    if (!this.bridge.refresh) return { size: this.size, session: this.session };
+    const result = await this.bridge.refresh(this.handle);
+    if (Number.isSafeInteger(result?.size)) this.size = result.size;
+    if (result?.session) this.session = result.session;
+    return result;
   }
   async invokeParent(method, args = []) {
     if (!this.parent || !this.bridge.invoke) throw new Error('This embedded Wurst has no delegated parent runtime access');
     return this.bridge.invoke(this.handle, String(method ?? ''), args);
+  }
+  subscribeParentPigLink(listener) {
+    if (!this.parent?.piglink || !this.bridge.subscribeParentPigLink) return null;
+    const id = this.bridge.subscribeParentPigLink(this.handle, listener);
+    return () => { try { this.bridge.unsubscribeParentPigLink?.(id); } catch {} };
+  }
+  subscribeSession(listener) {
+    if (!this.session?.id || !this.bridge.subscribeSession) return null;
+    const id = this.bridge.subscribeSession(this.handle, listener);
+    return () => { try { this.bridge.unsubscribeSession?.(id); } catch {} };
   }
   async close() { try { await this.bridge.close?.(this.handle); } catch {} }
 }
@@ -92,22 +113,36 @@ async function providerFrom(input, options = {}) {
 }
 
 export class WurstEmbedElement extends HTMLElement {
-  static observedAttributes = ['src', 'wurstkey', 'parent-pigfs'];
+  static observedAttributes = ['src', 'wurstkey', 'parent-pigfs', 'parent-piglets', 'isolated'];
   constructor() {
     super();
     this._root = this.attachShadow({ mode: 'closed' });
-    this._frame = null; this._port = null; this._provider = null; this._generation = 0; this.ready = Promise.resolve(this);
+    this._frame = null; this._port = null; this._provider = null; this._generation = 0; this._childSeq = 1; this._childPending = new Map(); this._pigLinkListeners = new Map(); this._unsubscribeParentPigLink = null; this._unsubscribeSession = null; this.ready = Promise.resolve(this);
+    this.piglink = Object.freeze({
+      describe: () => this._childCall('piglink.describe'),
+      invoke: (name, input = {}) => this._childCall('piglink.invoke', [String(name ?? ''), input]),
+      on: (name, listener) => {
+        const eventName = String(name ?? '*');
+        if (typeof listener !== 'function') throw new TypeError('PigLink event listener must be a function');
+        const set = this._pigLinkListeners.get(eventName) || new Set(); set.add(listener); this._pigLinkListeners.set(eventName, set);
+        return () => { set.delete(listener); if (!set.size) this._pigLinkListeners.delete(eventName); };
+      }
+    });
     const style = document.createElement('style');
     style.textContent = ':host{display:block;position:relative;width:100%;height:420px;min-height:180px;contain:layout paint}iframe{width:100%;height:100%;border:0;display:block;background:transparent}.status{position:absolute;inset:0;z-index:2;display:grid;place-items:center;padding:24px;box-sizing:border-box;background:#fff8f6;color:#6d5961;font:600 13px system-ui;text-align:center}.status[hidden]{display:none}.pig{font-size:30px;display:block;margin-bottom:8px}.error{color:#a62f48}';
     this._status = document.createElement('div'); this._status.className = 'status';
     this._status.innerHTML = '<div><span class="pig">🐷</span>Warming the Wurster…</div>';
     this._root.append(style, this._status);
   }
+  get relationship() { return this._provider?.parent ? structuredClone(this._provider.parent) : null; }
+  get authorityComposition() { return this._provider?.composition ? structuredClone(this._provider.composition) : null; }
+  get descriptor() { return this._provider?.descriptor ? structuredClone(this._provider.descriptor) : null; }
+  get session() { return this._provider?.session ? structuredClone(this._provider.session) : null; }
   connectedCallback() { if (this.hasAttribute('src')) void this.load(this.getAttribute('src')); }
   attributeChangedCallback(name, oldValue, newValue) {
     if (!this.isConnected || oldValue === newValue) return;
     if (name === 'src' && newValue) void this.load(newValue);
-    if ((name === 'wurstkey' || name === 'parent-pigfs') && this._provider) void this.load(this.getAttribute('src'));
+    if ((name === 'wurstkey' || name === 'parent-pigfs' || name === 'parent-piglets' || name === 'isolated') && this._provider) void this.load(this.getAttribute('src'));
   }
   async load(input) {
     const generation = ++this._generation;
@@ -115,7 +150,12 @@ export class WurstEmbedElement extends HTMLElement {
     this.ready = new Promise((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
     this._show('🐷', 'Opening Wurst…');
     try {
-      const provider = await providerFrom(input, this._embedOptions());
+      const embedOptions = this._embedOptions();
+      const provider = await providerFrom(input, embedOptions);
+      if ((embedOptions.parent.pigfs || embedOptions.parent.piglets) && provider.kind !== 'runtime') {
+        await provider.close?.();
+        throw new Error('Parent Wurst delegation requires <wurst-embed> to run inside a Wurst runtime');
+      }
       if (generation !== this._generation) return this;
       this._provider = provider;
       await this._start(provider, generation);
@@ -128,10 +168,21 @@ export class WurstEmbedElement extends HTMLElement {
     }
   }
   _embedOptions() {
-    const raw = String(this.getAttribute('parent-pigfs') || '').trim().toLowerCase();
-    if (!raw) return {};
-    if (!['read', 'read-write'].includes(raw)) throw new TypeError('parent-pigfs must be "read" or "read-write"');
-    return { parentPigFs: raw };
+    const pigfs = String(this.getAttribute('parent-pigfs') || '').trim().toLowerCase();
+    const piglets = String(this.getAttribute('parent-piglets') || '').trim().toLowerCase();
+    const isolated = this.hasAttribute('isolated');
+    if (pigfs && !['read', 'read-write'].includes(pigfs)) throw new TypeError('parent-pigfs must be "read" or "read-write"');
+    if (piglets && !['read', 'manage'].includes(piglets)) throw new TypeError('parent-piglets must be "read" or "manage"');
+    if (isolated && (pigfs || piglets)) throw new TypeError('isolated cannot be combined with parent-pigfs or parent-piglets');
+    return { parent: { isolated, pigfs: pigfs || null, piglets: piglets || null } };
+  }
+  _childCall(method, args = []) {
+    if (this._provider?.parent?.isolated) return Promise.reject(new Error('PigLink is disabled for an isolated Wurst embed'));
+    if (!this._port) return Promise.reject(new Error('Embedded Wurst is not ready'));
+    const id = `child-${this._childSeq++}`;
+    const result = new Promise((resolve, reject) => this._childPending.set(id, { resolve, reject }));
+    this._port.postMessage({ type: 'wurster-embed-child-call', id, method, args });
+    return result;
   }
   async open(input) { return this.load(input); }
   async _start(provider, generation = ++this._generation) {
@@ -174,9 +225,40 @@ export class WurstEmbedElement extends HTMLElement {
         }
         return;
       }
+      if (m?.type === 'wurster-embed-child-result') {
+        const pending = this._childPending.get(String(m.id || ''));
+        if (!pending) return;
+        this._childPending.delete(String(m.id || ''));
+        m.ok ? pending.resolve(m.result) : pending.reject(new Error(m.error || 'Embedded PigLink call failed'));
+        return;
+      }
+      if (m?.type === 'wurster-embed-child-event') {
+        if (provider.parent?.isolated) return;
+        const name = String(m.name || ''), payload = structuredClone(m.payload ?? null);
+        for (const key of [name, '*']) for (const listener of this._pigLinkListeners.get(key) || []) {
+          try { listener(payload, name); } catch {}
+        }
+        this.dispatchEvent(new CustomEvent('wurst-piglink-event', {
+          detail: { name, payload }, bubbles: true, composed: true
+        }));
+        return;
+      }
+      if (m?.type === 'wurster-embed-session-refreshed') {
+        try { await provider.refresh?.(); } catch {}
+        return;
+      }
+      if (m?.type === 'wurster-embed-session-refresh-failed') {
+        this.dispatchEvent(new CustomEvent('wurst-session-conflict', {
+          detail: { error: m.error || 'Wurst view could not rebase', code: m.code || 'WURST_SESSION_CONFLICT', session: provider.session || null },
+          bubbles: true, composed: true
+        }));
+        return;
+      }
       if (m?.type === 'wurster-embed-ready') {
         this._status.hidden = true;
-        this.dispatchEvent(new CustomEvent('wurst-ready', { detail: m.detail || {}, bubbles: true }));
+        const detail = { ...(m.detail || {}), relationship: provider.parent || null, composition: provider.composition || null, session: provider.session || null };
+        this.dispatchEvent(new CustomEvent('wurst-ready', { detail, bubbles: true }));
+        if (provider.composition?.level === 'notice') this.dispatchEvent(new CustomEvent('wurst-authority-composition', { detail: provider.composition, bubbles: true, composed: true }));
       } else if (m?.type === 'wurster-embed-error') this._fail(new Error(m.error || 'Wurst failed to open'));
     });
     await new Promise((resolve, reject) => {
@@ -185,11 +267,23 @@ export class WurstEmbedElement extends HTMLElement {
     });
     if (generation !== this._generation) return;
     this._status.hidden = true;
+    this._unsubscribeParentPigLink?.();
+    this._unsubscribeParentPigLink = provider.subscribeParentPigLink?.((name, payload) => {
+      try { port.postMessage({ type: 'wurster-embed-parent-piglink-event', name: String(name ?? ''), payload: structuredClone(payload ?? null) }); } catch {}
+    }) || null;
+    this._unsubscribeSession?.();
+    this._unsubscribeSession = provider.subscribeSession?.((detail) => {
+      if (String(detail?.writer ?? '') === String(provider.handle ?? '')) return;
+      const session = detail?.session ? structuredClone(detail.session) : null;
+      try { port.postMessage({ type: 'wurster-embed-session-changed', size: Number(detail?.size ?? provider.size), session }); } catch {}
+      this.dispatchEvent(new CustomEvent('wurst-session-changed', { detail: { session }, bubbles: true, composed: true }));
+    }) || null;
     frame.contentWindow.postMessage({
       type: 'wurster-embed-init', size: provider.size, sourceKind: provider.kind,
       wurstKey: this.getAttribute('wurstkey') || null,
       persistent: Boolean(provider.persist && provider.writable),
-      parent: provider.parent || null
+      parent: provider.parent || null,
+      session: provider.session || null
     }, targetOrigin(HOST_URL), [channel.port2]);
   }
   _show(icon, text, error = false) {
@@ -200,7 +294,13 @@ export class WurstEmbedElement extends HTMLElement {
     this._show('🌭', error?.message || String(error), true);
     this.dispatchEvent(new CustomEvent('wurst-error', { detail: { error: error?.message || String(error) }, bubbles: true }));
   }
-  _teardownFrame() { this._port?.close?.(); this._port = null; this._frame?.remove(); this._frame = null; void this._provider?.close?.(); }
+  _teardownFrame() {
+    for (const pending of this._childPending.values()) pending.reject(new Error('Embedded Wurst closed'));
+    this._childPending.clear();
+    this._unsubscribeParentPigLink?.(); this._unsubscribeParentPigLink = null;
+    this._unsubscribeSession?.(); this._unsubscribeSession = null;
+    this._port?.close?.(); this._port = null; this._frame?.remove(); this._frame = null; void this._provider?.close?.();
+  }
   disconnectedCallback() { this._generation += 1; this._teardownFrame(); }
 }
 

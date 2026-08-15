@@ -69,6 +69,18 @@ export async function runDesktopBuild(argv = process.argv.slice(2)) {
     args.push('--linux', 'AppImage', `--${arch || 'x64'}`, '--config.directories.output=../linux/dist');
   }
 
+  console.log('[Wurster Lab] building shared Wurster Web embed runtime');
+  const webBuild = spawn(process.execPath, [path.join(ROOT, 'runtime', 'web', 'build.mjs')], {
+    cwd: ROOT,
+    stdio: 'inherit',
+    env
+  });
+  const webBuildCode = await new Promise((resolve, reject) => {
+    webBuild.on('error', reject);
+    webBuild.on('exit', (code, signal) => signal ? reject(new Error(`Wurster Web build terminated by ${signal}`)) : resolve(code ?? 1));
+  });
+  if (webBuildCode !== 0) throw new Error(`[Wurster Lab] shared Wurster Web embed runtime build failed (${webBuildCode})`);
+
   if (shouldBundlePigsty(env)) {
     console.log(`[Wurster Lab] preparing Pigsty Edge runtime for ${target}${arch ? `/${arch}` : ''}`);
     const edgeRuntime = await prepareDesktopEdgeRuntimes({ target, arch, env });

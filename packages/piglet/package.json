@@ -1,0 +1,12 @@
+{
+  "name": "@wurster/piglet",
+  "version": "0.32.3",
+  "description": "Runtime-neutral Piglet relationship, delegation and authority-composition contracts.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src"
+  ]
+}

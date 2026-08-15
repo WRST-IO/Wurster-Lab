@@ -20,7 +20,7 @@ assert.equal(desktop.build.win.artifactName, 'Wurster-Setup-${version}-${arch}.$
 assert.equal(desktop.build.mac.artifactName, 'Wurster-${version}-mac-${arch}.${ext}');
 assert.equal(desktop.build.linux.artifactName, 'Wurster-${version}-linux-${arch}.${ext}');
 assert.deepEqual(desktop.build.extraResources, [
-  { from: '../web/src', to: 'web-runtime', filter: ['wurster-embed.mjs', 'wurster-embed-host.html', 'wurster-web.mjs', 'wurster-sw.js', 'trust-data.mjs'] },
+  { from: '../web/dist', to: 'web-runtime', filter: ['wurster-embed.mjs', 'wurster-embed-host.html', 'wurster.js', 'wurster.min.js', 'wurster-sw.js', 'trust-data.mjs'] },
   { from: 'runtimes', to: 'runtimes', filter: ['wurster-edge-runtime-*/**/*'] }
 ]);
 assert.equal(pkg.scripts['dist:linux'], 'npm run dist:linux --workspace @wurster/desktop');
@@ -48,7 +48,10 @@ assert.match(edgeRuntimeTool, /verifyEdgeRuntimeDirectory/);
 
 assert.match(webBuilder, /wurster\.js/);
 assert.match(webBuilder, /wurster\.min\.js/);
-assert.match(webBuilder, /minify:\s*true/);
+assert.match(webBuilder, /bundle:\s*true/);
+assert.match(webBuilder, /minify/);
+assert.match(desktopBuilder, /runtime', 'web', 'build\.mjs/);
+assert.match(desktopBuilder, /shared Wurster Web embed runtime/);
 
 assert.match(release, /tags:\s*\n\s*- 'v\*'/);
 assert.match(release, /runs-on: macos-latest/);

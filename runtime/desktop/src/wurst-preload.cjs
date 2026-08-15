@@ -4,6 +4,12 @@ const invoke = (channel, ...args) => ipcRenderer.invoke(channel, ...args);
 const authSession = new Map();
 const authResultListeners = new Set();
 const piglinkHandlers = new Map();
+const embedRelationships = new Map();
+const embedSessions = new Map();
+const embedParentPigLinkSubscriptions = new Map();
+const embedSessionSubscriptions = new Map();
+const machineClients = new Map();
+let nextEmbedSubscriptionId = 1;
 let piglinkDeclaration = null;
 let piglinkLoadError = null;
 let piglinkReadyResolve;
@@ -210,15 +216,121 @@ function installWurstEmbedElement() {
 }
 
 contextBridge.exposeInMainWorld('wurstEmbedRuntime', Object.freeze({
-  open: (src, options = {}) => invoke('wurst:piglet:embed-open', normalizeEmbedSource(src), options),
+  open: async (src, options = {}) => {
+    const opened = await invoke('wurst:piglet:embed-open', normalizeEmbedSource(src), options);
+    if (opened?.handle) {
+      const key = String(opened.handle);
+      embedRelationships.set(key, structuredClone(opened.parent ?? null));
+      embedSessions.set(key, structuredClone(opened.session ?? null));
+    }
+    return opened;
+  },
   read: (handle, offset, length) => invoke('wurst:piglet:embed-read', String(handle ?? ''), Number(offset), Number(length)),
   persist: (handle, data) => {
     const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
     return invoke('wurst:piglet:embed-persist', String(handle ?? ''), bytes);
   },
+  refresh: async (handle) => {
+    const key = String(handle ?? '');
+    const refreshed = await invoke('wurst:piglet:embed-refresh', key);
+    if (refreshed?.session) embedSessions.set(key, structuredClone(refreshed.session));
+    return refreshed;
+  },
   invoke: (handle, method, args = []) => invoke('wurst:piglet:embed-invoke', String(handle ?? ''), String(method ?? ''), Array.isArray(args) ? args : []),
-  close: (handle) => invoke('wurst:piglet:embed-close', String(handle ?? ''))
+  subscribeParentPigLink: (handle, callback) => {
+    const key = String(handle ?? '');
+    if (typeof callback !== 'function') throw new TypeError('Parent PigLink event subscriber must be a function');
+    if (!embedRelationships.get(key)?.piglink) throw new Error('Parent PigLink is unavailable to this Piglet');
+    const id = `epl-${nextEmbedSubscriptionId++}`;
+    embedParentPigLinkSubscriptions.set(id, { handle: key, callback });
+    return id;
+  },
+  unsubscribeParentPigLink: (subscriptionId) => embedParentPigLinkSubscriptions.delete(String(subscriptionId ?? '')),
+  subscribeSession: (handle, callback) => {
+    const key = String(handle ?? '');
+    if (typeof callback !== 'function') throw new TypeError('Wurst session subscriber must be a function');
+    if (!embedSessions.get(key)?.id) throw new Error('Wurst session is unavailable');
+    const id = `ews-${nextEmbedSubscriptionId++}`;
+    embedSessionSubscriptions.set(id, { handle: key, callback });
+    return id;
+  },
+  unsubscribeSession: (subscriptionId) => embedSessionSubscriptions.delete(String(subscriptionId ?? '')),
+  close: async (handle) => {
+    const key = String(handle ?? '');
+    for (const [id, sub] of embedParentPigLinkSubscriptions) if (sub.handle === key) embedParentPigLinkSubscriptions.delete(id);
+    for (const [id, sub] of embedSessionSubscriptions) if (sub.handle === key) embedSessionSubscriptions.delete(id);
+    embedRelationships.delete(key);
+    embedSessions.delete(key);
+    return invoke('wurst:piglet:embed-close', key);
+  }
 }));
+
+ipcRenderer.on('wurst:piglink:event-accepted', (_event, message = {}) => {
+  const name = String(message.name ?? '');
+  const payload = structuredClone(message.payload ?? null);
+  for (const sub of embedParentPigLinkSubscriptions.values()) {
+    if (!embedRelationships.get(sub.handle)?.piglink) continue;
+    try { sub.callback(name, payload); } catch {}
+  }
+});
+
+ipcRenderer.on('wurst:piglet:session-changed', (_event, detail = {}) => {
+  const sessionId = String(detail?.session?.id ?? '');
+  if (!sessionId) return;
+  for (const sub of embedSessionSubscriptions.values()) {
+    const session = embedSessions.get(sub.handle);
+    if (session?.id !== sessionId) continue;
+    embedSessions.set(sub.handle, structuredClone(detail.session));
+    try { sub.callback(structuredClone(detail)); } catch {}
+  }
+});
+
+ipcRenderer.on('wurst:piglet:machine-event', (_event, detail = {}) => {
+  const sessionId = String(detail?.session?.id ?? '');
+  const name = String(detail?.name ?? '');
+  if (!sessionId || !name) return;
+  const payload = structuredClone(detail?.payload ?? null);
+  for (const client of machineClients.values()) {
+    if (client.sessionId !== sessionId) continue;
+    for (const key of [name, '*']) for (const listener of client.listeners.get(key) || []) {
+      try { listener(payload, name); } catch {}
+    }
+  }
+});
+
+async function connectPigletMachine(ref, options = {}) {
+  const opened = await invoke('wurst:piglet:machine-connect', String(ref ?? ''), options);
+  const handle = String(opened?.handle ?? '');
+  if (!handle) throw new Error('Wurster did not return a machine attachment');
+  let closed = false;
+  const client = { sessionId: String(opened?.session?.id ?? ''), listeners: new Map() };
+  machineClients.set(handle, client);
+  return Object.freeze({
+    descriptor: structuredClone(opened.descriptor ?? null),
+    session: structuredClone(opened.session ?? null),
+    piglink: Object.freeze({
+      describe: () => invoke('wurst:piglet:machine-describe', handle),
+      invoke: async (name, input = {}, invokeOptions = {}) => {
+        if (closed) throw new Error('Wurst machine connection is closed');
+        const result = await invoke('wurst:piglet:machine-invoke', handle, String(name ?? ''), input, invokeOptions);
+        return result?.result ?? null;
+      },
+      on: (name, listener) => {
+        if (typeof listener !== 'function') throw new TypeError('PigLink event listener must be a function');
+        const eventName = String(name ?? '*');
+        const set = client.listeners.get(eventName) || new Set();
+        set.add(listener); client.listeners.set(eventName, set);
+        return () => { set.delete(listener); if (!set.size) client.listeners.delete(eventName); };
+      }
+    }),
+    close: async () => {
+      if (closed) return false;
+      closed = true;
+      machineClients.delete(handle);
+      return invoke('wurst:piglet:machine-close', handle);
+    }
+  });
+}
 
 window.addEventListener('DOMContentLoaded', installAuthAnchors, { once: true });
 window.addEventListener('DOMContentLoaded', installWurstEmbedElement, { once: true });
@@ -286,6 +398,7 @@ ipcRenderer.on('wurst:piglink:invoke-request', async (_event, request = {}) => {
 
 contextBridge.exposeInMainWorld('wurst', Object.freeze({
   info: () => invoke('wurst:info'),
+  parent: null,
   capabilities: Object.freeze({
     query: (name) => invoke('wurst:capabilities:query', String(name ?? '')),
     list: () => invoke('wurst:capabilities:list')
@@ -306,7 +419,13 @@ contextBridge.exposeInMainWorld('wurst', Object.freeze({
   }),
   piglet: Object.freeze({
     children: () => invoke('wurst:piglet:children'),
-    url: (ref) => invoke('wurst:piglet:url', String(ref ?? '')),
+    running: () => invoke('wurst:piglet:running'),
+    connect: connectPigletMachine,
+    invoke: async (ref, name, input = {}, options = {}) => {
+      const child = await connectPigletMachine(ref, options);
+      try { return await child.piglink.invoke(name, input, options); }
+      finally { await child.close().catch(() => {}); }
+    },
     inspect: (ref) => invoke('wurst:piglet:inspect', String(ref ?? '')),
     install: async (name, data, options = {}) => {
       let bytes;
