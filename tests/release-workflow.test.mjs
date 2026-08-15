@@ -22,7 +22,7 @@ assert.equal(desktop.build.linux.artifactName, 'Wurster-${version}-linux-${arch}
 assert.equal(desktop.dependencies['electron-updater'], '6.8.9');
 assert.deepEqual(desktop.build.publish, { provider: 'github', owner: 'WRST-IO', repo: 'Wurster-Lab' });
 assert.equal(desktop.build.dmg.background, 'build/background.tiff');
-assert.deepEqual(desktop.build.dmg.window, { size: { width: 540, height: 380 } });
+assert.deepEqual(desktop.build.dmg.window, { width: 540, height: 380 });
 assert.deepEqual(desktop.build.dmg.contents, [
   { x: 130, y: 220, type: 'file' },
   { x: 410, y: 220, type: 'link', path: '/Applications' }

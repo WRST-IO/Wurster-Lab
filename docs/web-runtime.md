@@ -8,7 +8,7 @@ order: 3
 
 Wurster Web is the browser implementation of the portable Wurst runtime. It opens local or HTTP Range-backed WRST v7, serves application resources through a scoped Service Worker and provides the same core PigFS/PigLink/Piglet vocabulary as Desktop.
 
-## 0.32.5 surface
+## 0.32.6 surface
 
 The distribution in `runtime/web/dist/` contains the browser runtime, service worker and universal `<wurst-embed>` host. A normal site can embed a Wurst with:
 

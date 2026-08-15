@@ -1,6 +1,6 @@
 {
   "name": "@wurster/desktop",
-  "version": "0.32.5",
+  "version": "0.32.6",
   "private": true,
   "description": "Wurster: a deliberately tiny Electron runtime for .wurst and .wrst mini apps.",
   "type": "module",
@@ -140,10 +140,8 @@
     "dmg": {
       "background": "build/background.tiff",
       "window": {
-        "size": {
-          "width": 540,
-          "height": 380
-        }
+        "width": 540,
+        "height": 380
       },
       "contents": [
         {

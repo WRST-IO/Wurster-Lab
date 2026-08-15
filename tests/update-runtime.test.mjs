@@ -57,7 +57,7 @@ assert.equal(autoUpdateSupported({ isPackaged: false, platform: 'darwin' }), fal
 }
 
 {
-  const updater = new FakeUpdater({ isUpdateAvailable: false, updateInfo: { version: '0.32.5' } });
+  const updater = new FakeUpdater({ isUpdateAvailable: false, updateInfo: { version: '0.32.6' } });
   const states = [];
   const result = await runStartupAutoUpdate({ isPackaged: true, platform: 'win32', settings: {}, loadUpdater: async () => updater, onState: async (state) => states.push(state), settleDelayMs: 0 });
   assert.equal(result.status, 'current');

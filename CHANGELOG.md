@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.32.6 - Release Build Repair
+
+- Fixed the macOS DMG window configuration for electron-builder 26.x by using `dmg.window.width` / `height` instead of the invalid nested `dmg.window.size` object.
+- Restored Windows and macOS release builds, which were all blocked during configuration validation because electron-builder validates the complete shared build configuration before selecting the platform target.
+- Updated the release regression assertion to match electron-builder's actual `DmgWindow` schema while keeping the supplied 540×380 DMG background and icon placement unchanged.
+- Bumped Wurster runtime/workspace release metadata to 0.32.6; the failed `v0.32.5` tag remains an auditable failed-build marker and is not rewritten.
+
 ## 0.32.5 - Automatic Desktop Updates
 
 - Added opt-out automatic desktop updates, enabled by default in Wurster Settings, backed by public `WRST-IO/Wurster-Lab` GitHub releases.

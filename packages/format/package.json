@@ -1,6 +1,6 @@
 {
   "name": "@wurster/format",
-  "version": "0.32.5",
+  "version": "0.32.6",
   "description": "Tiny WRST binary container reader/writer shared by Meat Grinder and Wurster.",
   "type": "module",
   "exports": "./src/index.js",
