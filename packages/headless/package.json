@@ -1,6 +1,6 @@
 {
   "name": "@wurster/headless",
-  "version": "0.33.0",
+  "version": "0.33.1",
   "description": "Development and AI harness for headless PigLink actions.",
   "type": "module",
   "bin": {
@@ -13,10 +13,10 @@
     "src"
   ],
   "dependencies": {
-    "@wurster/format": "0.33.0",
-    "@wurster/piglink": "0.33.0",
-    "@wurster/pigsty": "0.33.0",
-    "@wurster/piglet": "0.33.0"
+    "@wurster/format": "0.33.1",
+    "@wurster/piglink": "0.33.1",
+    "@wurster/pigsty": "0.33.1",
+    "@wurster/piglet": "0.33.1"
   },
   "engines": {
     "node": ">=22"

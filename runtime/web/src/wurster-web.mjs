@@ -21,7 +21,7 @@ const FS_END_MAGIC = new Uint8Array([0x57, 0x37, 0x52, 0x45]);
 const FS_RECORD = Object.freeze({ DATA: 1, MAP: 2, CATALOG: 3, COMMIT: 4 });
 const SIGNATURE_PATH = '__wurst/signature.json';
 const SEALED_APP_INDEX_PATH = '__wurst/sealed-app/index.json';
-const WURSTER_WEB_VERSION = '0.33.0';
+const WURSTER_WEB_VERSION = '0.33.1';
 const te = new TextEncoder();
 const td = new TextDecoder();
 function bytes(value) {

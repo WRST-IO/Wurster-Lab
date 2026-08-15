@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.33.1 - Bounded Electron Smoke Bootstrap
+
+- Fixed the 0.33.0 release workflow hang introduced by Electron 43's lazy binary installation. Desktop jobs now prepare the Electron smoke binary explicitly before invoking the real Electron Piglet route test.
+- Added a shared `@electron/get` cache per runner OS/architecture and Electron version. Re-runs of the same release ref can reuse the verified archive, while a cache miss still falls back to the bounded official Electron download.
+- Added a four-minute downloader watchdog with periodic heartbeat output, a five-minute workflow-step limit for binary preparation and a two-minute limit for the real Electron Piglet smoke. The smoke process itself also has a 30-second runtime watchdog once Electron starts.
+- Added bounded job timeouts across validate, Web, Desktop and publish jobs so a release can fail clearly rather than remain in-progress for hours.
+- Kept the 0.33.0 object-based Piglet storage/runtime behavior unchanged; this patch is release-lane hardening only.
+- Bumped Wurster runtime/workspace metadata to 0.33.1.
+
 ## 0.33.0 - Object-Based Piglet Storage and Deterministic Desktop Routes
 
 - Replaced Desktop Piglet virtual-app dependence on Service Worker takeover with deterministic `wurst://runtime/__wurster/<session>/...` routing owned by the Electron runtime. Browser Wurster continues to use its scoped Service Worker; Desktop serves the same logical WursterWeb resources directly from the active Piglet session/source layer.

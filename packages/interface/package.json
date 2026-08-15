@@ -1,6 +1,6 @@
 {
   "name": "@wurster/piglink",
-  "version": "0.33.0",
+  "version": "0.33.1",
   "description": "Runtime-neutral PigLink declarations, actions, events and validation.",
   "type": "module",
   "exports": {

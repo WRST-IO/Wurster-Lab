@@ -23,7 +23,7 @@ async function inputFrom(flags) {
 }
 
 function help() {
-  console.log(`\n🐷 Wurster Headless 0.33.0 — PigLink developer/AI harness\n\nUsage:\n  wurster-headless describe <file.wurst|file.wrst> [--json]\n  wurster-headless invoke <file.wurst|file.wrst> <action> [--input '{"x":1}'] [--input-file input.json] [--json]\n  wurster-headless test <file.wurst|file.wrst> [--json]\n  wurster-headless stdio <file.wurst|file.wrst>\n\nThe 0.33.0 harness is for developer-controlled Wursts. It is not the production untrusted-code sandbox.\n`);
+  console.log(`\n🐷 Wurster Headless 0.33.1 — PigLink developer/AI harness\n\nUsage:\n  wurster-headless describe <file.wurst|file.wrst> [--json]\n  wurster-headless invoke <file.wurst|file.wrst> <action> [--input '{"x":1}'] [--input-file input.json] [--json]\n  wurster-headless test <file.wurst|file.wrst> [--json]\n  wurster-headless stdio <file.wurst|file.wrst>\n\nThe 0.33.1 harness is for developer-controlled Wursts. It is not the production untrusted-code sandbox.\n`);
 }
 
 const { positionals, flags } = parse(process.argv.slice(2));

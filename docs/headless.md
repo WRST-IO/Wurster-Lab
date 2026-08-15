@@ -12,7 +12,7 @@ A Child must declare `piglink.headless: true` before `wurst.piglet.connect()` / 
 
 ## Developer harness
 
-Wurster Lab 0.33.0 includes a browserless harness for development, CI and automation:
+Wurster Lab 0.33.1 includes a browserless harness for development, CI and automation:
 
 ```bash
 wurster-headless describe app.wurst
@@ -56,6 +56,6 @@ A separate external CLI/MCP process also cannot yet attach to a session already 
 
 ## Security status
 
-The 0.33.0 CLI harness uses a disposable Node worker and restricted JavaScript context. It is useful for developer-controlled Wursts and CI, but it is **not** the final hostile-third-party-code sandbox. A production headless Wurster still needs a real untrusted-code boundary with CPU, memory and capability budgets.
+The 0.33.1 CLI harness uses a disposable Node worker and restricted JavaScript context. It is useful for developer-controlled Wursts and CI, but it is **not** the final hostile-third-party-code sandbox. A production headless Wurster still needs a real untrusted-code boundary with CPU, memory and capability budgets.
 
 Pigsty may be invoked through PigLink, but its worker engine remains development-only and native Edge/WASIX availability is explicit. Requested unavailable engines fail rather than silently falling back.

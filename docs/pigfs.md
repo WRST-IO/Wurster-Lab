@@ -18,7 +18,7 @@ await wurst.pigfs.rename('/workspace/a.txt', '/workspace/archive/a.txt');
 
 ## What it provides
 
-PigFS 0.33.0 has functional support for files/directories, stable object IDs, streaming writes, transactions, snapshots, watches, quotas, internal symlinks, realms, encryption and compaction.
+PigFS 0.33.1 has functional support for files/directories, stable object IDs, streaming writes, transactions, snapshots, watches, quotas, internal symlinks, realms, encryption and compaction.
 
 Paths are names; object identity survives rename. Transactions publish groups of changes atomically. Append-safe storage is a crash-safety strategy, not permanent growth: compaction removes dead records and obsolete ciphertext.
 

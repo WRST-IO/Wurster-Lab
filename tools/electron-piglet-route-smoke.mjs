@@ -144,11 +144,19 @@ async function run() {
   runtimeSession.protocol.unhandle('wurst');
 }
 
+const smokeTimeoutMs = Math.max(1_000, Number(process.env.WURSTER_ELECTRON_SMOKE_TIMEOUT_MS || 30_000));
+let timeoutHandle;
+const smokeTimeout = new Promise((_, reject) => {
+  timeoutHandle = setTimeout(() => reject(new Error(`Electron Desktop Piglet smoke exceeded ${Math.round(smokeTimeoutMs / 1000)}s`)), smokeTimeoutMs);
+});
+
 let exitCode = 0;
 try {
-  await run();
+  await Promise.race([run(), smokeTimeout]);
 } catch (error) {
   exitCode = 1;
   console.error(error?.stack || error);
+} finally {
+  clearTimeout(timeoutHandle);
 }
 app.exit(exitCode);
