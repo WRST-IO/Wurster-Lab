@@ -28,7 +28,7 @@ A browser-ready folder with `index.html` is enough for the simple case. Add `wur
 ## Where to go next
 
 - [Getting Started](getting-started.md) - build and open a Wurst.
-- [Current status](status.md) - what 0.32.4 actually supports.
+- [Current status](status.md) - what 0.32.5 actually supports.
 - [PigFS](pigfs.md), [PigLink](piglink.md), [Piglet](piglet.md), [Pigsty](pigsty.md) - the four runtime pillars.
 - [Security Model](security-model.md) - the Host fence and internal cooperation.
 - [Universal Runtime Law](universal-runtime.md) - what every conforming Wurster must preserve.

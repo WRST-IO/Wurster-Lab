@@ -372,7 +372,7 @@ export async function buildWurst(projectDir, explicitOutput, options = {}) {
       signed: signingEnabled
     },
     build: {
-      meatGrinder: '0.32.4',
+      meatGrinder: '0.32.5',
       generatedManifest: Boolean(config.__generated),
       createdAt: new Date().toISOString()
     }

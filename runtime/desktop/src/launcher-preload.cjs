@@ -55,7 +55,15 @@ contextBridge.exposeInMainWorld('wursterSettings', Object.freeze({
   deletePublisherSigner: (id) => ipcRenderer.invoke('wurster:settings:publisher:delete', id),
   beginTotp: () => ipcRenderer.invoke('wurster:settings:totp:begin'),
   confirmTotp: (code) => ipcRenderer.invoke('wurster:settings:totp:confirm', code),
-  disableTotp: (code) => ipcRenderer.invoke('wurster:settings:totp:disable', code)
+  disableTotp: (code) => ipcRenderer.invoke('wurster:settings:totp:disable', code),
+  setAutoUpdate: (enabled) => ipcRenderer.invoke('wurster:settings:update:auto', Boolean(enabled))
+}));
+
+contextBridge.exposeInMainWorld('wursterUpdate', Object.freeze({
+  onState: (callback) => {
+    if (typeof callback !== 'function') return;
+    ipcRenderer.on('wurster:update:state', (_event, state) => callback(state));
+  }
 }));
 
 contextBridge.exposeInMainWorld('wursterVerification', Object.freeze({

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.32.5 - Automatic Desktop Updates
+
+- Added opt-out automatic desktop updates, enabled by default in Wurster Settings, backed by public `WRST-IO/Wurster-Lab` GitHub releases.
+- Added a startup updater flow for packaged macOS and Windows runtimes with an `oink oink` progress surface; update failures fail open and leave the installed runtime usable.
+- Added deterministic GitHub update metadata staging for the Windows NSIS installer and both macOS ZIP architectures, while keeping release builds auditable through the existing tag workflow.
+- Switched `v0.*` runtime tags from GitHub prereleases to normal releases so the stable updater channel can discover pre-1.0 Wurster versions without opting into prerelease channels.
+- Added the supplied 540×380 Wurster artwork as the macOS DMG background with the standard app-to-Applications layout.
+- Bumped Wurster runtime/workspace release metadata to 0.32.5; protected Authority and generated site state remain outside this transfer.
+
 ## 0.32.4 - Desktop Piglet Bootstrap Repair
 
 - Fixed Desktop `<wurst-embed>` bootstrap when Electron's isolated preload world does not expose a usable `customElements` registry. The preload now treats that registry as optional and de-duplicates the injected bootstrap script through the shared DOM.

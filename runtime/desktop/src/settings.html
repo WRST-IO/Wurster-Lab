@@ -32,6 +32,12 @@
     <div id="publisherPanel" class="panel"></div>
   </section>
   <section class="section">
+    <div class="section-head"><div><div class="section-title">Updates</div><div class="section-sub">Keep the installed Wurster runtime fresh from public GitHub releases.</div></div></div>
+    <div class="panel">
+      <div class="security-row"><div class="security-icon">🐽</div><div class="security-copy"><div class="security-name">Automatic Wurster updates</div><div id="updateMeta" class="security-meta"></div></div><label class="switch"><input id="autoUpdateToggle" type="checkbox"><span class="slider"></span></label></div>
+    </div>
+  </section>
+  <section class="section">
     <div class="section-head"><div><div class="section-title">Security</div><div class="section-sub">Protection for this Wurster only. Wursts stay portable.</div></div></div>
     <div class="panel">
       <div class="security-row"><div class="security-icon">🔐</div><div class="security-copy"><div class="security-name">Local secure storage</div><div id="storageMeta" class="security-meta"></div></div><div id="storageStatus" class="status"></div></div>
@@ -60,6 +66,7 @@ function render(){
   $('#storageMeta').textContent=ctx.meatLockerAvailable?ctx.storageLabel:'No secure local storage is available';$('#storageStatus').textContent=ctx.meatLockerAvailable?'Available':'Unavailable';$('#storageStatus').classList.toggle('off',!ctx.meatLockerAvailable);
   $('#addIdentity').disabled=!ctx.meatLockerAvailable;$('#addPublisher').disabled=!ctx.meatLockerAvailable;
   $('#totpMeta').textContent=ctx.totpConfigured?'Configured. Individual identities may require a one-time code.':'Optional extra check for stored Meat Identities.';$('#totpAction').textContent=ctx.totpConfigured?'Manage':'Set up';$('#totpAction').disabled=!ctx.meatLockerAvailable;
+  $('#autoUpdateToggle').checked=ctx.autoUpdate;$('#autoUpdateToggle').disabled=!ctx.autoUpdateSupported;$('#updateMeta').textContent=ctx.autoUpdateSupported?`Wurster ${ctx.version}. Checks public desktop releases on startup. Turn this off to stay on this version.`:`Wurster ${ctx.version}. Automatic desktop updates are available on macOS and Windows.`;
   const panel=$('#identityPanel');panel.innerHTML='';if(!ctx.identities.length)panel.innerHTML='<div class="empty">No Meat Identities yet.</div>';
   else for(const id of ctx.identities){const row=document.createElement('div');row.className='identity-row';row.innerHTML=`<button class="identity-icon"></button><div class="identity-copy"><div class="identity-name"></div><div class="identity-meta"></div></div><button class="chevron">›</button>`;row.querySelector('.identity-icon').textContent=id.emoji||'🐷';row.querySelector('.identity-name').textContent=id.name;row.querySelector('.identity-meta').textContent=protectionMeta(id);row.querySelector('.identity-icon').onclick=()=>manageIdentity(id,true);row.querySelector('.chevron').onclick=()=>manageIdentity(id,false);row.querySelector('.identity-copy').onclick=()=>manageIdentity(id,false);panel.appendChild(row)}
   const pp=$('#publisherPanel');pp.innerHTML='';if(!ctx.publisherSigners.length)pp.innerHTML='<div class="empty">No MeatGrinder signing identities yet. Unsigned remains the default.</div>';
@@ -100,7 +107,7 @@ async function manageTotp(){
   openModal(`<div class="modal-head"><div><h2>Authenticator App</h2><p class="lead">Authenticator protection is enabled on this Wurster.</p></div><button class="close" data-close>×</button></div><p class="micro">Disable it only after entering a current code. Identities that require it will return to local storage protection only.</p><div class="field"><label>Current 6-digit code</label>${otpMarkup('disableCode')}</div><div id="disableErr" class="error"></div><div class="modal-actions"><button data-close class="button">Cancel</button><button id="disableTotp" class="button danger">Disable Authenticator</button></div>`);wireOtp('disableCode');
   $('#disableTotp').onclick=async()=>{try{await api.disableTotp($('#disableCode').value);closeModal();await refresh()}catch(e){$('#disableErr').textContent=e.message}};
 }
-$('#backToWurster').onclick=()=>launcher.back();$('#windowMin').onclick=()=>launcher.minimize();$('#windowClose').onclick=()=>launcher.close();$('#addIdentity').onclick=newIdentity;$('#addPublisher').onclick=newPublisher;$('#totpAction').onclick=manageTotp;$('#scrim').addEventListener('click',e=>{if(e.target===$('#scrim'))closeModal()});await refresh();
+$('#backToWurster').onclick=()=>launcher.back();$('#windowMin').onclick=()=>launcher.minimize();$('#windowClose').onclick=()=>launcher.close();$('#addIdentity').onclick=newIdentity;$('#addPublisher').onclick=newPublisher;$('#totpAction').onclick=manageTotp;$('#autoUpdateToggle').onchange=async e=>{const wanted=e.target.checked;e.target.disabled=true;try{ctx=await api.setAutoUpdate(wanted);render()}catch(err){e.target.checked=!wanted;alert(err.message)}finally{e.target.disabled=!ctx?.autoUpdateSupported}};$('#scrim').addEventListener('click',e=>{if(e.target===$('#scrim'))closeModal()});await refresh();
 })();
 </script>
 </body>

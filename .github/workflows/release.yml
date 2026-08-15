@@ -268,6 +268,9 @@ jobs:
     runs-on: windows-latest
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      WURSTER_WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+      WURSTER_WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      WURSTER_WIN_CERTIFICATE_SUBJECT_NAME: ${{ secrets.WIN_CERTIFICATE_SUBJECT_NAME }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -279,7 +282,8 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: runtime-windows-x64
-          path: runtime/windows/dist/*.exe
+          path: |
+            runtime/windows/dist/*.exe
           if-no-files-found: error
           compression-level: 0
 
@@ -292,8 +296,10 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           pattern: runtime-*
-          path: release-assets
-          merge-multiple: true
+          path: release-parts
+
+      - name: Stage release and updater assets
+        run: node tools/prepare-release-assets.mjs release-parts release-assets
 
       - name: Create checksums
         working-directory: release-assets
@@ -306,13 +312,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          prerelease=''
-          if [[ "$GITHUB_REF_NAME" == v0.* ]]; then
-            prerelease='--prerelease'
-          fi
-
           gh release create "$GITHUB_REF_NAME" release-assets/* \
             --verify-tag \
             --title "Wurster ${GITHUB_REF_NAME#v}" \
-            --generate-notes \
-            $prerelease
+            --generate-notes

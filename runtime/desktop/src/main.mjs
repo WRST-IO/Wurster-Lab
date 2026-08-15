@@ -36,6 +36,7 @@ import { bindPigletPigFsPersistence } from './piglet-pigfs-runtime.mjs';
 import { createTrustedSurfaceRuntime } from './trusted-surface-runtime.mjs';
 import { createDesktopPigstyRuntime } from './pigsty-runtime.mjs';
 import { createDesktopDevToolsRuntime, isWurstDevToolsShortcut } from './devtools-runtime.mjs';
+import { runStartupAutoUpdate } from './update-runtime.mjs';
 import { cspFor, networkRequestAllowed, parseHttpRange, partitionFor, responseFor, safeRequestPath } from './web-sandbox-runtime.mjs';
 import {
   SEALED_APP_INDEX_PATH,
@@ -83,6 +84,7 @@ const SUPPORTED_CAPABILITIES = new Set(['storage.local', 'network', 'window.alwa
 const MEAT_LOCKER_FORMAT = 'wurster/meat-locker-5';
 const WURSTER_SETTINGS_FORMAT = 'wurster/settings-1';
 const SETTINGS_HTML = path.join(HERE, 'settings.html');
+const UPDATE_HTML = path.join(HERE, 'update.html');
 const LAUNCHER_PRELOAD = path.join(HERE, 'launcher-preload.cjs');
 const LAUNCHER_HTML = path.join(HERE, 'launcher.html');
 const WRST_AUTHORITY_URL = 'https://authority.wrst.io';
@@ -805,9 +807,9 @@ async function readWursterSettings() {
   try {
     const parsed = JSON.parse(await fs.readFile(await settingsPath(), 'utf8'));
     if (parsed?.format !== WURSTER_SETTINGS_FORMAT) throw new Error('Invalid Wurster settings');
-    return parsed;
+    return { ...parsed, updates: { ...parsed.updates, autoUpdate: parsed.updates?.autoUpdate !== false } };
   } catch {
-    return { format: WURSTER_SETTINGS_FORMAT, totp: null };
+    return { format: WURSTER_SETTINGS_FORMAT, totp: null, updates: { autoUpdate: true } };
   }
 }
 
@@ -2486,6 +2488,9 @@ async function settingsContext() {
     devicePresenceAvailable: devicePresenceAvailable(),
     devicePresenceLabel: process.platform === 'darwin' ? 'Touch ID' : process.platform === 'win32' ? 'Windows Security' : 'device presence',
     totpConfigured: Boolean(settings.totp?.protectedSecret),
+    version: app.getVersion(),
+    autoUpdate: settings.updates.autoUpdate,
+    autoUpdateSupported: ['darwin', 'win32'].includes(process.platform),
     identities: await listMeatIdentities(),
     publisherSigners: await listPublisherSigners()
   };
@@ -2498,6 +2503,7 @@ function assertSettingsSender(event) {
 }
 
 ipcMain.handle('wurster:settings:context', async (event) => { assertSettingsSender(event); return settingsContext(); });
+ipcMain.handle('wurster:settings:update:auto', async (event, enabled) => { assertSettingsSender(event); const settings = await readWursterSettings(); settings.updates = { ...settings.updates, autoUpdate: Boolean(enabled) }; await writeWursterSettings(settings); return settingsContext(); });
 ipcMain.handle('wurster:settings:generate-meatphrase', async (event) => { assertSettingsSender(event); return generateMeatphrase(12); });
 ipcMain.handle('wurster:settings:identity:add', async (event, payload = {}) => {
   assertSettingsSender(event);
@@ -3055,7 +3061,7 @@ ipcMain.on('wurster:launcher:close', (event) => {
   }
 });
 
-function openLauncherWindow({ show = true } = {}) {
+function openLauncherWindow({ show = true, loadHome = true } = {}) {
   if (launcherWindow && !launcherWindow.isDestroyed()) {
     if (show) {
       launcherWindow.show();
@@ -3093,8 +3099,10 @@ function openLauncherWindow({ show = true } = {}) {
   win.webContents.on('will-navigate', (event) => event.preventDefault());
   win.once('ready-to-show', () => { if (show) win.show(); });
   win.on('closed', () => { if (launcherWindow === win) launcherWindow = null; });
-  launcherView = 'launcher';
-  void win.loadFile(LAUNCHER_HTML);
+  if (loadHome) {
+    launcherView = 'launcher';
+    void win.loadFile(LAUNCHER_HTML);
+  }
   return win;
 }
 
@@ -3363,6 +3371,47 @@ async function showWurstError(error) {
   });
 }
 
+async function loadDesktopAutoUpdater() {
+  const module = await import('electron-updater');
+  return module.autoUpdater ?? module.default?.autoUpdater ?? null;
+}
+
+async function runAutomaticStartupUpdate() {
+  const settings = await readWursterSettings();
+  let updateVisible = false;
+  const result = await runStartupAutoUpdate({
+    isPackaged: app.isPackaged,
+    platform: process.platform,
+    settings,
+    loadUpdater: loadDesktopAutoUpdater,
+    onState: async (state) => {
+      if (state.phase === 'error' && !updateVisible) return;
+      if (!updateVisible) {
+        if (!launcherWindow || launcherWindow.isDestroyed()) openLauncherWindow({ show: false, loadHome: false });
+        launcherView = 'update';
+        launcherWindow.setMinimumSize(480, 350);
+        launcherWindow.setMaximumSize(620, 460);
+        launcherWindow.setSize(520, 380, true);
+        launcherWindow.setTitle('Wurster Update');
+        await launcherWindow.loadFile(UPDATE_HTML);
+        launcherWindow.show();
+        launcherWindow.focus();
+        updateVisible = true;
+      }
+      launcherWindow.webContents.send('wurster:update:state', state);
+    }
+  });
+  if (result.status === 'error') {
+    console.warn('[Wurster Update]', result.error?.message || result.error);
+    if (updateVisible) {
+      await new Promise((resolve) => setTimeout(resolve, 1400));
+      await showLauncherHome({ focus: false });
+      launcherWindow?.hide();
+    }
+  }
+  return result.status === 'installing';
+}
+
 async function openInitialWurst() {
   // Finder document launches on macOS arrive via app.open-file rather than argv.
   // Give that event a short chance to arrive before showing the chooser.
@@ -3381,6 +3430,7 @@ async function openInitialWurst() {
 
 app.whenReady().then(async () => {
   installApplicationMenu();
+  if (await runAutomaticStartupUpdate()) return;
   try {
     const startupVerification = findIdentityVerificationArgument(process.argv);
     const startupHandoff = pendingRuntimeHandoff ?? findRuntimeHandoffArgument(process.argv);

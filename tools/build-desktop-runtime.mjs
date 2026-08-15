@@ -45,7 +45,7 @@ export async function runDesktopBuild(argv = process.argv.slice(2)) {
   const arch = String(argv[1] || '').toLowerCase();
   if (!['windows', 'mac', 'linux'].includes(target)) throw new Error('Usage: node tools/build-desktop-runtime.mjs <windows|mac|linux> [x64|arm64|universal]');
 
-  const args = ['exec', '--', 'electron-builder'];
+  const args = ['exec', '--', 'electron-builder', '--publish', 'never'];
   if (target === 'windows') {
     args.push('--win', 'nsis', `--${arch || 'x64'}`, '--config.directories.output=../windows/dist');
     if (env.WURSTER_WIN_CSC_LINK) env.WIN_CSC_LINK = env.WURSTER_WIN_CSC_LINK;

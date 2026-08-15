@@ -106,7 +106,12 @@ Outputs are organized below `runtime/windows/dist/` and `runtime/mac/dist/`.
 
 ## GitHub runtime releases
 
-Pushing a tag that exactly matches `v<package.json version>` triggers `.github/workflows/release.yml`. The workflow runs the test gate, builds each desktop target on its native GitHub-hosted operating system and publishes the resulting installers as Release assets. Pre-1.0 tags are marked as prereleases.
+Pushing a tag that exactly matches `v<package.json version>` triggers `.github/workflows/release.yml`. The workflow runs the test gate, builds each desktop target on its native GitHub-hosted operating system and publishes the resulting installers plus updater metadata as normal Release assets. Wurster 0.x tags remain pre-1.0 software versions, but the GitHub Releases are intentionally not marked as prereleases so the stable desktop updater channel can discover them.
+
+
+The desktop package carries a GitHub `publish` configuration for `WRST-IO/Wurster-Lab`. Release builds use it to embed Electron's private `app-update.yml` runtime configuration while CI still publishes the final, cross-architecture Release asset set itself. The packaged updater therefore has one canonical public feed configuration without runtime-side `setFeedURL` overrides.
+
+Windows Authenticode remains independently configurable. When the Windows build is signed, electron-builder records the resolved publisher in `app-update.yml` and electron-updater verifies downloaded installers against that publisher. The release metadata also marks the current per-machine NSIS installer as requiring elevation during update installation.
 
 Signing credentials are never stored in the repository. The current hosted macOS release jobs fail closed unless all five repository secrets are configured:
 

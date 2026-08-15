@@ -19,6 +19,14 @@ for (const [name, command] of Object.entries(pkg.scripts)) assert.doesNotMatch(c
 assert.equal(desktop.build.win.artifactName, 'Wurster-Setup-${version}-${arch}.${ext}');
 assert.equal(desktop.build.mac.artifactName, 'Wurster-${version}-mac-${arch}.${ext}');
 assert.equal(desktop.build.linux.artifactName, 'Wurster-${version}-linux-${arch}.${ext}');
+assert.equal(desktop.dependencies['electron-updater'], '6.8.9');
+assert.deepEqual(desktop.build.publish, { provider: 'github', owner: 'WRST-IO', repo: 'Wurster-Lab' });
+assert.equal(desktop.build.dmg.background, 'build/background.tiff');
+assert.deepEqual(desktop.build.dmg.window, { size: { width: 540, height: 380 } });
+assert.deepEqual(desktop.build.dmg.contents, [
+  { x: 130, y: 220, type: 'file' },
+  { x: 410, y: 220, type: 'link', path: '/Applications' }
+]);
 assert.deepEqual(desktop.build.extraResources, [
   { from: '../web/dist', to: 'web-runtime', filter: ['wurster-embed.mjs', 'wurster-embed-host.html', 'wurster.js', 'wurster.min.js', 'wurster-sw.js', 'trust-data.mjs'] },
   { from: 'runtimes', to: 'runtimes', filter: ['wurster-edge-runtime-*/**/*'] }
@@ -34,6 +42,7 @@ assert.match(desktopBuilder, /WURSTER_BUNDLE_PIGSTY/);
 assert.match(desktopBuilder, /Pigsty Edge runtime is not bundled in this release \(coming soon\)/);
 assert.match(desktopBuilder, /'windows', 'mac', 'linux'/);
 assert.match(desktopBuilder, /--linux', 'AppImage'/);
+assert.match(desktopBuilder, /'--publish', 'never'/);
 
 assert.equal(edgeRuntimeLock.repository, 'WRST-IO/wurster-edge-runtime');
 assert.equal(edgeRuntimeLock.tag, 'v0.1.0-dev.2');
@@ -73,6 +82,9 @@ assert.match(release, /actions\/upload-artifact@v7/);
 assert.match(release, /actions\/download-artifact@v8/);
 assert.match(release, /SHA256SUMS\.txt/);
 assert.match(release, /gh release create/);
+assert.match(release, /prepare-release-assets\.mjs release-parts release-assets/);
+assert.doesNotMatch(release, /--prerelease/);
+assert.match(release, /WURSTER_WIN_CSC_LINK/);
 
 assert.match(pages, /workflow_run:/);
 assert.match(pages, /workflows:\s*\n\s*- Release Wurster Runtime/);

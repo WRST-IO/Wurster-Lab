@@ -78,6 +78,6 @@ Child sources are range-readable. Writable Child PigFS persists back to the Pare
 
 If the underlying Child Wurst changes independently, Wurster fails instead of silently choosing a winner. Session-level stale writes use `WURST_SESSION_CONFLICT`; backing-file conflicts use `WURST_PIGLET_CONFLICT`.
 
-## Remaining 0.32.4 work
+## Remaining 0.32.5 work
 
 The largest open gap is an external broker that lets a separate CLI/MCP process discover and attach to a Desktop/Web-owned Wurst session already running elsewhere. The generic CLI Child-subtool path also still needs full writable nested-Child PigFS and Parent-service parity. Path-scoped delegation, lifecycle/revoke, recovery and deep nesting remain pre-1.0 work.
