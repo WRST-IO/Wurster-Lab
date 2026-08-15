@@ -22,8 +22,8 @@ order: 2
     "protection": "public"
   },
 
-  "data": {
-    "format": "wurst/data-realms-1",
+  "pigfs": {
+    "format": "wurst/pigfs-policy-1",
     "writable": true,
     "realms": [
       { "id": "workspace" },
@@ -65,12 +65,12 @@ WurstKey protects developer-owned immutable content. It is independent of PigFS 
 
 ## Mutable PigFS data
 
-Mutable data is declared only through `data`:
+Mutable data is declared only through `pigfs`:
 
 ```json
 {
-  "data": {
-    "format": "wurst/data-realms-1",
+  "pigfs": {
+    "format": "wurst/pigfs-policy-1",
     "writable": true,
     "realms": [
       { "id": "gallery" }

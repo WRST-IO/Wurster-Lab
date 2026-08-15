@@ -6,9 +6,9 @@ order: 1
 ---
 # Current status
 
-Wurster 0.32.3 is pre-1.0 but intended for real integration work. Presence of code is not the same as a stable contract; this page is the short maturity map.
+Wurster 0.32.4 is pre-1.0 but intended for real integration work. Presence of code is not the same as a stable contract; this page is the short maturity map.
 
-| Area | 0.32.3 status | Current boundary |
+| Area | 0.32.4 status | Current boundary |
 | --- | --- | --- |
 | Windows Desktop | release lane | shared Electron runtime |
 | macOS arm64/x64 | release lane | signed/notarized workflow |
@@ -20,7 +20,7 @@ Wurster 0.32.3 is pre-1.0 but intended for real integration work. Presence of co
 | **Piglet** | **functional / pre-stable** | universal Views, cooperative Parent↔Child links, shared sessions, machine attachments and writable Child PigFS on Desktop/Web |
 | **Pigsty** | **experimental / coming soon** | contracts/adapters exist; native Edge/WASIX runtime is not a normal release dependency |
 
-## Important 0.32.3 limits
+## Important 0.32.4 limits
 
 - Multiple Views and in-runtime machine clients of the same Child share one durable Wurst session and revision-safe PigFS state.
 - A browserless Parent Wurst can use Child Wursts as PigLink subtools without a DOM.

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.32.4 - Desktop Piglet Bootstrap Repair
+
+- Fixed Desktop `<wurst-embed>` bootstrap when Electron's isolated preload world does not expose a usable `customElements` registry. The preload now treats that registry as optional and de-duplicates the injected bootstrap script through the shared DOM.
+- Serves the Desktop embed bootstrap module from `wurst://app/__wurst/runtime/wurster-embed.mjs`, keeping ES-module loading same-origin with the running Wurst instead of widening the `wurst:` scheme CORS policy.
+- Keeps the actual Wurster-owned embed host frame on `wurst://runtime`, preserving the separate runtime origin and Parent/Host isolation while the bootstrap module itself loads from the app origin.
+- Synchronized manifest documentation with the current PigFS contract: `pigfs: { format: "wurst/pigfs-policy-1" }`; the discarded `data / wurst/data-realms-1` model is not retained as a compatibility path.
+- Includes the post-0.32.3 Desktop Developer Tools and shutdown-lifecycle hardening already present on `main`, and runs its regression suite in the normal `npm test` gate.
+- Bumped Wurster runtime/workspace release metadata to 0.32.4 while leaving protected Authority and separately versioned site packages untouched.
+
 ## 0.32.3 - Cooperative Wurst Sessions and Machine Ends
 
 - Recentered Wurst security on the hard Wurst↔Host boundary. Parent/Child cooperation is intentionally cheap inside the Wurst world while Host filesystem, process, shell, environment and Wurster secrets remain non-ambient and runtime-mediated.

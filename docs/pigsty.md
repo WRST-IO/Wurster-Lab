@@ -8,7 +8,7 @@ order: 4
 
 Pigsty is isolated compute over Wurst-owned files: build, compile, transform, install and generate without turning that work into Host Node/Shell/FS authority.
 
-## Status in 0.32.3
+## Status in 0.32.4
 
 **Experimental / coming soon.** The policy, workspace, changeset and engine contracts are implemented and tested. The native Edge.js/WASIX runtime is still being matured separately and is not bundled or required by normal Windows/macOS/Web releases.
 
@@ -51,7 +51,7 @@ WURSTER_PIGSTY_ENGINE=worker
 
 Native builds use the separately produced `wurster-edge-runtime-<target>` bundle containing Edge, Wasmer, package material and a hash-checked manifest. A development machine may point Wurster at it with `WURSTER_EDGE_RUNTIME_DIR` (and optionally `WURSTER_EDGE_CACHE_DIR`).
 
-Desktop packaging may opt into native runtime acquisition with `WURSTER_BUNDLE_PIGSTY=1`, but this is intentionally outside the normal 0.32.3 release gate.
+Desktop packaging may opt into native runtime acquisition with `WURSTER_BUNDLE_PIGSTY=1`, but this is intentionally outside the normal 0.32.4 release gate.
 
 ## Security rule
 

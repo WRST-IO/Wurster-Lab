@@ -207,10 +207,11 @@ function normalizeEmbedSource(raw) {
 }
 
 function installWurstEmbedElement() {
-  if (customElements.get('wurst-embed')) return;
+  if (globalThis.customElements?.get?.('wurst-embed')) return;
+  if (document.querySelector('script[data-wurster-embed-runtime="1"]')) return;
   const script = document.createElement('script');
   script.type = 'module';
-  script.src = 'wurst://runtime/wurster-embed.mjs';
+  script.src = 'wurst://app/__wurst/runtime/wurster-embed.mjs';
   script.dataset.wursterEmbedRuntime = '1';
   document.head.appendChild(script);
 }

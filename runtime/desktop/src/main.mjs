@@ -374,6 +374,10 @@ function configureSession(wurstSession, context) {
         }
         return responseFor(resourceEntry, context.manifest, loaded.data, requestedRange);
       }
+      if (parsedUrl.hostname === 'app' && decodeURIComponent(parsedUrl.pathname) === '/__wurst/runtime/wurster-embed.mjs') {
+        const data = await fs.readFile(path.join(WEB_RUNTIME_SRC, 'wurster-embed.mjs'));
+        return new Response(data, { status: 200, headers: { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
+      }
       if (parsedUrl.hostname === 'runtime') {
         const requested = decodeURIComponent(parsedUrl.pathname.replace(/^\/+/, ''));
         const allowed = new Map([

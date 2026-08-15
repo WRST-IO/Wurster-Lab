@@ -88,8 +88,12 @@ assert.match(main, /newWindow\.once\('ready-to-show', \(\) => \{\s*if \(!newWind
 assert.match(main, /allowServiceWorkers:\s*true/, 'wurst: must permit the Wurster-owned embed host service worker');
 assert.match(main, /process\.resourcesPath, 'web-runtime'/, 'packaged Desktop must load the shared Wurster Web embed runtime from extraResources');
 assert.match(main, /\.\.\/\.\.\/web\/dist/, 'Desktop development must use the same built browser runtime contract as packaged Wurster');
-assert.match(await text('runtime/desktop/src/wurst-preload.cjs'), /wurst:\/\/runtime\/wurster-embed\.mjs/, 'Desktop Wursts must receive the universal <wurst-embed> runtime');
+assert.match(await text('runtime/desktop/src/wurst-preload.cjs'), /wurst:\/\/app\/__wurst\/runtime\/wurster-embed\.mjs/, 'Desktop Wursts must receive the universal <wurst-embed> bootstrap from their own app origin');
 const preload = await text('runtime/desktop/src/wurst-preload.cjs');
+assert.match(preload, /globalThis\.customElements\?\.get\?\.\('wurst-embed'\)/, 'Desktop preload must tolerate customElements being unavailable in the isolated preload world');
+assert.match(main, /hostname === 'app'[\s\S]*?__wurst\/runtime\/wurster-embed\.mjs/, 'Desktop must serve the embed bootstrap module from the app origin');
+assert.match(main, /corsEnabled:\s*false/, 'Desktop must not widen the wurst: scheme CORS boundary to bootstrap Piglet');
+assert.match(await text('runtime/web/src/wurster-embed.mjs'), /wurst:\/\/runtime\/wurster-embed-host\.html/, 'Desktop embed bootstrap must keep the Wurster-owned host frame on the isolated runtime origin');
 assert.doesNotMatch(preload, /wurst:piglet:url|wurst:\/\/piglet/, 'pre-embed Piglet byte URL APIs must not return');
 assert.doesNotMatch(main, /wurst:\/\/piglet|wurst:piglet:url/, 'Desktop must not revive raw Piglet URL serving');
 assert.doesNotMatch(web, /pigletUrl\(|openPiglet\(/, 'Web must keep <wurst-embed> as the single Piglet presentation API');

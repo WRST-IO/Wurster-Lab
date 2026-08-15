@@ -1,5 +1,10 @@
 const MODULE_URL = new URL(import.meta.url);
-const HOST_URL = new URL('./wurster-embed-host.html', MODULE_URL);
+const DESKTOP_APP_BOOTSTRAP = MODULE_URL.protocol === 'wurst:'
+  && MODULE_URL.hostname === 'app'
+  && MODULE_URL.pathname === '/__wurst/runtime/wurster-embed.mjs';
+const HOST_URL = DESKTOP_APP_BOOTSTRAP
+  ? new URL('wurst://runtime/wurster-embed-host.html')
+  : new URL('./wurster-embed-host.html', MODULE_URL);
 
 function targetOrigin(url) { return new URL(url).origin; }
 function toTransferBuffer(value) {
