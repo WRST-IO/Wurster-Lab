@@ -488,8 +488,11 @@ export async function loadPigFsCommit(source, commitOffset) {
   return { root, record };
 }
 
-export async function verifyPigFsHistory(source, baseOffset) {
-  const latestOffset = await locateLatestFsCommit(source, assertSafeOffset(baseOffset, 'PigFS base offset'));
+export async function verifyPigFsHistory(source, baseOffset, { commitOffset = undefined } = {}) {
+  const base = assertSafeOffset(baseOffset, 'PigFS base offset');
+  const latestOffset = commitOffset === undefined
+    ? await locateLatestFsCommit(source, base)
+    : (commitOffset == null ? null : assertSafeOffset(commitOffset, 'PigFS authoritative commit offset'));
   if (latestOffset == null) return { valid: true, format: PIG_FS_FORMAT, historyMode: PIG_FS_HISTORY_NONE, root: null, commitOffset: null, commits: [] };
   const latestCommit = await loadPigFsCommit(source, latestOffset);
   const mode = rootHistoryMode(latestCommit.root);
@@ -843,12 +846,13 @@ function ensureParents(entries, path, timestamp, actorId, generation) {
 }
 
 export class PigFsStore {
-  constructor({ source, baseOffset, append, sync = async () => {} } = {}) {
+  constructor({ source, baseOffset, append, sync = async () => {}, appendRecord = null } = {}) {
     if (!source || typeof source.read !== 'function' || !Number.isSafeInteger(source.size)) throw new Error('PigFS store requires random-access source');
-    if (typeof append !== 'function') throw new Error('PigFS store requires append(bytes)');
+    if (typeof append !== 'function' && typeof appendRecord !== 'function') throw new Error('PigFS store requires append(bytes) or appendRecord()');
     this.source = source;
     this.baseOffset = assertSafeOffset(baseOffset, 'PigFS base offset');
     this.append = append;
+    this.appendRecordImpl = appendRecord;
     this.sync = sync;
     this.root = null;
     this.commitOffset = null;
@@ -872,6 +876,15 @@ export class PigFsStore {
   async appendRecord(type, payload, previousCommitOffset = 0) {
     const bytes = Buffer.isBuffer(payload) ? payload : Buffer.from(payload);
     const task = this.appendTail.then(async () => {
+      if (this.appendRecordImpl) {
+        const appended = await this.appendRecordImpl(type, bytes, { previousCommitOffset, sequence: ++this.sequence });
+        const recordStart = Number(appended.recordStart);
+        const recordEnd = Number(appended.recordEnd);
+        if (!Number.isSafeInteger(recordStart) || !Number.isSafeInteger(recordEnd) || recordEnd < recordStart) throw new Error('PigFS append arena returned invalid offsets');
+        this.nextOffset = Math.max(this.nextOffset, recordEnd);
+        this.source.size = Math.max(this.source.size, recordEnd);
+        return { recordStart, payloadLength: bytes.length, recordLength: recordEnd - recordStart };
+      }
       const recordStart = this.nextOffset;
       const record = makeFsRecord(type, bytes, { recordStart, previousCommitOffset, sequence: ++this.sequence });
       await this.append(record);

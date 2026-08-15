@@ -238,6 +238,7 @@ contextBridge.exposeInMainWorld('wurstEmbedRuntime', Object.freeze({
     return refreshed;
   },
   invoke: (handle, method, args = []) => invoke('wurst:piglet:embed-invoke', String(handle ?? ''), String(method ?? ''), Array.isArray(args) ? args : []),
+  runtime: (handle, method, args = []) => invoke('wurst:piglet:embed-runtime', String(handle ?? ''), String(method ?? ''), Array.isArray(args) ? args : []),
   subscribeParentPigLink: (handle, callback) => {
     const key = String(handle ?? '');
     if (typeof callback !== 'function') throw new TypeError('Parent PigLink event subscriber must be a function');

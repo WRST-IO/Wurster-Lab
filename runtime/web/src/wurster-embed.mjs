@@ -59,6 +59,10 @@ class RuntimeBridgeProvider {
     if (!this.parent || !this.bridge.invoke) throw new Error('This embedded Wurst has no delegated parent runtime access');
     return this.bridge.invoke(this.handle, String(method ?? ''), args);
   }
+  async invokeRuntime(method, args = []) {
+    if (!this.bridge.runtime) throw new Error('This embedded Wurst has no Desktop runtime service bridge');
+    return this.bridge.runtime(this.handle, String(method ?? ''), args);
+  }
   subscribeParentPigLink(listener) {
     if (!this.parent?.piglink || !this.bridge.subscribeParentPigLink) return null;
     const id = this.bridge.subscribeParentPigLink(this.handle, listener);
@@ -228,6 +232,16 @@ export class WurstEmbedElement extends HTMLElement {
           port.postMessage({ type: 'wurster-embed-persist-result', id: m.id, ok: true, result });
         } catch (error) {
           port.postMessage({ type: 'wurster-embed-persist-result', id: m.id, ok: false, error: error?.message || String(error) });
+        }
+        return;
+      }
+      if (m?.type === 'wurster-embed-runtime-call') {
+        try {
+          if (!provider.invokeRuntime) throw new Error('Desktop Wurst runtime services are unavailable');
+          const result = await provider.invokeRuntime(m.method, Array.isArray(m.args) ? m.args : []);
+          port.postMessage({ type: 'wurster-embed-runtime-result', id: m.id, ok: true, result });
+        } catch (error) {
+          port.postMessage({ type: 'wurster-embed-runtime-result', id: m.id, ok: false, error: error?.message || String(error), code: error?.code || null });
         }
         return;
       }

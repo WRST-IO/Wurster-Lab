@@ -36,6 +36,7 @@ await buildCore('wurster.min.js', true);
 
 const outputs = [
   ['wurster-sw.js', 'wurster-sw.js'],
+  ['wurster-frame-bootstrap.js', 'wurster-frame-bootstrap.js'],
   ['wurster-embed.mjs', 'wurster-embed.mjs'],
   ['wurster-embed.mjs', 'wurster-embed.js'],
   ['wurster-embed-host.html', 'wurster-embed-host.html'],

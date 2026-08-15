@@ -51,13 +51,14 @@ jobs:
           cp runtime/web/dist/wurster.js release-web/
           cp runtime/web/dist/wurster.min.js release-web/
           cp runtime/web/dist/wurster-sw.js release-web/
+          cp runtime/web/dist/wurster-frame-bootstrap.js release-web/
           cp runtime/web/dist/wurster-embed.js release-web/
           cp runtime/web/dist/wurster-embed-host.html release-web/
           cp runtime/web/dist/trust-data.mjs release-web/
           (
             cd release-web
             zip -9 "Wurster-Web-${version}.zip" \
-              wurster.js wurster.min.js wurster-sw.js wurster-embed.js \
+              wurster.js wurster.min.js wurster-sw.js wurster-frame-bootstrap.js wurster-embed.js \
               wurster-embed-host.html trust-data.mjs
           )
       - uses: actions/upload-artifact@v7
@@ -84,6 +85,10 @@ jobs:
           node-version: 22
           package-manager-cache: false
       - run: npm install
+      - name: Build Web runtime for real Electron Piglet smoke
+        run: npm run runtime:web:build
+      - name: Verify real Electron Desktop Piglet route
+        run: npm run test:electron:piglet
 
       - name: Require macOS signing and notarization secrets
         shell: bash
@@ -182,6 +187,10 @@ jobs:
           node-version: 22
           package-manager-cache: false
       - run: npm install
+      - name: Build Web runtime for real Electron Piglet smoke
+        run: npm run runtime:web:build
+      - name: Verify real Electron Desktop Piglet route
+        run: npm run test:electron:piglet
 
       - name: Require macOS signing and notarization secrets
         shell: bash
@@ -278,6 +287,10 @@ jobs:
           node-version: 22
           package-manager-cache: false
       - run: npm install
+      - name: Build Web runtime for real Electron Piglet smoke
+        run: npm run runtime:web:build
+      - name: Verify real Electron Desktop Piglet route
+        run: npm run test:electron:piglet
       - run: npm run dist:win
       - uses: actions/upload-artifact@v7
         with:

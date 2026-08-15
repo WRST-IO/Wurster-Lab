@@ -1,6 +1,10 @@
 import { inspectPigletSource } from './piglet-package.mjs';
 import { describePigLinkSource, invokePigLinkActionSource } from '@wurster/headless';
 import { createPigletMachineServices } from './piglet-machine-runtime.mjs';
+import { createPigletDescendantRuntime } from './piglet-descendant-runtime.mjs';
+import { createPigletRuntimeServiceRouter } from './piglet-runtime-service-router.mjs';
+import { createPigletWorldRuntime } from './piglet-world-runtime.mjs';
+import { invokeRootBackedWurstService } from './piglet-object-runtime.mjs';
 import {
   WurstSessionRegistry,
   analyzePigletAuthorityComposition,
@@ -14,6 +18,12 @@ function publicDescriptor(descriptor) {
     source: descriptor.source,
     path: descriptor.path ?? null,
     objectId: descriptor.objectId ?? null,
+    storageObjectId: descriptor.storageObjectId ?? null,
+    packageDigest: descriptor.packageDigest ?? null,
+    baseBlobHash: descriptor.baseBlobHash ?? null,
+    baseSize: descriptor.baseSize ?? null,
+    stateRevision: descriptor.stateRevision ?? null,
+    stateHash: descriptor.stateHash ?? null,
     application: structuredClone(descriptor.application ?? null),
     signature: structuredClone(descriptor.signature ?? null),
     data: structuredClone(descriptor.data ?? null),
@@ -23,12 +33,10 @@ function publicDescriptor(descriptor) {
   };
 }
 
-function contextScope(context) {
-  return String(context?.runtimeBinding || `wurst:${context?.manifest?.id || 'unknown'}`);
-}
-
+function contextScope(context) { return String(context?.runtimeBinding || `wurst:${context?.manifest?.id || 'unknown'}`); }
 function descriptorLocator(descriptor) {
-  if (descriptor?.objectId) return `pigfs://object/${descriptor.objectId}`;
+  if (descriptor?.objectId) return `wurst-object:${descriptor.objectId}`;
+  if (descriptor?.storageObjectId) return `pigfs-storage:${descriptor.storageObjectId}`;
   return String(descriptor?.ref || descriptor?.path || descriptor?.application?.id || 'unknown-child');
 }
 
@@ -59,13 +67,20 @@ function sessionMetadata(descriptor, source) {
     source: descriptor.source ?? null,
     path: descriptor.path ?? null,
     objectId: descriptor.objectId ?? null,
+    storageObjectId: descriptor.storageObjectId ?? null,
     size: Number(source?.size ?? descriptor.bytes ?? 0)
   };
 }
 
-export function createPigletEmbedRuntime({ storage, invokeParent = null, relationshipOptions = null, onSessionChanged = null, onMachineEvent = null }) {
+export function createPigletEmbedRuntime({ storage, invokeParent = null, relationshipOptions = null, onSessionChanged = null, onMachineEvent = null, activeActor = null }) {
   const registry = new WurstSessionRegistry();
   const worlds = new Map();
+
+  const descendantRuntime = createPigletDescendantRuntime({
+    registry, worlds, storage, activeActor, contextScope, descriptorLocator, sessionMetadata, publicDescriptor
+  });
+  const { actorFor, resolveNested, openDescendant, nestedChildren } = descendantRuntime;
+  const worldRuntime = createPigletWorldRuntime({ registry, worlds, contextScope });
 
   async function open(parentContext, descriptor, source, options = {}) {
     const { parent, composition } = relationshipFor(parentContext, descriptor, options, relationshipOptions);
@@ -77,10 +92,11 @@ export function createPigletEmbedRuntime({ storage, invokeParent = null, relatio
     let world = worlds.get(attached.session.id);
     try {
       if (attached.created) {
-        const runtimeSource = await storage.prepareRuntimeSource(parentContext, descriptor, source);
+        const runtimeSource = await storage.prepareRuntimeSource(parentContext, descriptor, source, { parentObjectId: options.parentObjectId ?? null });
+        const runtimeDescriptor = runtimeSource.objectId ? { ...descriptor, objectId: runtimeSource.objectId } : descriptor;
         world = {
           parentContext,
-          descriptor,
+          descriptor: runtimeDescriptor,
           runtimeSource,
           source: runtimeSource.source,
           parent,
@@ -93,7 +109,7 @@ export function createPigletEmbedRuntime({ storage, invokeParent = null, relatio
         handle: attached.attachment.id,
         size: world.source.size,
         descriptor: publicDescriptor(world.descriptor),
-        writable: Boolean(world.runtimeSource.path && world.descriptor.data?.writable),
+        writable: Boolean((world.runtimeSource.rootBacked || world.runtimeSource.path) && world.descriptor.data?.writable),
         parent: world.parent,
         composition: world.composition,
         session: registry.describeByAttachment(attached.attachment.id)
@@ -122,29 +138,40 @@ export function createPigletEmbedRuntime({ storage, invokeParent = null, relatio
 
   async function invoke(parentContext, rawHandle, method, args = []) {
     const { world } = requireAttachment(parentContext, rawHandle);
-    if (typeof invokeParent !== 'function') throw new Error('Parent runtime services are unavailable');
     const name = String(method ?? '');
+    const safeArgs = Array.isArray(args) ? args : [];
     assertPigletParentMethod(world.parent, name);
-    return invokeParent(parentContext, name, Array.isArray(args) ? args : [], world);
+    if (world.logicalParentWorld) {
+      if (name.startsWith('pigfs.')) {
+        const outcome = await invokeRootBackedWurstService(world.logicalParentWorld, name, safeArgs, { actor: actorFor(parentContext) });
+        return outcome && typeof outcome === 'object' && Object.hasOwn(outcome, 'committed') ? outcome.result : outcome;
+      }
+      if (name === 'piglet.children') return nestedChildren(parentContext, world.logicalParentWorld);
+      if (name === 'piglet.inspect') return (await resolveNested(parentContext, world.logicalParentWorld, safeArgs[0])).descriptor;
+      throw new Error(`Nested delegated parent service is unavailable: ${name}`);
+    }
+    if (typeof invokeParent !== 'function') throw new Error('Parent runtime services are unavailable');
+    return invokeParent(parentContext, name, safeArgs, world);
   }
 
   async function persist(parentContext, rawHandle, payload) {
     const handle = String(rawHandle ?? '');
     registry.requireFresh(handle);
     const { world } = requireAttachment(parentContext, handle);
-    if (!world.runtimeSource.path || !world.descriptor.data?.writable) throw new Error('This embedded Wurst is not writable');
+    if (!(world.runtimeSource.rootBacked || world.runtimeSource.path) || !world.descriptor.data?.writable) throw new Error('This embedded Wurst is not writable');
     const data = payload instanceof Uint8Array ? Buffer.from(payload.buffer, payload.byteOffset, payload.byteLength) : Buffer.from(payload ?? []);
     const inspected = await inspectPigletSource({ size: data.length, async read(offset, length) { return data.subarray(offset, offset + length); } });
     if (inspected.signature?.status === 'invalid') throw new Error(`Embedded Wurst signature became invalid: ${inspected.signature.error ?? 'verification failed'}`);
     if (inspected.application?.id !== world.descriptor.application?.id) throw new Error('Embedded Wurst identity changed during persistence');
     await storage.persistRuntimeSource(parentContext, world.runtimeSource, data);
-    world.source = await storage.openSource(parentContext, world.runtimeSource.path);
+    world.source = world.runtimeSource.rootBacked ? world.runtimeSource.source : await storage.openSource(parentContext, world.runtimeSource.path);
     world.runtimeSource.source = world.source;
+    await worldRuntime.invalidate(world);
     const session = registry.bump(handle, { metadata: sessionMetadata(world.descriptor, world.source) });
     if (typeof onSessionChanged === 'function') {
       try { onSessionChanged(parentContext, { session, writer: handle, size: world.source.size }); } catch {}
     }
-    return { ok: true, size: data.length, path: world.runtimeSource.path, revision: session.revision, session };
+    return { ok: true, size: data.length, path: world.runtimeSource.path ?? null, objectId: world.runtimeSource.objectId ?? null, revision: session.revision, session };
   }
 
   function refresh(parentContext, rawHandle) {
@@ -172,7 +199,8 @@ export function createPigletEmbedRuntime({ storage, invokeParent = null, relatio
     if (attachment.kind !== 'machine') throw new Error('Wurst session attachment is not a machine client');
     registry.refresh(handle);
     const services = await createPigletMachineServices(world, {
-      invokeParent: (method, args) => invoke(parentContext, handle, method, args)
+      invokeParent: (method, args) => invoke(parentContext, handle, method, args),
+      actor: actorFor(parentContext)
     });
     try {
       const invoked = await invokePigLinkActionSource(world.source, String(rawName ?? ''), input ?? {}, {
@@ -184,6 +212,13 @@ export function createPigletEmbedRuntime({ storage, invokeParent = null, relatio
       if (services.changed()) {
         const persisted = await persist(parentContext, handle, services.bytes());
         session = persisted.session;
+      } else if (services.committed?.()) {
+        await world.source.refresh?.();
+        await worldRuntime.invalidate(world);
+        session = registry.bump(handle, { metadata: sessionMetadata(world.descriptor, world.source) });
+        if (typeof onSessionChanged === 'function') {
+          try { onSessionChanged(parentContext, { session, writer: handle, size: world.source.size }); } catch {}
+        }
       }
       if (typeof onMachineEvent === 'function') {
         for (const event of invoked.events ?? []) {
@@ -196,20 +231,19 @@ export function createPigletEmbedRuntime({ storage, invokeParent = null, relatio
     }
   }
 
-  function close(parentContext, rawHandle) {
-    const handle = String(rawHandle ?? '');
-    requireAttachment(parentContext, handle);
-    const released = registry.release(handle);
-    if (released.closed) worlds.delete(released.session.id);
-    return true;
+  async function close(parentContext, rawHandle) {
+    return worldRuntime.closeHandle(parentContext, rawHandle, requireAttachment);
   }
 
-  function closeContext(parentContext) {
-    const scope = contextScope(parentContext);
-    const sessionIds = registry.list(scope).map((item) => item.id);
-    registry.releaseScope(scope);
-    for (const id of sessionIds) worlds.delete(id);
+  async function closeContext(parentContext) {
+    return worldRuntime.closeContext(parentContext);
   }
 
-  return { open, read, invoke, persist, refresh, list, machineDescribe, machineInvoke, close, closeContext };
+  const { runtimeInvoke } = createPigletRuntimeServiceRouter({
+    registry, contextScope, requireAttachment, actorFor, nestedChildren, resolveNested, openDescendant,
+    invalidateWorld: worldRuntime.invalidate, onSessionChanged, sessionMetadata, read, persist, refresh, invoke, close,
+    machineDescribe, machineInvoke
+  });
+
+  return { open, read, invoke, runtimeInvoke, persist, refresh, list, machineDescribe, machineInvoke, close, closeContext, serveVirtualRoute: worldRuntime.serveVirtualRoute, worldBySession: worldRuntime.worldBySession };
 }

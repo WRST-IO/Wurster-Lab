@@ -33,11 +33,18 @@ import {
   PIG_FS_HISTORY_NONE,
   pigFsRealmGovernance
 } from './pig-fs.js';
+import { WurstObjectStore } from './wurst-object-store.js';
+import { acquireLocalWurstArena } from './local-wurst-arena.js';
+import { loadAuthoritativeRuntimeRoots } from './runtime-roots.js';
+import { copyLiveWurstObjectsForCompaction } from './wurst-object-compaction.js';
+import { openLocalWurstObjectStore } from './local-wurst-object-store.js';
 
 export { PNG_SIGNATURE, embedWurstInPng, extractWurstFromPng, isPngBuffer } from './png-carrier.js';
 export * from './pig-fs-records.js';
 export * from './wurst-identity.js';
 export * from './pig-fs.js';
+export * from './wurst-object-store.js';
+export { openLocalWurstObjectStore } from './local-wurst-object-store.js';
 
 export const MAGIC = Buffer.from('WRST');
 export const FORMAT_VERSION = 7;
@@ -611,7 +618,8 @@ export async function openWurstFile(filePath) {
       entries.set(safePath, { ...rawEntry, path: safePath, scope: rawEntry.scope ?? 'app', virtualOffset });
     }
 
-    const { root: pigFsRoot, commitOffset: pigFsCommitOffset } = await loadLatestFsRoot(source, baseLength, PIG_FS_FORMAT);
+    const { loadedFs, loadedObjects, hostObject } = await loadAuthoritativeRuntimeRoots(source, baseLength);
+    const { root: pigFsRoot, commitOffset: pigFsCommitOffset } = loadedFs;
     assertFsPolicyMatchesRoot(manifest, pigFsRoot);
 
     return {
@@ -622,6 +630,9 @@ export async function openWurstFile(filePath) {
       baseLength,
       pigFsRoot,
       pigFsCommitOffset,
+      objectStoreRoot: loadedObjects.root,
+      objectStoreCommitOffset: loadedObjects.commitOffset,
+      objectStoreHost: hostObject,
       source,
       size: stat.size,
       wurstSize: source.size,
@@ -647,13 +658,16 @@ export async function openWurstFile(filePath) {
         return this.pigFsRoot ? readPigFsRange(source, this.pigFsRoot, fsPath, offset, length, options) : null;
       },
       async pigFsHistory() {
-        return this.pigFsRoot ? verifyPigFsHistory(source, this.baseLength) : { valid: true, format: PIG_FS_FORMAT, historyMode: PIG_FS_HISTORY_NONE, root: null, commitOffset: null, commits: [] };
+        return this.pigFsRoot ? verifyPigFsHistory(source, this.baseLength, { commitOffset: this.pigFsCommitOffset }) : { valid: true, format: PIG_FS_FORMAT, historyMode: PIG_FS_HISTORY_NONE, root: null, commitOffset: null, commits: [] };
       },
-      async refreshWurstFs() {
-        const loaded = await loadLatestFsRoot(source, baseLength, PIG_FS_FORMAT);
-        assertFsPolicyMatchesRoot(manifest, loaded.root);
-        this.pigFsRoot = loaded.root;
-        this.pigFsCommitOffset = loaded.commitOffset;
+      async refreshWurstFs({ physicalLatest = false } = {}) {
+        const roots = await loadAuthoritativeRuntimeRoots(source, baseLength, { physicalLatestPigFs: physicalLatest });
+        assertFsPolicyMatchesRoot(manifest, roots.loadedFs.root);
+        this.pigFsRoot = roots.loadedFs.root;
+        this.pigFsCommitOffset = roots.loadedFs.commitOffset;
+        this.objectStoreRoot = roots.loadedObjects.root;
+        this.objectStoreCommitOffset = roots.loadedObjects.commitOffset;
+        this.objectStoreHost = roots.hostObject;
         this.wurstSize = source.size;
         return { root: this.pigFsRoot, commitOffset: this.pigFsCommitOffset };
       },
@@ -1743,48 +1757,36 @@ export async function openLocalPigFsStore(filePath, reader) {
   if (reader.carrier) throw new Error('Incremental PigFS writes are not yet available for carrier Wursts');
   if (reader.manifest?.pigfs?.format !== 'wurst/pigfs-policy-1' || reader.manifest.pigfs.writable !== true) throw new Error('This Wurst does not declare writable PigFS realms');
   if (reader.pigFsRoot && reader.pigFsRoot.format !== PIG_FS_FORMAT) throw new Error(`Unsupported PigFS root format ${reader.pigFsRoot.format}`);
-  const appendHandle = await fs.open(filePath, 'a');
+  const arena = await acquireLocalWurstArena(filePath, reader.source);
   let closed = false;
   const store = new PigFsStore({
     source: reader.source,
     baseOffset: reader.baseLength,
-    append: async (bytes) => {
-      if (closed) throw new Error('PigFS writer is closed');
-      const data = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
-      let offset = 0;
-      while (offset < data.length) {
-        const { bytesWritten } = await appendHandle.write(data, offset, data.length - offset, null);
-        if (bytesWritten <= 0) throw new Error('Could not append PigFS record');
-        offset += bytesWritten;
-      }
-    },
+    appendRecord: arena.appendRecord,
     sync: async () => {
       if (closed) throw new Error('PigFS writer is closed');
-      await appendHandle.sync();
+      // Once the system Object Store exists, a PigFS COMMIT is only prepared
+      // logical state. The following Root Commit is the sole durability edge.
+      if (!reader.objectStoreRoot) await arena.sync();
     }
   });
   await store.init();
+  if (reader.objectStoreRoot) {
+    // A Root Commit is the durability boundary once the Wurst Object Store
+    // exists. Valid PigFS records beyond the host object's stateHead are only
+    // prepared tail garbage after a crash and must not become authoritative.
+    store.root = reader.pigFsRoot ? structuredClone(reader.pigFsRoot) : null;
+    store.commitOffset = reader.pigFsCommitOffset ?? null;
+  }
   store.closeFile = async () => {
     if (closed) return;
     closed = true;
     store.close();
-    await appendHandle.close();
+    await arena.release();
   };
   return store;
 }
 
-/**
- * Materialize the current live PigFS generation into a fresh raw WRST file.
- *
- * The immutable application bytes are copied byte-for-byte. Only live PigFS
- * DATA records are carried forward and all catalog/map records are rebuilt with
- * new physical offsets. Sealed DATA chunks stay ciphertext; only sealed metadata
- * pages are opened/resealed because their record pointers change.
- *
- * This intentionally writes to a separate destination. The runtime can keep the
- * old Wurst readable while compaction happens, then atomically-ish swap files at
- * a quiet point without reloading the Wurst renderer.
- */
 export async function writeCompactedWurstFile(destination, reader, options = {}) {
   if (!reader?.source || !Number.isSafeInteger(reader.baseLength)) throw new Error('A live Wurst reader is required');
   if (reader.carrier) throw new Error('Carrier Wurst compaction is not yet supported');
@@ -1837,6 +1839,7 @@ export async function writeCompactedWurstFile(destination, reader, options = {})
       tempSource.size += data.length;
     };
 
+    let targetPigFsCommitOffset = null;
     const root = reader.pigFsRoot;
     if (root) {
       if ((root.historyMode ?? 'integrity') !== PIG_FS_HISTORY_NONE) {
@@ -1884,10 +1887,19 @@ export async function writeCompactedWurstFile(destination, reader, options = {})
         nextRoot.realms[realmId] = await store.buildRealmWithCatalog(realm, entries, changedMaps, root.generation, 0);
       }
       await store.publishStandaloneRoot(nextRoot, { generation: root.generation });
+      targetPigFsCommitOffset = store.commitOffset;
       store.close();
     } else {
       await target.sync();
     }
+
+    await copyLiveWurstObjectsForCompaction({
+      reader,
+      tempSource,
+      append,
+      sync: async () => target.sync(),
+      targetPigFsCommitOffset
+    });
 
     const newSize = tempSource.size;
     const oldSize = reader.source.size;
@@ -1899,6 +1911,9 @@ export async function writeCompactedWurstFile(destination, reader, options = {})
     try {
       if (verify.manifest?.format !== reader.manifest?.format || verify.baseLength !== reader.baseLength) {
         throw new Error('Compacted Wurst verification failed');
+      }
+      if (reader.objectStoreRoot && verify.objectStoreRoot?.rootObjectId !== reader.objectStoreRoot.rootObjectId) {
+        throw new Error('Compacted Wurst lost its Wurst Object identity');
       }
     } finally {
       await verify.close();
@@ -1950,7 +1965,7 @@ export async function openWurstRangeSource(source, { close = async () => {}, phy
     if (virtualOffset + rawEntry.length > baseLength) throw new Error(`Invalid range for ${safePath}`);
     entries.set(safePath, { ...rawEntry, path: safePath, scope: rawEntry.scope ?? 'app', virtualOffset });
   }
-  const loadedFs = await loadLatestFsRoot(source, baseLength, PIG_FS_FORMAT);
+  const { loadedFs, loadedObjects, hostObject } = await loadAuthoritativeRuntimeRoots(source, baseLength);
   assertFsPolicyMatchesRoot(manifest, loadedFs.root);
   const reader = {
     version, flags, manifest, index, baseLength, payloadStart, source,
@@ -1959,6 +1974,9 @@ export async function openWurstRangeSource(source, { close = async () => {}, phy
     carrier,
     pigFsRoot: loadedFs.root,
     pigFsCommitOffset: loadedFs.commitOffset,
+    objectStoreRoot: loadedObjects.root,
+    objectStoreCommitOffset: loadedObjects.commitOffset,
+    objectStoreHost: hostObject,
     entries: () => [...entries.values()].map((entry) => ({ ...entry })),
     has: (resourcePath) => entries.has(normalizeWurstPath(resourcePath)),
     entry: (resourcePath) => {
@@ -2001,7 +2019,14 @@ export async function openWurstRangeSource(source, { close = async () => {}, phy
     pigFsStat(fsPath, options = {}) { return this.pigFsRoot ? statPigFsEntry(source, this.pigFsRoot, fsPath, options) : null; },
     pigFsList(fsPath = '/data', options = {}) { return this.pigFsRoot ? listPigFsDirectory(source, this.pigFsRoot, fsPath, options) : []; },
     pigFsReadRange(fsPath, offset = 0, length = null, options = {}) { return this.pigFsRoot ? readPigFsRange(source, this.pigFsRoot, fsPath, offset, length, options) : null; },
-    pigFsHistory() { return this.pigFsRoot ? verifyPigFsHistory(source, this.baseLength) : Promise.resolve({ valid: true, format: PIG_FS_FORMAT, historyMode: PIG_FS_HISTORY_NONE, root: null, commitOffset: null, commits: [] }); },
+    pigFsHistory() { return this.pigFsRoot ? verifyPigFsHistory(source, this.baseLength, { commitOffset: this.pigFsCommitOffset }) : Promise.resolve({ valid: true, format: PIG_FS_FORMAT, historyMode: PIG_FS_HISTORY_NONE, root: null, commitOffset: null, commits: [] }); },
+    async refreshWurstFs({ physicalLatest = false } = {}) {
+      const roots = await loadAuthoritativeRuntimeRoots(source, baseLength, { physicalLatestPigFs: physicalLatest });
+      assertFsPolicyMatchesRoot(manifest, roots.loadedFs.root);
+      this.pigFsRoot = roots.loadedFs.root; this.pigFsCommitOffset = roots.loadedFs.commitOffset;
+      this.objectStoreRoot = roots.loadedObjects.root; this.objectStoreCommitOffset = roots.loadedObjects.commitOffset; this.objectStoreHost = roots.hostObject;
+      this.wurstSize = source.size; return { root: this.pigFsRoot, commitOffset: this.pigFsCommitOffset };
+    },
     async close() { if (!closed) { closed = true; await close(); } }
   };
   return reader;

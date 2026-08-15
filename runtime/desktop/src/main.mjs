@@ -37,6 +37,8 @@ import { createTrustedSurfaceRuntime } from './trusted-surface-runtime.mjs';
 import { createDesktopPigstyRuntime } from './pigsty-runtime.mjs';
 import { createDesktopDevToolsRuntime, isWurstDevToolsShortcut } from './devtools-runtime.mjs';
 import { runStartupAutoUpdate } from './update-runtime.mjs';
+import { createWurstObjectHostRuntime } from './wurst-object-host-runtime.mjs';
+import { serveWursterRuntimeRequest } from './wurster-runtime-protocol.mjs';
 import { cspFor, networkRequestAllowed, parseHttpRange, partitionFor, responseFor, safeRequestPath } from './web-sandbox-runtime.mjs';
 import {
   SEALED_APP_INDEX_PATH,
@@ -170,7 +172,6 @@ if (!hasSingleInstanceLock) {
     }
   });
 }
-
 
 function findRuntimeHandoffArgument(argv = []) {
   return argv.find((arg) => typeof arg === 'string' && arg.startsWith('wurster://')) ?? null;
@@ -383,21 +384,10 @@ function configureSession(wurstSession, context) {
         return new Response(data, { status: 200, headers: { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
       }
       if (parsedUrl.hostname === 'runtime') {
-        const requested = decodeURIComponent(parsedUrl.pathname.replace(/^\/+/, ''));
-        if (requested.startsWith('__wurster/')) return new Response('Wurster Web virtual route is waiting for Service Worker control', { status: 503 });
-        const allowed = new Map([
-          ['wurster-embed.mjs', ['wurster-embed.mjs', 'text/javascript; charset=utf-8']],
-          ['wurster-embed-host.html', ['wurster-embed-host.html', 'text/html; charset=utf-8']],
-          ['wurster-web.mjs', ['wurster.js', 'text/javascript; charset=utf-8']],
-          ['wurster.js', ['wurster.js', 'text/javascript; charset=utf-8']],
-          ['wurster.min.js', ['wurster.min.js', 'text/javascript; charset=utf-8']],
-          ['wurster-sw.js', ['wurster-sw.js', 'text/javascript; charset=utf-8']],
-          ['trust-data.mjs', ['trust-data.mjs', 'text/javascript; charset=utf-8']]
-        ]);
-        const asset = allowed.get(requested);
-        if (!asset) return new Response('Wurster runtime asset not found', { status: 404 });
-        const data = await fs.readFile(path.join(WEB_RUNTIME_SRC, asset[0]));
-        return new Response(data, { status: 200, headers: { 'Content-Type': asset[1], 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
+        return serveWursterRuntimeRequest(request, {
+          webRuntimeDir: WEB_RUNTIME_SRC,
+          pigletRuntime: pigletEmbeds
+        });
       }
       if (parsedUrl.hostname === 'piglink') {
         const requested = decodeURIComponent(parsedUrl.pathname.replace(/^\//, ''));
@@ -937,7 +927,6 @@ async function revealMeatIdentity(identityId, authorization = {}) {
   return loadMeatIdentity(identityId, authorization);
 }
 
-
 function publisherSignerName(publisher) {
   return publisher.domain ?? publisher.email ?? publisher.label ?? `Signer ${String(publisher.fingerprint ?? '').slice(0, 10)}…`;
 }
@@ -1381,7 +1370,6 @@ ipcMain.handle('wurster:auth:context', async (event) => {
   };
 });
 
-
 ipcMain.handle('wurster:auth:manage-identities', async (event) => {
   authSurfaceForEvent(event);
   return Boolean(await openProtectedSettingsWindow());
@@ -1469,6 +1457,7 @@ async function clearCurrentContext() {
   if (context.runtimeBinding) unlockSessions.revokeBinding(context.runtimeBinding);
   if (context.pigFsStore?.closeFile) await context.pigFsStore.closeFile().catch(() => {});
   else if (context.pigFsStore?.close) await context.pigFsStore.close().catch(() => {});
+  await wurstObjectHost.close(context);
   if (context.applicationProtectionHandle) await protectionClient.destroy(context.applicationProtectionHandle);
   if (context.reader) await context.reader.close().catch(() => {});
 }
@@ -1510,6 +1499,7 @@ function assertWurstSender(event) {
 }
 
 let pigletRuntime = null;
+let pigletEmbeds = null;
 let pigLinkRuntime = null;
 
 async function invokeDelegatedParentPigFs(context, method, args = []) {
@@ -1630,6 +1620,8 @@ async function invokeDelegatedParentService(context, method, args = []) {
   throw new Error(`Unsupported delegated parent service: ${name}`);
 }
 
+const wurstObjectHost = createWurstObjectHostRuntime({ activeActor: activeFilesystemIdentity });
+
 const pigletStorage = createPigletStorageAdapter({
   realmDataMode,
   realmRuntimeSummary,
@@ -1639,15 +1631,17 @@ const pigletStorage = createPigletStorageAdapter({
   refreshContext: refreshWurstFsContext,
   scheduleHygiene: scheduleWurstFsHygiene,
   normalizeDataPath: pigFsPath,
-  waitForMaintenance: waitForWurstFsMaintenance
+  waitForMaintenance: waitForWurstFsMaintenance,
+  ensureObjectStore: (context) => wurstObjectHost.ensure(context)
 });
-const pigletEmbeds = createPigletEmbedRuntime({
+pigletEmbeds = createPigletEmbedRuntime({
   storage: pigletStorage,
   invokeParent: invokeDelegatedParentService,
   onSessionChanged: (context, detail) => {
     const target = context === currentContext ? currentWindow?.webContents : null;
     if (target && !target.isDestroyed()) target.send('wurst:piglet:session-changed', detail);
   },
+  activeActor: activeFilesystemIdentity,
   onMachineEvent: (context, detail) => {
     const target = context === currentContext ? currentWindow?.webContents : null;
     if (target && !target.isDestroyed()) target.send('wurst:piglet:machine-event', detail);
@@ -1860,6 +1854,7 @@ async function compactCurrentWurstFs(context, { reason = 'manual' } = {}) {
       if (context.pigFsStore?.closeFile) await context.pigFsStore.closeFile();
       else if (context.pigFsStore?.close) await context.pigFsStore.close();
       context.pigFsStore = null;
+      await wurstObjectHost.close(context);
       await originalReader.close();
 
       try {
@@ -1926,7 +1921,7 @@ function scheduleWurstFsHygiene(context, delay = 1800) {
 }
 
 async function refreshWurstFsContext(context) {
-  await context.reader.refreshWurstFs();
+  await wurstObjectHost.refresh(context);
   context.pkg = null;
 }
 
@@ -3296,6 +3291,7 @@ async function loadPackage(filePath) {
       applicationProtectionHandle: null,
       applicationSessionTimer: null,
       pigFsStore: null,
+      objectStore: null,
       pigFsMaintenance: null,
       pigFsHygieneTimer: null,
       sealedAppMap: null,

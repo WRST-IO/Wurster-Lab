@@ -1,6 +1,6 @@
 {
   "name": "@wurster/session",
-  "version": "0.32.8",
+  "version": "0.33.0",
   "description": "Runtime-neutral, short-lived Wurster authorization session broker.",
   "type": "module",
   "exports": {

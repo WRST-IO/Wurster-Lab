@@ -1,4 +1,5 @@
 import { openWurstRangeSource, PigFsStore } from '@wurster/format';
+import { invokeRootBackedWurstService } from './piglet-object-runtime.mjs';
 
 function bytesSource(initial) {
   let backing = Buffer.from(initial);
@@ -20,7 +21,38 @@ function bytesSource(initial) {
   };
 }
 
-export async function createPigletMachineServices(world, { invokeParent = null } = {}) {
+export async function createPigletMachineServices(world, { invokeParent = null, actor = null } = {}) {
+  if (world.runtimeSource?.rootBacked) {
+    let committed = false;
+    const serviceManifest = {
+      pigfs: world.descriptor?.data?.format === 'wurst/pigfs-policy-1',
+      parent: world.parent ? { piglink: Boolean(world.parent.piglink), pigfs: Boolean(world.parent.pigfs), piglets: Boolean(world.parent.piglets) } : null
+    };
+    const services = async (method, args = []) => {
+      const name = String(method ?? '');
+      if (name.startsWith('pigfs.')) {
+        const outcome = await invokeRootBackedWurstService(world, name, args, { actor });
+        if (outcome && typeof outcome === 'object' && Object.hasOwn(outcome, 'committed')) {
+          committed ||= Boolean(outcome.committed);
+          return outcome.result;
+        }
+        return outcome;
+      }
+      if (name.startsWith('parent.')) {
+        if (typeof invokeParent !== 'function') throw new Error('Parent Wurst services are unavailable');
+        return invokeParent(name.slice('parent.'.length).replace(/^piglets\./, 'piglet.'), args);
+      }
+      throw new Error(`Unsupported machine runtime service: ${name}`);
+    };
+    return {
+      serviceManifest, services,
+      changed: () => false,
+      committed: () => committed,
+      bytes: () => { throw new Error('Root-backed Wurst machine state is not serialized as a whole snapshot'); },
+      initializedInMemory: () => false,
+      close: async () => {}
+    };
+  }
   const original = await world.source.read(0, world.source.size);
   const memory = bytesSource(original);
   const reader = await openWurstRangeSource(memory.source);
@@ -92,6 +124,7 @@ export async function createPigletMachineServices(world, { invokeParent = null }
       serviceManifest,
       services,
       changed: () => dirty,
+      committed: () => false,
       bytes: () => memory.bytes(),
       initializedInMemory: () => initializedInMemory,
       close: async () => { store?.close(); await reader.close(); }

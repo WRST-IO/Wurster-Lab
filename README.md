@@ -1,4 +1,4 @@
-# Wurster Lab 0.32.8
+# Wurster Lab 0.33.0
 
 Wurster Lab is the build, runtime, format, test and documentation workspace for **Wurst**: a portable software format for useful tools, workflows and applications. A Wurst gives software a world of its own without giving it the user's computer.
 
@@ -27,7 +27,7 @@ The hard security boundary is Wurst ↔ Host. Inside a Wurst world, cooperation 
 
 A Wurst may have human Views and machine clients at the same time. Multiple Views of the same PigFS-held Wurst share one durable Wurst world while keeping ephemeral DOM/UI state local to each View. Machine clients address the same durable session rather than creating a second Wurst copy.
 
-The remaining parity gap in 0.32.8 is cross-process attachment: a separately launched CLI/MCP process cannot yet discover and join a Desktop/Web-owned session that is already running in another Wurster process.
+The remaining parity gap in 0.33.0 is cross-process attachment: a separately launched CLI/MCP process cannot yet discover and join a Desktop/Web-owned session that is already running in another Wurster process.
 
 ## Workspace
 
@@ -58,11 +58,11 @@ npm run dist:linux
 npm run runtime:web:build
 ```
 
-Normal 0.32.x packaging does not require Pigsty native runtime bundles. Edge/Wasmer release inputs come from `WRST-IO/wurster-edge-runtime`, not from binaries committed to Wurster Lab.
+Normal Wurster packaging does not require Pigsty native runtime bundles. Edge/Wasmer release inputs come from `WRST-IO/wurster-edge-runtime`, not from binaries committed to Wurster Lab.
 
 ## Release status
 
-0.32.8 is a pre-1.0 integration release intended for real application work such as WurstOS testing:
+0.33.0 is a pre-1.0 integration release intended for real application work such as WurstOS testing:
 
 | Pillar | Status |
 | --- | --- |

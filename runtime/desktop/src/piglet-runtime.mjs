@@ -71,7 +71,7 @@ export function createDesktopPigletRuntime({ ipcMain, assertWurstSender, storage
         label: null,
         source: 'pigfs',
         path: normalizedPath,
-        objectId: source.objectId ?? null,
+        storageObjectId: source.objectId ?? null,
         mutable: true
       });
       descriptor.label = descriptor.application?.name ?? descriptor.path.split('/').at(-1);
@@ -134,6 +134,7 @@ export function createDesktopPigletRuntime({ ipcMain, assertWurstSender, storage
   ipcMain.handle('wurst:piglet:embed-persist', async (event, handle, payload) => embeds.persist(assertWurstSender(event), handle, payload));
   ipcMain.handle('wurst:piglet:embed-refresh', async (event, handle) => embeds.refresh(assertWurstSender(event), handle));
   ipcMain.handle('wurst:piglet:embed-invoke', async (event, handle, method, args = []) => embeds.invoke(assertWurstSender(event), handle, method, args));
+  ipcMain.handle('wurst:piglet:embed-runtime', async (event, handle, method, args = []) => embeds.runtimeInvoke(assertWurstSender(event), handle, method, args));
   ipcMain.handle('wurst:piglet:embed-close', async (event, handle) => embeds.close(assertWurstSender(event), handle));
 
 

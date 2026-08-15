@@ -74,10 +74,18 @@ For a stricter compartment:
 
 ## Persistence and conflicts
 
-Child sources are range-readable. Writable Child PigFS persists back to the Parent-held Wurst with conflict checking. Built-in writable Children materialize a mutable copy in Parent PigFS while the immutable built-in bytes covered by the Parent signature remain unchanged.
+Wurster 0.33 gives every persistent mutable Child a stable **Wurst Object ID**. The Child keeps its own virtual WRST address space, immutable signed Base and mutable PigFS state, while the authoritative Root Wurst physically hosts mutable records in its append arena. Containment is therefore a logical ownership/authority relationship rather than a requirement that the complete Child remain a contiguous blob inside the Parent.
 
-If the underlying Child Wurst changes independently, Wurster fails instead of silently choosing a winner. Session-level stale writes use `WURST_SESSION_CONFLICT`; backing-file conflicts use `WURST_PIGLET_CONFLICT`.
+A Child PigFS write updates the Child object's `stateRevision` and Root Object-index metadata. It does **not** rewrite complete ancestor Wursts and does not propagate state revisions up the containment chain. Immutable Bases are deduplicated by exact `baseBlobHash`, independently from the publisher-protected `packageDigest`.
 
-## Remaining 0.32.8 work
+If another session changed a dependency first, Wurster fails instead of silently choosing a winner. Read-set/write-set conflicts retain `WURST_SESSION_CONFLICT` semantics. Relationship changes have their own revision dimension and are published atomically.
 
-The largest open gap is an external broker that lets a separate CLI/MCP process discover and attach to a Desktop/Web-owned Wurst session already running elsewhere. The generic CLI Child-subtool path also still needs full writable nested-Child PigFS and Parent-service parity. Path-scoped delegation, lifecycle/revoke, recovery and deep nesting remain pre-1.0 work.
+Extraction/materialization produces a standalone Closure containing the selected Wurst, all transitively owned Children, required immutable Bases and current mutable states. Move preserves Object IDs; export/copy creates a new mutable object world with new Object IDs. Publisher-signed immutable Base bytes remain bit-identical. See [Wurst Object Storage](wurst-object-storage.md).
+
+## Desktop and browser presentation
+
+Browser Wurster may use its Service Worker to serve `__wurster/<session>/...` virtual application resources. Electron Desktop does not depend on Service Worker controller takeover. Desktop owns the Child source/session already, so `wurst://runtime/__wurster/<session>/...` is served deterministically by the Desktop runtime protocol layer. Both paths expose the same logical Wurst session to the application.
+
+## Remaining work
+
+The largest open interoperability gap remains an external broker that lets a separate CLI/MCP process discover and attach to a Desktop/Web-owned Wurst session already running elsewhere. More trust/governance policy can be layered onto the 0.33 Object Store without restoring whole-Wurst ancestor writeback.

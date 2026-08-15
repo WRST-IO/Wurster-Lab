@@ -205,8 +205,25 @@ assert.equal(discoveredStored.length, 1);
 assert.equal(discoveredStored[0].ref, 'pigfs:/workspace/apps/Existing.wurst');
 const persisted = await storageAdapter.install(storedContext, pigletBytes, { name: 'Drop.wurst' });
 assert.equal(persisted.ref, 'pigfs:/workspace/piglets/Drop.wurst');
-assert.equal(persisted.objectId, 'drop-object');
+assert.equal(persisted.storageObjectId, 'drop-object');
+assert.equal(persisted.objectId, undefined, 'Parent PigFS object identity must not masquerade as a persistent Wurst Object ID');
 assert.equal(sha256(Buffer.concat(persistedChunks)), childDigest, 'PigFS Piglet install must persist the original package bytes');
+let deletedObjectId = null;
+storedContext.objectStore = {
+  root: { rootObjectId: 'ROOT' },
+  async findChild(parentObjectId, locator) {
+    assert.equal(parentObjectId, 'ROOT');
+    assert.equal(locator, 'pigfs-storage:drop-object');
+    return { objectId: 'WURST-CHILD' };
+  },
+  async deleteSubtree(objectId, options) {
+    assert.equal(objectId, 'WURST-CHILD');
+    assert.equal(options.actorId, null);
+    deletedObjectId = objectId;
+  }
+};
+assert.equal(await storageAdapter.remove(storedContext, persisted.ref), true);
+assert.equal(deletedObjectId, 'WURST-CHILD', 'removing a Parent PigFS Child must detach its persistent Wurst Object subtree');
 
 const pigLinkIpc = new MockIpc();
 let sent = null;

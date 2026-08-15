@@ -22,6 +22,7 @@ addEventListener('message', async (event) => {
     let requestSeq = 1;
     const pendingPersist = new Map();
     const pendingParent = new Map();
+    const pendingRuntime = new Map();
     const onBridgeResult = (message) => {
       const m = message.data;
       if (m?.type === 'wurster-embed-persist-result') {
@@ -29,6 +30,14 @@ addEventListener('message', async (event) => {
         if (!pending) return;
         pendingPersist.delete(m.id);
         m.ok ? pending.resolve(m.result) : pending.reject(new Error(m.error || 'Embedded Wurst persistence failed'));
+        return;
+      }
+      if (m?.type === 'wurster-embed-runtime-result') {
+        const pending = pendingRuntime.get(m.id);
+        if (!pending) return;
+        pendingRuntime.delete(m.id);
+        if (m.ok) pending.resolve(m.result);
+        else { const error = new Error(m.error || 'Desktop Wurst runtime operation failed'); error.code = m.code || null; pending.reject(error); }
         return;
       }
       if (m?.type === 'wurster-embed-parent-result') {
@@ -72,9 +81,17 @@ addEventListener('message', async (event) => {
     };
     port.addEventListener('message', onBridgeResult);
     session = await WursterWeb.open(source, {
+      sessionId: event.data.session?.id || undefined,
+      desktopVirtualRoutes: location.protocol === 'wurst:',
       wurstKey: event.data.wurstKey || null,
       serviceWorkerUrl: new URL('./wurster-sw.js', import.meta.url).toString(),
       serviceWorkerScope: base.pathname,
+      runtimeInvoke: location.protocol === 'wurst:' ? async (method, args = []) => {
+        const id = `runtime-${requestSeq++}`;
+        const result = new Promise((resolve, reject) => pendingRuntime.set(id, { resolve, reject }));
+        port.postMessage({ type: 'wurster-embed-runtime-call', id, method, args });
+        return result;
+      } : null,
       persistSnapshot: event.data.persistent ? async (blob) => {
         const data = await blob.arrayBuffer();
         const id = `persist-${requestSeq++}`;

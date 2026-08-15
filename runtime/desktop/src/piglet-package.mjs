@@ -52,9 +52,19 @@ export async function inspectPigletSource(source, metadata = {}) {
   const reader = await openPigletSource(source);
   try {
     const signature = await verifyPackageSignatureFromReader(reader);
+    const baseHash = crypto.createHash('sha256');
+    for (let offset = 0; offset < reader.baseLength; offset += 4 * 1024 * 1024) {
+      baseHash.update(await source.read(offset, Math.min(4 * 1024 * 1024, reader.baseLength - offset)));
+    }
     return {
       ...metadata,
       bytes: source.size,
+      baseSize: reader.baseLength,
+      baseBlobHash: `sha256:${baseHash.digest('hex')}`,
+      packageDigest: signature?.record?.statement?.packageDigest ?? null,
+      stateRevision: reader.pigFsRoot?.generation ?? 0,
+      stateHash: reader.pigFsRoot?.stateHash ?? null,
+      stateHead: reader.pigFsCommitOffset ?? null,
       sha256: metadata.sha256 ?? null,
       application: {
         id: reader.manifest?.id ?? null,

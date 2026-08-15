@@ -28,7 +28,7 @@ assert.deepEqual(desktop.build.dmg.contents, [
   { x: 410, y: 220, type: 'link', path: '/Applications' }
 ]);
 assert.deepEqual(desktop.build.extraResources, [
-  { from: '../web/dist', to: 'web-runtime', filter: ['wurster-embed.mjs', 'wurster-embed-host.html', 'wurster.js', 'wurster.min.js', 'wurster-sw.js', 'trust-data.mjs'] },
+  { from: '../web/dist', to: 'web-runtime', filter: ['wurster-embed.mjs', 'wurster-embed.js', 'wurster-embed-host.html', 'wurster.js', 'wurster.min.js', 'wurster-sw.js', 'wurster-frame-bootstrap.js', 'trust-data.mjs'] },
   { from: 'runtimes', to: 'runtimes', filter: ['wurster-edge-runtime-*/**/*'] }
 ]);
 assert.equal(pkg.scripts['dist:linux'], 'npm run dist:linux --workspace @wurster/desktop');
@@ -68,6 +68,8 @@ assert.match(release, /runs-on: macos-15-intel/);
 assert.match(release, /runs-on: windows-latest/);
 assert.match(release, /\n\s*web:\s*\n/);
 assert.match(release, /npm run runtime:web:build/);
+assert.match(release, /npm run test:electron:piglet/);
+assert.match(release, /wurster-frame-bootstrap\.js/);
 assert.match(release, /Wurster-Web-\$\{version\}\.zip/);
 assert.match(release, /runtime-web/);
 assert.doesNotMatch(release, /pigsty-linux-amd64:/);

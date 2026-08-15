@@ -36,12 +36,25 @@ const headlessFileRuntime = await text('packages/headless/src/file-runtime.js');
 const pigletContract = await text('packages/piglet/src/index.js');
 const pigletSessionContract = await text('packages/piglet/src/session.js');
 
+const pigletObjectRuntime = await text('runtime/desktop/src/piglet-object-runtime.mjs');
+const pigletObjectPolicy = await text('runtime/desktop/src/piglet-object-pigfs-policy.mjs');
+const pigletObjectStorage = await text('runtime/desktop/src/piglet-object-storage-runtime.mjs');
+const pigletDescendantRuntime = await text('runtime/desktop/src/piglet-descendant-runtime.mjs');
+const pigletWorldRuntime = await text('runtime/desktop/src/piglet-world-runtime.mjs');
+const pigletServiceRouter = await text('runtime/desktop/src/piglet-runtime-service-router.mjs');
+const pigletRouteRuntime = await text('runtime/desktop/src/piglet-route-runtime.mjs');
+const wursterRuntimeProtocol = await text('runtime/desktop/src/wurster-runtime-protocol.mjs');
+const objectHostRuntime = await text('runtime/desktop/src/wurst-object-host-runtime.mjs');
+const objectStore = await text('packages/format/src/wurst-object-store.js');
+
+
 // These are budgets, not style targets. They stop known large modules from
 // silently growing while follow-up refactors continue to split responsibilities.
 assert.ok(lines(main) <= 3500, `desktop main.mjs exceeded temporary 3500-line budget (${lines(main)})`);
 assert.ok(lines(web) <= 950, `web runtime exceeded temporary 950-line budget (${lines(web)})`);
 assert.ok(lines(format) <= 2100, `format index exceeded temporary 2100-line budget (${lines(format)})`);
 assert.ok(lines(pigsty) <= 1000, `Pigsty core exceeded temporary 1000-line budget (${lines(pigsty)})`);
+assert.ok(lines(objectStore) <= 1100, `Wurst Object Store exceeded temporary 1100-line budget (${lines(objectStore)})`);
 
 for (const [name, source] of [
   ['piglet-runtime', pigletRuntime],
@@ -62,7 +75,16 @@ for (const [name, source] of [
   ['web-piglet-machine-runtime', webPigletMachineRuntime],
   ['headless-file-runtime', headlessFileRuntime],
   ['piglet-contract', pigletContract],
-  ['piglet-session-contract', pigletSessionContract]
+  ['piglet-session-contract', pigletSessionContract],
+  ['piglet-object-runtime', pigletObjectRuntime],
+  ['piglet-object-pigfs-policy', pigletObjectPolicy],
+  ['piglet-object-storage-runtime', pigletObjectStorage],
+  ['piglet-descendant-runtime', pigletDescendantRuntime],
+  ['piglet-world-runtime', pigletWorldRuntime],
+  ['piglet-runtime-service-router', pigletServiceRouter],
+  ['piglet-route-runtime', pigletRouteRuntime],
+  ['wurster-runtime-protocol', wursterRuntimeProtocol],
+  ['wurst-object-host-runtime', objectHostRuntime]
 ]) {
   assert.ok(lines(source) <= 250, `${name} should stay a focused runtime module (${lines(source)} lines)`);
 }

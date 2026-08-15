@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.33.0 - Object-Based Piglet Storage and Deterministic Desktop Routes
+
+- Replaced Desktop Piglet virtual-app dependence on Service Worker takeover with deterministic `wurst://runtime/__wurster/<session>/...` routing owned by the Electron runtime. Browser Wurster continues to use its scoped Service Worker; Desktop serves the same logical WursterWeb resources directly from the active Piglet session/source layer.
+- Added a real Electron Piglet route smoke gate to desktop release jobs. It loads the packaged-style `wurst://runtime/wurster-embed-host.html`, opens a Child through the actual source bridge and verifies that the Child `index.html` and dependent assets are served without requiring a Service Worker controller.
+- Introduced the Root Wurst Object Store: stable Wurst Object IDs, exact immutable `baseBlobHash` identity, mutable object state heads, separate state/relationship revisions, append-only arena records, authenticated Root Commit chains and paginated copy-on-write Object/Relationship/Base indexes.
+- Changed mutable embedded Piglets from whole-Wurst Parent writeback to virtual object-backed WRST range sources. A normal Child PigFS write appends only the Child delta plus index/Root-Commit metadata and does not rewrite or increment state revisions of its ancestors.
+- Added transaction read/write sets with dimension-specific conflict checks, serializable grouped Root publication, cycle-safe atomic reparenting, reachability-based liveness and explicit Package Transition authorization for immutable base upgrades.
+- Added subtree materialization and Root-object compaction paths that preserve Object IDs for move/compaction, remap IDs for export/copy, copy immutable bases bit-identically and keep existing publisher signatures verifiable without Publisher private keys.
+- Made the Root Commit the physical durability boundary once object storage is active. Prepared PigFS/object records may exist as uncommitted tail garbage; recovery selects the last authenticated Root Commit and ignores incomplete or unpublished tail data.
+- Hardened Root recovery to walk backward past a fully framed but semantically invalid newest Root Commit, so the last completely valid committed generation remains authoritative even when the physical tail contains convincing-looking garbage.
+- Kept WurstKey-protected Child applications compatible with deterministic Desktop routing: the embed host validates the key, the Desktop route retains only the derived application data key for the live Child world, encrypted resources are decrypted by Wurster, and route keys are zeroed on teardown.
+- Made persistent identity boundaries explicit in the runtime. Parent PigFS file identity is exposed only as `storageObjectId`; a stable PigFS storage ID is used as the containment locator while the Wurst Object ID remains the persistent mutable-instance identity. Removing a PigFS-held Child detaches its Wurst Object subtree so reachability and later compaction determine liveness/reclamation.
+- Added deep-write, stale-read, same-object conflict, group-commit, crash/tail-garbage, relationship, governance, package-transition, compaction, extraction/signature and real Root-backed Child PigFS regressions.
+- Bumped the Wurster runtime/workspace release metadata to 0.33.0 while leaving protected Authority and separately versioned site state untouched.
+
 ## 0.32.8 - Settings Surface and Desktop Piglet Virtual Route Repair
 
 - Split Wurster Settings into General, Identities and About categories. General settings such as automatic updates are available without unlocking the Meat Locker, while identities, Meatphrases, publisher signing keys and Authenticator configuration remain behind local user verification.

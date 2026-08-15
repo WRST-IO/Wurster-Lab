@@ -13,7 +13,16 @@ export const PIG_FS_RECORD = Object.freeze({
   DATA: 1,
   MAP: 2,
   CATALOG: 3,
-  COMMIT: 4
+  COMMIT: 4,
+  // WRST v7 system arena records. These share the crash-safe W7RC framing
+  // with PigFS so both layers may coexist in one append-only physical tail.
+  // They are not PigFS objects and are never exposed through app PigFS APIs.
+  OBJECT_DATA: 16,
+  OBJECT_PAGE: 17,
+  RELATION_PAGE: 18,
+  BASE_PAGE: 19,
+  EXTENT_PAGE: 20,
+  ROOT_COMMIT: 21
 });
 
 function sha256(buffer) {
@@ -53,7 +62,7 @@ export function makeFsRecord(type, payload, { recordStart, previousCommitOffset 
   return Buffer.concat([header, body, trailer]);
 }
 
-function parseTrailer(buffer, trailerAbsoluteOffset, baseOffset, sourceSize) {
+export function parseFsRecordTrailer(buffer, trailerAbsoluteOffset, baseOffset, sourceSize) {
   if (buffer.length !== PIG_FS_RECORD_TRAILER_SIZE || !buffer.subarray(0, 4).equals(PIG_FS_RECORD_END_MAGIC)) return null;
   if (buffer.readUInt16LE(4) !== 1) return null;
   const type = buffer.readUInt16LE(6);
@@ -94,7 +103,7 @@ export async function readFsRecord(source, recordStart) {
   const payload = await source.read(start + PIG_FS_RECORD_HEADER_SIZE, payloadLength);
   const trailerOffset = start + PIG_FS_RECORD_HEADER_SIZE + payloadLength;
   const trailerBytes = await source.read(trailerOffset, PIG_FS_RECORD_TRAILER_SIZE);
-  const trailer = parseTrailer(trailerBytes, trailerOffset, 0, source.size);
+  const trailer = parseFsRecordTrailer(trailerBytes, trailerOffset, 0, source.size);
   if (!trailer || trailer.recordStart !== start || trailer.type !== type || trailer.previousCommitOffset !== previousCommitOffset || trailer.payloadLength !== payloadLength) {
     throw new Error('PigFS record trailer mismatch');
   }
@@ -102,28 +111,52 @@ export async function readFsRecord(source, recordStart) {
   return { type, payload, payloadLength, previousCommitOffset, sequence, recordStart: start, recordEnd: trailer.recordEnd };
 }
 
-export async function locateLatestFsCommit(source, baseOffset) {
-  const base = assertSafeOffset(baseOffset, 'PigFS base offset');
+export async function locateLatestRecord(source, baseOffset, { types = null } = {}) {
+  const base = assertSafeOffset(baseOffset, 'record base offset');
+  if (!source || typeof source.read !== 'function' || !Number.isSafeInteger(source.size)) throw new Error('Record locator requires a random-access source');
   if (source.size <= base) return null;
+  const wanted = types == null ? null : new Set(Array.isArray(types) ? types : [types]);
 
-  const trailerOffset = source.size - PIG_FS_RECORD_TRAILER_SIZE;
-  if (trailerOffset >= base) {
-    const tail = await source.read(trailerOffset, PIG_FS_RECORD_TRAILER_SIZE);
-    const parsed = parseTrailer(tail, trailerOffset, base, source.size);
-    if (parsed) return parsed.type === PIG_FS_RECORD.COMMIT ? parsed.recordStart : (parsed.previousCommitOffset || null);
+  // First recover the last fully written record even when EOF contains arbitrary
+  // uncommitted bytes. After that, records are physically contiguous and their
+  // trailers let us walk backwards without trusting any uncommitted root.
+  async function findTrailerBefore(endExclusive) {
+    let end = Math.min(Number(endExclusive), source.size);
+    const scanWindow = 1024 * 1024;
+    while (end - base >= PIG_FS_RECORD_TRAILER_SIZE) {
+      const start = Math.max(base, end - scanWindow);
+      const bytes = await source.read(start, end - start);
+      for (let index = bytes.length - PIG_FS_RECORD_TRAILER_SIZE; index >= 0; index -= 1) {
+        if (!bytes.subarray(index, index + 4).equals(PIG_FS_RECORD_END_MAGIC)) continue;
+        const absolute = start + index;
+        const parsed = parseFsRecordTrailer(bytes.subarray(index, index + PIG_FS_RECORD_TRAILER_SIZE), absolute, base, source.size);
+        if (parsed && parsed.recordEnd <= endExclusive) return parsed;
+      }
+      if (start === base) break;
+      end = start + PIG_FS_RECORD_TRAILER_SIZE - 1;
+    }
+    return null;
   }
 
-  const scanLength = Math.min(source.size - base, PIG_FS_MAX_RECORD_PAYLOAD + PIG_FS_RECORD_HEADER_SIZE + PIG_FS_RECORD_TRAILER_SIZE + 4096);
-  const scanStart = source.size - scanLength;
-  const bytes = await source.read(scanStart, scanLength);
-  for (let index = bytes.length - PIG_FS_RECORD_TRAILER_SIZE; index >= 0; index -= 1) {
-    if (!bytes.subarray(index, index + 4).equals(PIG_FS_RECORD_END_MAGIC)) continue;
-    const absolute = scanStart + index;
-    const parsed = parseTrailer(bytes.subarray(index, index + PIG_FS_RECORD_TRAILER_SIZE), absolute, base, source.size);
-    if (!parsed) continue;
-    return parsed.type === PIG_FS_RECORD.COMMIT ? parsed.recordStart : (parsed.previousCommitOffset || null);
+  let current = await findTrailerBefore(source.size);
+  while (current) {
+    if (!wanted || wanted.has(current.type)) return current;
+    if (current.recordStart <= base) break;
+    const trailerOffset = current.recordStart - PIG_FS_RECORD_TRAILER_SIZE;
+    let previous = null;
+    if (trailerOffset >= base) {
+      const trailer = await source.read(trailerOffset, PIG_FS_RECORD_TRAILER_SIZE);
+      previous = parseFsRecordTrailer(trailer, trailerOffset, base, source.size);
+      if (previous && previous.recordEnd !== current.recordStart) previous = null;
+    }
+    current = previous || await findTrailerBefore(current.recordStart);
   }
   return null;
+}
+
+export async function locateLatestFsCommit(source, baseOffset) {
+  const record = await locateLatestRecord(source, baseOffset, { types: PIG_FS_RECORD.COMMIT });
+  return record?.recordStart ?? null;
 }
 
 export function decodeLatestFsRootFromBuffer(buffer, baseOffset, expectedFormat) {
@@ -134,14 +167,13 @@ export function decodeLatestFsRootFromBuffer(buffer, baseOffset, expectedFormat)
   let trailer = null;
   for (let offset = bytes.length - PIG_FS_RECORD_TRAILER_SIZE; offset >= base; offset -= 1) {
     if (!bytes.subarray(offset, offset + 4).equals(PIG_FS_RECORD_END_MAGIC)) continue;
-    const parsed = parseTrailer(bytes.subarray(offset, offset + PIG_FS_RECORD_TRAILER_SIZE), offset, base, bytes.length);
-    if (!parsed) continue;
+    const parsed = parseFsRecordTrailer(bytes.subarray(offset, offset + PIG_FS_RECORD_TRAILER_SIZE), offset, base, bytes.length);
+    if (!parsed || parsed.type !== PIG_FS_RECORD.COMMIT) continue;
     trailer = parsed;
     break;
   }
   if (!trailer) return { root: null, commitOffset: null };
-  const commitOffset = trailer.type === PIG_FS_RECORD.COMMIT ? trailer.recordStart : (trailer.previousCommitOffset || null);
-  if (commitOffset == null) return { root: null, commitOffset: null };
+  const commitOffset = trailer.recordStart;
   const head = bytes.subarray(commitOffset, commitOffset + PIG_FS_RECORD_HEADER_SIZE);
   if (!head.subarray(0, 4).equals(PIG_FS_RECORD_MAGIC) || head.readUInt16LE(6) !== PIG_FS_RECORD.COMMIT) throw new Error('Invalid PigFS commit record');
   const payloadLengthBig = head.readBigUInt64LE(8);
@@ -152,6 +184,18 @@ export function decodeLatestFsRootFromBuffer(buffer, baseOffset, expectedFormat)
   try { root = JSON.parse(payload.toString('utf8')); } catch { throw new Error('Invalid PigFS commit JSON'); }
   if (root?.format !== expectedFormat) throw new Error(`Unsupported PigFS root format: ${root?.format ?? 'missing'}`);
   return { root, commitOffset };
+}
+
+
+export async function loadFsRootAt(source, commitOffset, expectedFormat) {
+  if (commitOffset == null) return { root: null, commitOffset: null };
+  const offset = assertSafeOffset(commitOffset, 'PigFS commit offset');
+  const record = await readFsRecord(source, offset);
+  if (record.type !== PIG_FS_RECORD.COMMIT) throw new Error('Authoritative PigFS state head does not point to a COMMIT record');
+  let root;
+  try { root = JSON.parse(record.payload.toString('utf8')); } catch { throw new Error('Invalid PigFS commit JSON'); }
+  if (root?.format !== expectedFormat) throw new Error(`Unsupported PigFS root format: ${root?.format ?? 'missing'}`);
+  return { root, commitOffset: offset };
 }
 
 export async function loadLatestFsRoot(source, baseOffset, expectedFormat) {

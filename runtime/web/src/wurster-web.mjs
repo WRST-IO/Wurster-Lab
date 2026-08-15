@@ -21,7 +21,7 @@ const FS_END_MAGIC = new Uint8Array([0x57, 0x37, 0x52, 0x45]);
 const FS_RECORD = Object.freeze({ DATA: 1, MAP: 2, CATALOG: 3, COMMIT: 4 });
 const SIGNATURE_PATH = '__wurst/signature.json';
 const SEALED_APP_INDEX_PATH = '__wurst/sealed-app/index.json';
-const WURSTER_WEB_VERSION = '0.32.8';
+const WURSTER_WEB_VERSION = '0.33.0';
 const te = new TextEncoder();
 const td = new TextDecoder();
 function bytes(value) {
@@ -436,43 +436,17 @@ async function* encodeFsSnapshotStream(realms,entries,readFileChunk,baseOffset,g
 }
 async function encodeFsSnapshot(realms,entries,readFileChunk,baseOffset,generation=1){const records=[];for await(const record of encodeFsSnapshotStream(realms,entries,readFileChunk,baseOffset,generation))records.push(record);return records;}
 
+function escapeHtmlText(value) { return String(value).replaceAll('&', '&amp;').replaceAll('<', '\u003c').replaceAll('>', '\u003e'); }
 function injectBootstrap(html,session){
   const network=Array.isArray(session.reader.manifest?.capabilities?.network)?session.reader.manifest.capabilities.network:[];
   const hostOrigin=location.origin;
   const csp=`default-src ${hostOrigin} data: blob:; script-src ${hostOrigin} 'unsafe-inline' blob:; style-src ${hostOrigin} 'unsafe-inline' blob:; img-src ${hostOrigin} data: blob: ${network.join(' ')}; media-src ${hostOrigin} data: blob: ${network.join(' ')}; font-src ${hostOrigin} data: blob:; connect-src ${hostOrigin} ${network.join(' ')}; object-src 'none'; frame-src ${hostOrigin}; base-uri 'none';`;
   const config={sessionId:session.id,root:session._virtualBase(),origin:location.origin,wurstId:session.reader.manifest?.id||null,piglinkEntry:session.reader.manifest?.piglink?.entry||null,piglink:session.reader.manifest?.piglink||null,parent:session.options.parent||null,embedModuleUrl:new URL('./wurster-embed.js',import.meta.url).toString()};
-  const script=`<meta http-equiv="Content-Security-Policy" content="${csp.replaceAll('"','&quot;')}"><script>(${frameBootstrap.toString()})(${JSON.stringify(config)})<\/script>`;
+  const bootstrapUrl=new URL('./wurster-frame-bootstrap.js',import.meta.url).toString();
+  const script=`<meta http-equiv="Content-Security-Policy" content="${csp.replaceAll('"','&quot;')}"><script type="application/json" id="__wurster-frame-config">${escapeHtmlText(JSON.stringify(config))}<\/script><script src="${bootstrapUrl}"><\/script>`;
   return /<head[\s>]/i.test(html)?html.replace(/<head([^>]*)>/i,`<head$1>${script}`):`${script}${html}`;
 }
-function frameBootstrap(config){
-  const pending=new Map();let seq=1;const handlers=new Map();const parentPigLinkListeners=new Map();const embedRelationships=new Map();const embedSessions=new Map();const embedParentPigLinkSubscriptions=new Map();const embedSessionSubscriptions=new Map();const machineClients=new Map();let nextEmbedSubscriptionId=1;let piglinkReadyResolve;const piglinkReady=new Promise(r=>piglinkReadyResolve=r);
-  function call(method,...args){const id=`${config.sessionId}:${seq++}`;return new Promise((resolve,reject)=>{pending.set(id,{resolve,reject});parent.postMessage({__wurster:1,sessionId:config.sessionId,id,method,args},'*');});}
-  addEventListener('message',async(event)=>{const m=event.data;if(m?.__wursterReply&&m.sessionId===config.sessionId){const p=pending.get(m.id);if(!p)return;pending.delete(m.id);m.ok?p.resolve(m.result):p.reject(new Error(m.error||'Wurster Web operation failed'));return;}if(m?.__wursterSessionChanged&&m.sessionId===config.sessionId){try{dispatchEvent(new CustomEvent('wurst-session-changed',{detail:{session:structuredClone(m.session??null)}}));}catch{}return;}if(m?.__wursterPigletSessionChanged&&m.sessionId===config.sessionId){const sid=String(m.session?.id||'');if(sid){for(const sub of embedSessionSubscriptions.values()){if(embedSessions.get(sub.handle)?.id!==sid)continue;embedSessions.set(sub.handle,structuredClone(m.session));try{sub.callback({writer:String(m.writer||''),session:structuredClone(m.session),size:Number(m.size||0)});}catch{}}}return;}if(m?.__wursterPigletMachineEvent&&m.sessionId===config.sessionId){const sid=String(m.childSessionId||'');const name=String(m.name||''),payload=structuredClone(m.payload??null);for(const client of machineClients.values()){if(client.sessionId!==sid)continue;for(const key of [name,'*'])for(const listener of client.listeners.get(key)||[]){try{listener(payload,name);}catch{}}}return;}if(m?.__wursterParentPigLinkEvent&&m.sessionId===config.sessionId){const name=String(m.name||''),payload=structuredClone(m.payload??null);for(const key of [name,'*'])for(const listener of parentPigLinkListeners.get(key)||[]){try{listener(payload,name);}catch{}}return;}if(m?.__wursterPigLinkEventAccepted&&m.sessionId===config.sessionId){const name=String(m.name||''),payload=structuredClone(m.payload??null);for(const sub of embedParentPigLinkSubscriptions.values()){if(!embedRelationships.get(sub.handle)?.piglink)continue;try{sub.callback(name,payload);}catch{}}return;}if(m?.__wursterPigLinkInvoke&&m.sessionId===config.sessionId){const id=String(m.id||'');try{await piglinkReady;const name=String(m.name||''),fn=handlers.get(name);if(!fn)throw new Error(`Wurst action is declared but not registered: ${name}`);const result=await fn(structuredClone(m.input??{}));parent.postMessage({__wursterPigLinkResult:1,sessionId:config.sessionId,id,ok:true,result:structuredClone(result==null?null:result)},'*');}catch(error){parent.postMessage({__wursterPigLinkResult:1,sessionId:config.sessionId,id,ok:false,error:error?.message||String(error)},'*');}}});
-  window.PigLink=Object.freeze({define(def={}){for(const [name,fn] of Object.entries(def.actions||{})){if(typeof fn!=='function')throw new Error(`PigLink action must be a function: ${name}`);handlers.set(name,fn);}return true;}});
-  const dataUrl=(path)=>{const v=String(path??'').replaceAll('\\','/').replace(/^\/+/, '').replace(/^data\//,'');if(!v||v.split('/').some(p=>!p||p==='.'||p==='..'))throw new TypeError('Invalid PigFS media path');return `${config.root}/pigfs/${v.split('/').map(encodeURIComponent).join('/')}`;};
-  const parentPigFs=config.parent?.pigfs?Object.freeze({capabilities:()=>call('parent.pigfs.capabilities'),realms:()=>call('parent.pigfs.realms'),usage:()=>call('parent.pigfs.usage'),stat:(p)=>call('parent.pigfs.stat',p),list:(p='/')=>call('parent.pigfs.list',p),read:async(p,o={})=>{const result=await call('parent.pigfs.read',p,{offset:Number(o.offset||0),length:o.length==null?null:Number(o.length)});return result?.data??result;},write:(p,d,o={})=>call('parent.pigfs.write',p,d,o),beginWrite:(p,o={})=>call('parent.pigfs.beginWrite',p,o),writeChunk:(id,d)=>call('parent.pigfs.writeChunk',id,d),commitWrite:(id)=>call('parent.pigfs.commitWrite',id),abortWrite:(id)=>call('parent.pigfs.abortWrite',id),remove:(p,o={})=>call('parent.pigfs.remove',p,o),mkdir:(p,o={})=>call('parent.pigfs.mkdir',p,o),rename:(a,b)=>call('parent.pigfs.rename',a,b)}):null;
-  const parentPigLink=config.parent?.piglink?Object.freeze({describe:()=>call('parent.piglink.describe'),invoke:(name,input={})=>call('parent.piglink.invoke',String(name||''),input),on:(name,listener)=>{const eventName=String(name??'*');if(typeof listener!=='function')throw new TypeError('Parent PigLink event listener must be a function');const set=parentPigLinkListeners.get(eventName)||new Set();set.add(listener);parentPigLinkListeners.set(eventName,set);return()=>{set.delete(listener);if(!set.size)parentPigLinkListeners.delete(eventName);};}}):null;
-  const parentPiglets=config.parent?.piglets?Object.freeze({children:()=>call('parent.piglet.children'),inspect:(ref)=>call('parent.piglet.inspect',String(ref||'')),install:(name,data,options={})=>call('parent.piglet.install',String(name||'Piglet.wurst'),data,options),remove:(ref)=>call('parent.piglet.remove',String(ref||''))}):null;
-  const parentRuntime=config.parent?Object.freeze({
-    info:()=>Promise.resolve(structuredClone(config.parent.application||null)),
-    relationship:()=>Promise.resolve(structuredClone({format:config.parent.format,isolated:Boolean(config.parent.isolated),piglink:config.parent.piglink||null,pigfs:config.parent.pigfs||null,piglets:config.parent.piglets||null})),
-    pigfs:parentPigFs,piglink:parentPigLink,piglets:parentPiglets
-  }):null;
-  window.wurst=Object.freeze({
-    info:()=>call('info'),capabilities:Object.freeze({query:(n)=>call('capabilities.query',String(n||'')),list:()=>call('capabilities.list')}),
-    parent:parentRuntime,
-    auth:Object.freeze({status:(purpose='identity')=>call('auth.status',String(purpose||'identity')),onResult:()=>true}),identity:Object.freeze({session:()=>Promise.resolve(null)}),window:Object.freeze({close:()=>call('window.close'),minimize:()=>call('window.minimize')}),snapshot:Object.freeze({export:()=>call('snapshot.export')}),
-    piglink:Object.freeze({ready:()=>piglinkReady.then(()=>Boolean(config.piglinkEntry)),describe:()=>call('piglink.describe'),invoke:async(name,input={})=>{await piglinkReady;const fn=handlers.get(String(name));if(!fn)throw new Error(`Wurst action is not registered: ${name}`);return fn(structuredClone(input));},emit:(name,payload=null)=>{parent.postMessage({__wursterEvent:1,sessionId:config.sessionId,name,payload},'*');return true;}}),
-    piglet:Object.freeze({children:()=>call('piglet.children'),running:()=>call('piglet.running'),connect:async(ref,options={})=>{const opened=await call('piglet.machineConnect',String(ref||''),options);const handle=String(opened?.handle||'');if(!handle)throw new Error('Wurster did not return a machine attachment');let closed=false;const client={sessionId:String(opened?.session?.id||''),listeners:new Map()};machineClients.set(handle,client);return Object.freeze({descriptor:structuredClone(opened.descriptor||null),session:structuredClone(opened.session||null),piglink:Object.freeze({describe:()=>call('piglet.machineDescribe',handle),invoke:async(name,input={},invokeOptions={})=>{if(closed)throw new Error('Wurst machine connection is closed');const result=await call('piglet.machineInvoke',handle,String(name||''),input,invokeOptions);return result?.result??null;},on:(name,listener)=>{if(typeof listener!=='function')throw new TypeError('PigLink event listener must be a function');const eventName=String(name??'*'),set=client.listeners.get(eventName)||new Set();set.add(listener);client.listeners.set(eventName,set);return()=>{set.delete(listener);if(!set.size)client.listeners.delete(eventName);};}}),close:async()=>{if(closed)return false;closed=true;machineClients.delete(handle);return call('piglet.machineClose',handle);}});},invoke:async(ref,name,input={},options={})=>{const opened=await call('piglet.machineConnect',String(ref||''),options),handle=String(opened?.handle||'');if(!handle)throw new Error('Wurster did not return a machine attachment');try{const result=await call('piglet.machineInvoke',handle,String(name||''),input,options);return result?.result??null;}finally{await call('piglet.machineClose',handle).catch(()=>{});}},inspect:(ref)=>call('piglet.inspect',String(ref||'')),install:(name,data,options={})=>call('piglet.install',String(name||'Piglet.wurst'),data,options),remove:(ref)=>call('piglet.remove',String(ref||''))}),
-    pigsty:Object.freeze({status:()=>call('pigsty.status'),run:(request={})=>call('pigsty.run',request),build:(name='default',request={})=>call('pigsty.build',String(name||'default'),request)}),
-    pigfs:Object.freeze({capabilities:()=>call('pigfs.capabilities'),realms:()=>call('pigfs.realms'),usage:()=>call('pigfs.usage'),compact:()=>call('pigfs.compact'),url:dataUrl,stat:(p)=>call('pigfs.stat',p),list:(p='/')=>call('pigfs.list',p),read:(p,o={})=>call('pigfs.read',p,{offset:Number(o.offset||0),length:o.length==null?null:Number(o.length)}),write:(p,d,o={})=>call('pigfs.write',p,d,o),beginWrite:(p,o={})=>call('pigfs.beginWrite',p,o),writeChunk:(id,d)=>call('pigfs.writeChunk',id,d),commitWrite:(id)=>call('pigfs.commitWrite',id),abortWrite:(id)=>call('pigfs.abortWrite',id),remove:(p,o={})=>call('pigfs.remove',p,o),mkdir:(p,o={})=>call('pigfs.mkdir',p,o),rename:(a,b)=>call('pigfs.rename',a,b)})
-  });
-  function normalizeEmbedSource(raw){const value=String(raw??'').trim();if(!value)throw new TypeError('<wurst-embed> requires a src');if(value.startsWith('builtin:')||value.startsWith('pigfs:'))return value;if(value.startsWith('/'))return `pigfs:${value}`;return new URL(value,document.baseURI).href;}
-  window.wurstEmbedRuntime=Object.freeze({open:async(src,options={})=>{const normalized=normalizeEmbedSource(src);if(/^https?:/i.test(normalized)&&!normalized.startsWith(config.root))return null;const opened=await call('piglet.embedOpen',normalized,options);if(opened?.handle){const key=String(opened.handle);embedRelationships.set(key,structuredClone(opened.parent??null));embedSessions.set(key,structuredClone(opened.session??null));}return opened;},read:(handle,offset,length)=>call('piglet.embedRead',String(handle||''),Number(offset),Number(length)),persist:async(handle,data)=>{const key=String(handle||'');const result=await call('piglet.embedPersist',key,data);if(result?.session)embedSessions.set(key,structuredClone(result.session));return result;},refresh:async(handle)=>{const key=String(handle||'');const result=await call('piglet.embedRefresh',key);if(result?.session)embedSessions.set(key,structuredClone(result.session));return result;},invoke:(handle,method,args=[])=>call('piglet.embedInvoke',String(handle||''),String(method||''),Array.isArray(args)?args:[]),subscribeParentPigLink:(handle,callback)=>{const key=String(handle||'');if(typeof callback!=='function')throw new TypeError('Parent PigLink event subscriber must be a function');if(!embedRelationships.get(key)?.piglink)throw new Error('Parent PigLink is unavailable to this Piglet');const id=`epl-${nextEmbedSubscriptionId++}`;embedParentPigLinkSubscriptions.set(id,{handle:key,callback});return id;},unsubscribeParentPigLink:(id)=>embedParentPigLinkSubscriptions.delete(String(id||'')),subscribeSession:(handle,callback)=>{const key=String(handle||'');if(typeof callback!=='function')throw new TypeError('Wurst session subscriber must be a function');if(!embedSessions.get(key)?.id)throw new Error('Wurst session is unavailable');const id=`ews-${nextEmbedSubscriptionId++}`;embedSessionSubscriptions.set(id,{handle:key,callback});return id;},unsubscribeSession:(id)=>embedSessionSubscriptions.delete(String(id||'')),close:async(handle)=>{const key=String(handle||'');for(const[id,sub]of embedParentPigLinkSubscriptions)if(sub.handle===key)embedParentPigLinkSubscriptions.delete(id);for(const[id,sub]of embedSessionSubscriptions)if(sub.handle===key)embedSessionSubscriptions.delete(id);embedRelationships.delete(key);embedSessions.delete(key);return call('piglet.embedClose',key);}});
-  class WursterAuth extends HTMLElement{connectedCallback(){if(this.shadowRoot)return;const root=this.attachShadow({mode:'closed'}),wrap=document.createElement('div');wrap.style.cssText='font:600 13px system-ui;display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid rgba(80,50,60,.22);border-radius:14px;background:#fff8f6;color:#523f46;box-sizing:border-box;min-height:48px';const b=document.createElement('button');b.type='button';const type=String(this.getAttribute('type')||'identity').toLowerCase(),purpose=this.getAttribute('purpose')||(type==='wurstkey'?'application':'identity');b.textContent=type==='wurstkey'?'🔑 Unlock with Wurster Web':'🐷 Open Wurster Runtime';b.style.cssText='font:inherit;border:0;border-radius:999px;padding:8px 12px;background:#5d4650;color:white;cursor:pointer';b.addEventListener('click',async()=>{if(type==='wurstkey'){try{await call('auth.present',{type,purpose,target:this.getAttribute('target')||null,session:this.getAttribute('session')||'60m'});this.dispatchEvent(new CustomEvent('wurster-auth-success',{bubbles:true,composed:true,detail:{purpose:'application',runtime:'web'}}));}catch(error){this.dispatchEvent(new CustomEvent('wurster-auth-error',{bubbles:true,composed:true,detail:{error:error.message}}));}return;}const request=(crypto.randomUUID?.()||Math.random().toString(36).slice(2)),duration=this.getAttribute('session')||'60m';const params=new URLSearchParams({origin:config.origin,purpose,request,duration});if(config.wurstId)params.set('wurst',config.wurstId);const a=document.createElement('a');a.href=`wurster://auth?${params}`;a.target='_top';a.click();});wrap.append(b);const note=document.createElement('span');note.textContent=type==='wurstkey'?'Wurster opens the key prompt outside the Wurst DOM':'Authenticate with the trusted local runtime';wrap.append(note);root.append(wrap);}}
-  customElements.define('wurster-auth',WursterAuth);
-  addEventListener('DOMContentLoaded',async()=>{try{if(config.embedModuleUrl&&!customElements.get('wurst-embed')){const e=document.createElement('script');e.type='module';e.src=config.embedModuleUrl;document.head.append(e);}if(config.piglinkEntry){const s=document.createElement('script');s.src=`${config.root}/piglink/entry.js`;s.onload=()=>piglinkReadyResolve();s.onerror=()=>piglinkReadyResolve();document.head.append(s);}else piglinkReadyResolve();}catch{piglinkReadyResolve();}},{once:true});
-}
+
 
 export class WursterWebSession {
   static async open(input, options = {}) {
@@ -519,6 +493,15 @@ export class WursterWebSession {
           const entry = this.reader.entry(probe.path);
           await this._readProtected(entry, 0, Math.min(1, entry.encryption?.plainLength ?? 1));
         }
+      }
+    } catch (error) {
+      this.applicationKey = previous || null;
+      this._sealedMap = null;
+      throw error;
+    }
+    try {
+      if (this.options.desktopVirtualRoutes === true && typeof this.options.runtimeInvoke === 'function') {
+        await this.options.runtimeInvoke('application.unlock', [String(wurstKey ?? '')]);
       }
     } catch (error) {
       this.applicationKey = previous || null;
@@ -610,7 +593,8 @@ export class WursterWebSession {
     return { ok: true, session: this.externalSession, size: source.size };
   }
   async mount(container) {
-    if (typeof document === 'undefined' || !navigator.serviceWorker) throw new Error('Wurster Web mount requires a browser with Service Worker support');
+    if (typeof document === 'undefined') throw new Error('Wurster Web mount requires a browser document');
+    if (this.options.desktopVirtualRoutes !== true && !navigator.serviceWorker) throw new Error('Wurster Web mount requires Service Worker support outside Desktop');
     const target = typeof container === 'string' ? document.querySelector(container) : container;
     if (!target) throw new Error('Wurster Web mount container not found');
     this._mountTarget = target;
@@ -624,12 +608,16 @@ export class WursterWebSession {
     return this;
   }
   async _mountFrame(target = this._mountTarget) {
-    const swUrl = this.options.serviceWorkerUrl || '/wurster-sw.js', swScope = this.options.serviceWorkerScope || '/';
-    await navigator.serviceWorker.register(swUrl, { scope: swScope });
-    await navigator.serviceWorker.ready;
-    const controller = await waitForServiceWorkerControl(navigator.serviceWorker, { timeoutMs: this.options.serviceWorkerControlTimeoutMs || 5000 });
-    addEventListener('message', this._boundMessage); navigator.serviceWorker.addEventListener('message', this._boundSw);
-    await registerServiceWorkerSession(controller, this.id, { timeoutMs: this.options.serviceWorkerRegistrationTimeoutMs || 3000 });
+    const desktopVirtualRoutes = this.options.desktopVirtualRoutes === true;
+    if (!desktopVirtualRoutes) {
+      const swUrl = this.options.serviceWorkerUrl || '/wurster-sw.js', swScope = this.options.serviceWorkerScope || '/';
+      await navigator.serviceWorker.register(swUrl, { scope: swScope });
+      await navigator.serviceWorker.ready;
+      const controller = await waitForServiceWorkerControl(navigator.serviceWorker, { timeoutMs: this.options.serviceWorkerControlTimeoutMs || 5000 });
+      navigator.serviceWorker.addEventListener('message', this._boundSw);
+      await registerServiceWorkerSession(controller, this.id, { timeoutMs: this.options.serviceWorkerRegistrationTimeoutMs || 3000 });
+    }
+    addEventListener('message', this._boundMessage);
     const frame = document.createElement('iframe');
     frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals allow-downloads allow-top-navigation-by-user-activation');
     frame.setAttribute('referrerpolicy', 'no-referrer');
@@ -794,6 +782,9 @@ export class WursterWebSession {
   }
   async _invoke(method, args) {
     if(String(method).startsWith('parent.')){const childMethod=String(method).slice(7);if(typeof this.options.parentInvoke!=='function')throw new Error('Parent runtime services are unavailable');assertPigletParentMethod(this.options.parent,childMethod);return this.options.parentInvoke(childMethod,args);}
+    if(typeof this.options.runtimeInvoke==='function' && (String(method).startsWith('pigfs.') || String(method).startsWith('piglet.'))){
+      return this.options.runtimeInvoke(String(method), Array.isArray(args)?args:[]);
+    }
     switch (method) {
       case 'info': return { manifest: this.reader.manifest, source: this.reader.source.kind, format: 'wurst/7', webRuntime: WURSTER_WEB_VERSION, signature: this.signature };
       case 'auth.status': {

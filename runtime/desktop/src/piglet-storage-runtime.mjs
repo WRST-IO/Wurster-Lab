@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { MAX_PIGLET_BYTES, PIGLET_MIME, inspectPigletBytes, inspectPigletSource, normalizePigletBytes, sha256PigletSource } from './piglet-package.mjs';
+import { createPigletObjectStorageRuntime } from './piglet-object-storage-runtime.mjs';
 
 const PIGLET_EXT_RE = /\.(?:wurst|wrst)$/i;
 const MAX_DISCOVERY_ENTRIES = 1024;
@@ -24,7 +25,8 @@ export function createPigletStorageAdapter({
   refreshContext,
   scheduleHygiene,
   normalizeDataPath,
-  waitForMaintenance
+  waitForMaintenance,
+  ensureObjectStore
 }) {
   async function openSource(context, rawPath) {
     const target = normalizeDataPath(rawPath);
@@ -84,7 +86,7 @@ export function createPigletStorageAdapter({
           label: null,
           source: 'pigfs',
           path: storedPath,
-          objectId: source.objectId ?? null,
+          storageObjectId: source.objectId ?? null,
           mutable: true
         }));
       } catch {
@@ -133,7 +135,7 @@ export function createPigletStorageAdapter({
       label: inspected.application?.name ?? path.basename(destination),
       source: 'pigfs',
       path: destination,
-      objectId: installed.objectId ?? null,
+      storageObjectId: installed.objectId ?? null,
       mutable: true
     };
   }
@@ -170,34 +172,8 @@ export function createPigletStorageAdapter({
     return crypto.createHash('sha256').update(normalized).digest('hex');
   }
 
-  function runtimeCopyPath(context, descriptor) {
-    const realm = realmRuntimeSummary(context).find((item) => item.governance === 'ordinary' && !item.locked && (item.capabilities?.write || !item.initialized));
-    if (!realm) return null;
-    return `${String(realm.mount || `/${realm.id}`).replace(/\/$/, '')}/piglets/.runtime/${descriptor.sha256 || descriptor.application?.id || 'child'}.wurst`;
-  }
-
-  async function prepareRuntimeSource(context, descriptor, source) {
-    if (descriptor.source === 'pigfs') {
-      return { source, path: descriptor.path, expectedSha256: null, materializedFrom: null };
-    }
-    if (!descriptor.data?.writable) return { source, path: null, expectedSha256: descriptor.sha256 ?? null, materializedFrom: descriptor.ref };
-    const destination = runtimeCopyPath(context, descriptor);
-    if (!destination) throw new Error('Writable built-in Piglets require a writable ordinary parent PigFS realm');
-    try {
-      const existingSource = await openSource(context, destination);
-      const inspected = await inspectPigletSource(existingSource);
-      if (inspected.signature?.status === 'invalid' || inspected.application?.id !== descriptor.application?.id) throw new Error('Invalid materialized Piglet runtime copy');
-      return { source: existingSource, path: destination, expectedSha256: null, materializedFrom: descriptor.ref };
-    } catch {
-      return { source, path: destination, expectedSha256: null, materializedFrom: descriptor.ref };
-    }
-  }
-
-  async function persistRuntimeSource(context, source, bytes) {
-    if (!source?.path) throw new Error('This Piglet has no persistent parent PigFS backing');
-    source.expectedSha256 = await writeExact(context, source.path, bytes, { expectedSha256: source.expectedSha256 });
-    return source.expectedSha256;
-  }
+  const objectStorage = createPigletObjectStorageRuntime({ ensureObjectStore, activeActor, writeExact });
+  const { prepareRuntimeSource, persistRuntimeSource } = objectStorage;
 
   async function fingerprintRuntimeSource(source) {
     return sha256PigletSource(source);
@@ -207,9 +183,20 @@ export function createPigletStorageAdapter({
     const raw = String(rawRef ?? '');
     const storedPath = raw.startsWith('pigfs:') ? raw.slice('pigfs:'.length) : raw;
     const target = normalizeDataPath(storedPath);
+    let storageObjectId = null;
+    try {
+      const stat = await context.reader.pigFsStat(target, await readOptions(context, target));
+      storageObjectId = stat?.objectId ?? null;
+    } catch {}
     const store = await ensureInitializedStore(context);
     const removed = await store.remove(target, { actor: activeActor(context), recursive: false });
     if (removed) {
+      if (context.objectStore?.root) {
+        const rootId = context.objectStore.root.rootObjectId;
+        let child = storageObjectId ? await context.objectStore.findChild(rootId, `pigfs-storage:${storageObjectId}`) : null;
+        if (!child) child = await context.objectStore.findChild(rootId, `pigfs:${publicPath(target)}`); // pre-0.33 migration locator
+        if (child) await context.objectStore.deleteSubtree(child.objectId, { actorId: activeActor(context)?.publicRecord?.identityId ?? null });
+      }
       await refreshContext(context);
       scheduleHygiene(context, 700);
     }
