@@ -6,9 +6,9 @@ order: 1
 ---
 # Current status
 
-Wurster 0.33.1 is pre-1.0 but intended for real integration work. Presence of code is not the same as a stable contract; this page is the short maturity map.
+Wurster 0.33.2 is pre-1.0 but intended for real integration work. Presence of code is not the same as a stable contract; this page is the short maturity map.
 
-| Area | 0.33.1 status | Current boundary |
+| Area | 0.33.2 status | Current boundary |
 | --- | --- | --- |
 | Windows Desktop | release lane | shared Electron runtime |
 | macOS arm64/x64 | release lane | signed/notarized workflow |
@@ -27,7 +27,7 @@ Packaged Wurster Desktop builds on macOS and Windows check the public WRST-IO/Wu
 
 Automatic updates are a local Wurster setting and can be disabled under **Settings → Updates** to intentionally remain on an older runtime. Development/unpackaged runs never auto-update, and a failed update check falls back to normal startup instead of blocking Wurster.
 
-## Important 0.33.1 limits
+## Important 0.33.2 limits
 
 - Desktop serves `wurst://runtime/__wurster/<session>/...` directly from its active Piglet session/source layer. Desktop Child rendering does not depend on Service Worker controller takeover; browser Wurster keeps the Service Worker route.
 - Persistent mutable Children use the Root Wurst Object Store: immutable signed Base bytes remain independent from mutable object state, Child writes publish through Root Commits, and ancestor Wursts are not reserialized for a deep Child state change.

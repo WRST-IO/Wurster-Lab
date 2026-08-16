@@ -1,6 +1,6 @@
 {
   "name": "@wurster/meatgrinder",
-  "version": "0.33.1",
+  "version": "0.33.2",
   "description": "Meat Grinder: turn tiny widget/mini-app sources into a single .wurst binary.",
   "type": "module",
   "bin": {
@@ -13,9 +13,9 @@
     "src"
   ],
   "dependencies": {
-    "@wurster/format": "0.33.1",
-    "@wurster/piglink": "0.33.1",
-    "@wurster/pigsty": "0.33.1"
+    "@wurster/format": "0.33.2",
+    "@wurster/piglink": "0.33.2",
+    "@wurster/pigsty": "0.33.2"
   },
   "engines": {
     "node": ">=22"

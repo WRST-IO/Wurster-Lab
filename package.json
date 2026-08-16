@@ -1,6 +1,6 @@
 {
   "name": "wurster-lab",
-  "version": "0.33.1",
+  "version": "0.33.2",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -42,8 +42,7 @@
     "authority:worker:relay-secrets": "node tools/wrst-authority.mjs worker-relay-secrets",
     "dist:linux": "npm run dist:linux --workspace @wurster/desktop",
     "runtime:edge:prepare": "node tools/wurster-edge-runtime.mjs prepare",
-    "runtime:edge:verify": "node tools/wurster-edge-runtime.mjs verify",
-    "test:electron:piglet": "electron tools/electron-piglet-route-smoke.mjs"
+    "runtime:edge:verify": "node tools/wurster-edge-runtime.mjs verify"
   },
   "engines": {
     "node": ">=22"

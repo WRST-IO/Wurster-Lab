@@ -1,5 +1,14 @@
 # Changelog
 
+
+## 0.33.2 - Release Channel Cleanup
+
+- Removed the experimental real-Electron Piglet smoke harness from the public tag-triggered release workflow.
+- Removed the smoke-only Electron binary prefetch, cache restore/save steps, timeout plumbing and `test:electron:piglet` command.
+- Removed `tools/electron-piglet-route-smoke.mjs` and `tools/prepare-electron-smoke.mjs`; future Electron smoke coverage belongs in a separate pre-release CI lane once it is stable.
+- Kept the release channel focused on deterministic release work: tag validation, the normal regression gate, platform builds, signing/notarization, artifact verification and publication.
+- Runtime behavior is otherwise unchanged from 0.33.1; bumped Wurster runtime/workspace metadata to 0.33.2.
+
 ## 0.33.1 - Bounded Electron Smoke Bootstrap
 
 - Fixed the 0.33.0 release workflow hang introduced by Electron 43's lazy binary installation. Desktop jobs now prepare the Electron smoke binary explicitly before invoking the real Electron Piglet route test.

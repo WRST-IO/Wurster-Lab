@@ -81,7 +81,6 @@ jobs:
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      electron_config_cache: ${{ github.workspace }}/.cache/electron
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -89,34 +88,6 @@ jobs:
           node-version: 22
           package-manager-cache: false
       - run: npm install
-      - name: Resolve Electron smoke version
-        id: electron-smoke-version
-        run: node -e "require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'version=' + require('./runtime/desktop/package.json').devDependencies.electron + String.fromCharCode(10))"
-      - name: Restore Electron smoke cache
-        id: electron-smoke-cache
-        uses: actions/cache/restore@v5
-        with:
-          path: ${{ github.workspace }}/.cache/electron
-          key: electron-smoke-${{ runner.os }}-${{ runner.arch }}-${{ steps.electron-smoke-version.outputs.version }}
-      - name: Prepare Electron binary for smoke
-        timeout-minutes: 5
-        env:
-          DEBUG: '@electron/get*'
-          WURSTER_ELECTRON_PREPARE_TIMEOUT_MS: '240000'
-        run: node tools/prepare-electron-smoke.mjs
-      - name: Save Electron smoke cache
-        if: steps.electron-smoke-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
-        with:
-          path: ${{ github.workspace }}/.cache/electron
-          key: electron-smoke-${{ runner.os }}-${{ runner.arch }}-${{ steps.electron-smoke-version.outputs.version }}
-      - name: Build Web runtime for real Electron Piglet smoke
-        run: npm run runtime:web:build
-      - name: Verify real Electron Desktop Piglet route
-        timeout-minutes: 2
-        env:
-          WURSTER_ELECTRON_SMOKE_TIMEOUT_MS: '30000'
-        run: npm run test:electron:piglet
 
       - name: Require macOS signing and notarization secrets
         shell: bash
@@ -169,7 +140,6 @@ jobs:
       - name: Build signed and notarized macOS arm64
         run: npm run dist:mac:arm64
 
-
       - name: Verify signed and notarized app
         shell: bash
         run: |
@@ -209,7 +179,6 @@ jobs:
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      electron_config_cache: ${{ github.workspace }}/.cache/electron
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -217,34 +186,6 @@ jobs:
           node-version: 22
           package-manager-cache: false
       - run: npm install
-      - name: Resolve Electron smoke version
-        id: electron-smoke-version
-        run: node -e "require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'version=' + require('./runtime/desktop/package.json').devDependencies.electron + String.fromCharCode(10))"
-      - name: Restore Electron smoke cache
-        id: electron-smoke-cache
-        uses: actions/cache/restore@v5
-        with:
-          path: ${{ github.workspace }}/.cache/electron
-          key: electron-smoke-${{ runner.os }}-${{ runner.arch }}-${{ steps.electron-smoke-version.outputs.version }}
-      - name: Prepare Electron binary for smoke
-        timeout-minutes: 5
-        env:
-          DEBUG: '@electron/get*'
-          WURSTER_ELECTRON_PREPARE_TIMEOUT_MS: '240000'
-        run: node tools/prepare-electron-smoke.mjs
-      - name: Save Electron smoke cache
-        if: steps.electron-smoke-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
-        with:
-          path: ${{ github.workspace }}/.cache/electron
-          key: electron-smoke-${{ runner.os }}-${{ runner.arch }}-${{ steps.electron-smoke-version.outputs.version }}
-      - name: Build Web runtime for real Electron Piglet smoke
-        run: npm run runtime:web:build
-      - name: Verify real Electron Desktop Piglet route
-        timeout-minutes: 2
-        env:
-          WURSTER_ELECTRON_SMOKE_TIMEOUT_MS: '30000'
-        run: npm run test:electron:piglet
 
       - name: Require macOS signing and notarization secrets
         shell: bash
@@ -297,7 +238,6 @@ jobs:
       - name: Build signed and notarized macOS x64
         run: npm run dist:mac:x64
 
-
       - name: Verify signed and notarized app
         shell: bash
         run: |
@@ -335,7 +275,6 @@ jobs:
       WURSTER_WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
       WURSTER_WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
       WURSTER_WIN_CERTIFICATE_SUBJECT_NAME: ${{ secrets.WIN_CERTIFICATE_SUBJECT_NAME }}
-      electron_config_cache: ${{ github.workspace }}/.cache/electron
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -343,34 +282,6 @@ jobs:
           node-version: 22
           package-manager-cache: false
       - run: npm install
-      - name: Resolve Electron smoke version
-        id: electron-smoke-version
-        run: node -e "require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'version=' + require('./runtime/desktop/package.json').devDependencies.electron + String.fromCharCode(10))"
-      - name: Restore Electron smoke cache
-        id: electron-smoke-cache
-        uses: actions/cache/restore@v5
-        with:
-          path: ${{ github.workspace }}/.cache/electron
-          key: electron-smoke-${{ runner.os }}-${{ runner.arch }}-${{ steps.electron-smoke-version.outputs.version }}
-      - name: Prepare Electron binary for smoke
-        timeout-minutes: 5
-        env:
-          DEBUG: '@electron/get*'
-          WURSTER_ELECTRON_PREPARE_TIMEOUT_MS: '240000'
-        run: node tools/prepare-electron-smoke.mjs
-      - name: Save Electron smoke cache
-        if: steps.electron-smoke-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
-        with:
-          path: ${{ github.workspace }}/.cache/electron
-          key: electron-smoke-${{ runner.os }}-${{ runner.arch }}-${{ steps.electron-smoke-version.outputs.version }}
-      - name: Build Web runtime for real Electron Piglet smoke
-        run: npm run runtime:web:build
-      - name: Verify real Electron Desktop Piglet route
-        timeout-minutes: 2
-        env:
-          WURSTER_ELECTRON_SMOKE_TIMEOUT_MS: '30000'
-        run: npm run test:electron:piglet
       - run: npm run dist:win
       - uses: actions/upload-artifact@v7
         with:
